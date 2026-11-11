@@ -127,13 +127,14 @@
 
 {% if revenue | length > 1 %}
 <section class="panel">
-  <div class="panel-head"><h2>{{ t('dash.this_month') }}</h2></div>
+  <div class="panel-head"><h2>{{ t('dash.revenue_by_month') }}</h2></div>
   <div class="panel-body tight">
     <table class="ledger">
       <thead>
         <tr>
           <th>{{ t('inv.date') }}</th>
           <th class="num">{{ t('dash.invoices_count') }}</th>
+          <th style="width:45%"></th>
           <th class="num">{{ t('inv.total') }}</th>
         </tr>
       </thead>
@@ -143,14 +144,14 @@
         <tr>
           <td class="tight">{{ row['month'] }}</td>
           <td class="num">{{ row['invoice_count'] }}</td>
-          <td class="num">
-            {{ m(row['total_minor']) }}
-            {# A proportional rule under each figure: a trend you can read at a
-               glance without pulling in a charting library. #}
-            <div style="height:3px;background:var(--rule);margin-top:4px;">
+          {# A proportional rule in its own column: the shape of the trend,
+             readable at a glance, without pulling in a charting library. #}
+          <td>
+            <div style="height:3px;background:var(--rule)">
               <div style="height:3px;background:var(--ink);width:{{ (row['total_minor'] / peak * 100) | round(1) if peak else 0 }}%"></div>
             </div>
           </td>
+          <td class="num">{{ m(row['total_minor']) }}</td>
         </tr>
         {% endfor %}
       </tbody>

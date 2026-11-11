@@ -62,6 +62,7 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "dash.recent_invoices": ("Recent invoices", "أحدث الفواتير"),
     "dash.unpaid": ("Awaiting payment", "بانتظار السداد"),
     "dash.quick_new_invoice": ("New invoice", "فاتورة جديدة"),
+    "dash.revenue_by_month": ("Revenue by month", "الإيرادات حسب الشهر"),
     "dash.nothing_yet": (
         "Nothing here yet. Start by adding a customer.",
         "لا يوجد شيء بعد. ابدأ بإضافة عميل.",
@@ -130,6 +131,7 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
 
     # -- Invoices ----------------------------------------------------------
     "inv.title": ("Invoices", "الفواتير"),
+    "inv.details": ("Invoice details", "تفاصيل الفاتورة"),
     "inv.new": ("New invoice", "فاتورة جديدة"),
     "inv.edit": ("Edit invoice", "تعديل الفاتورة"),
     "inv.number": ("Invoice no.", "رقم الفاتورة"),
@@ -196,6 +198,7 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "pay.reference": ("Reference", "المرجع"),
     "pay.notes": ("Notes", "ملاحظات"),
     "pay.none": ("No payments recorded.", "لا توجد مدفوعات مسجلة."),
+    "pay.last": ("Last payment", "آخر دفعة"),
     "pay.method_cash": ("Cash", "نقداً"),
     "pay.method_card": ("Card", "بطاقة"),
     "pay.method_transfer": ("Bank transfer", "تحويل بنكي"),

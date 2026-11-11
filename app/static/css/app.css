@@ -264,6 +264,17 @@ table.ledger th.num, table.ledger td.num { text-align: end; }
 table.ledger td.tight { white-space: nowrap; }
 table.ledger .secondary { color: var(--ink-faint); font-size: 0.85rem; }
 
+/* A customer name, a plate or a note may be Arabic or Latin whichever
+   language the interface is in. `plaintext` lets each value order itself by
+   its own first strong character -- so "Riyadh Logistics Co." keeps its full
+   stop at the end on an Arabic page instead of having it jump to the front --
+   while the column's alignment still follows the interface direction. */
+table.ledger td,
+.facts dd,
+.figure .sub,
+.breadcrumb,
+.pagehead h1 { unicode-bidi: plaintext; }
+
 .row-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
 
 .empty {
@@ -396,7 +407,9 @@ textarea { min-height: 72px; resize: vertical; }
     margin-block-end: var(--space-4);
 }
 .toolbar input[type="search"], .toolbar select { width: auto; min-width: 140px; }
-.toolbar .grow { flex: 1 1 220px; }
+/* Capped, so the search box does not push the filters and the Apply button
+   onto rows of their own on a wide screen. */
+.toolbar .grow { flex: 1 1 220px; max-width: 340px; }
 
 /* --------------------------------------------------------------------------
    Dashboard figures. Ledger totals, not KPI cards: the number sits on a

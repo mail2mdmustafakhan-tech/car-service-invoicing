@@ -21,7 +21,7 @@
 
   {# ---- Who, which car, when ------------------------------------------- #}
   <section class="panel">
-    <div class="panel-head"><h2>{{ t('inv.title') }}</h2></div>
+    <div class="panel-head"><h2>{{ t('inv.details') }}</h2></div>
     <div class="panel-body">
       <div class="grid-2">
         <div class="field">
@@ -100,7 +100,7 @@
                 </select>
                 <input type="text" name="item_description" class="line-desc"
                        value="{{ item['description'] }}"
-                       placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px" required>
+                       placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
                 <input type="hidden" name="item_catalog_id" class="line-catalog"
                        value="{{ item['catalog_item_id'] or '' }}">
                 <input type="hidden" name="item_description_ar" class="line-desc-ar"
@@ -115,9 +115,9 @@
                 </select>
               </td>
               <td><input type="text" name="item_qty" class="line-qty num"
-                         value="{{ fmt_qty(item['qty_milli']) }}" inputmode="decimal" required></td>
+                         value="{{ fmt_qty(item['qty_milli']) }}" inputmode="decimal"></td>
               <td><input type="text" name="item_price" class="line-price num"
-                         value="{{ from_minor(item['unit_price_minor']) }}" inputmode="decimal" required></td>
+                         value="{{ from_minor(item['unit_price_minor']) }}" inputmode="decimal"></td>
               <td class="col-total line-total">0.00</td>
               <td class="col-kill">
                 <button type="button" class="btn small danger line-remove"
@@ -140,7 +140,7 @@
               {% endfor %}
             </select>
             <input type="text" name="item_description" class="line-desc" value=""
-                   placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px" required>
+                   placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
             <input type="hidden" name="item_catalog_id" class="line-catalog" value="">
             <input type="hidden" name="item_description_ar" class="line-desc-ar" value="">
             <input type="hidden" name="item_kind" class="line-kind" value="service">
@@ -152,8 +152,8 @@
               {% endfor %}
             </select>
           </td>
-          <td><input type="text" name="item_qty" class="line-qty num" value="1" inputmode="decimal" required></td>
-          <td><input type="text" name="item_price" class="line-price num" value="" inputmode="decimal" required></td>
+          <td><input type="text" name="item_qty" class="line-qty num" value="1" inputmode="decimal"></td>
+          <td><input type="text" name="item_price" class="line-price num" value="" inputmode="decimal"></td>
           <td class="col-total line-total">0.00</td>
           <td class="col-kill">
             <button type="button" class="btn small danger line-remove"

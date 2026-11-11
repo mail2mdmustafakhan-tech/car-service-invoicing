@@ -51,7 +51,11 @@
   <div class="figure">
     <div class="value">{{ m(invoice['paid_minor']) }}</div>
     <div class="label">{{ t('inv.paid') }}</div>
-    <div class="sub">{{ payments | length }} {{ t('pay.title') | lower }}</div>
+    {# The date of the most recent payment is more use than a count, and it
+       sidesteps writing a plural rule for two languages. #}
+    <div class="sub">
+      {% if payments %}{{ t('pay.last') }} {{ payments[-1]['paid_on'] }}{% endif %}
+    </div>
   </div>
 </div>
 
