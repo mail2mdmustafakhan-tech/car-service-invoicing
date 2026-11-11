@@ -9,4 +9,7 @@
 pytest>=8.0
 httpx>=0.27          # lets the tests call the app without a running server
 ruff>=0.4            # linter and formatter
-weasyprint>=60       # so the PDF path is covered by the tests too
+weasyprint>=60       # optional: pip installs it fine everywhere, but it only
+                     # *works* where Pango and Cairo are present. The test
+                     # suite passes either way -- app/pdf.py falls back to the
+                     # browser's print dialogue when it cannot be imported.

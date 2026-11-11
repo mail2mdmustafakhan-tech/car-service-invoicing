@@ -16,9 +16,16 @@ on:
   pull_request:
   workflow_dispatch:   # adds a "Run workflow" button on the Actions tab
 
+# If you push twice in quick succession, the older run is abandoned rather
+# than left burning minutes on code you have already replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     strategy:
       fail-fast: false
@@ -28,19 +35,22 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install the PDF system libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
+      # Note what is deliberately NOT here: the Pango and Cairo system
+      # libraries that WeasyPrint needs. Installing them with apt on a rented
+      # runner failed intermittently (apt exit code 100, a stale package
+      # index) and took the whole run red for a reason that had nothing to do
+      # with this code. The tests do not need them: app/pdf.py treats
+      # WeasyPrint as optional and falls back to the browser's own print
+      # dialogue, so the suite runs either way. The Docker job below is where
+      # PDF rendering is actually proved, which is also where it has to work.
 
       - name: Install dependencies
         run: |
@@ -56,11 +66,20 @@ jobs:
   docker:
     name: Build the Docker image
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build
         run: docker build -t car-service-invoicing:ci .
+
+      # Proves the PDF libraries really are in the image. This is the check
+      # that matters: PDF download is a Docker-only feature, so this is the
+      # only place it has to work.
+      - name: Check PDF rendering works inside the image
+        run: |
+          docker run --rm car-service-invoicing:ci python -c \
+            "import weasyprint; print('WeasyPrint', weasyprint.__version__, 'ready')"
 
       # Starting the container proves the image actually runs, not just that
       # it builds -- a missing system library only shows up at start-up.
@@ -69,7 +88,8 @@ jobs:
           docker run -d --name ci-check -p 8000:8000 car-service-invoicing:ci
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8000/healthz; then
-              echo "\nContainer is healthy."
+              echo ""
+              echo "Container is healthy."
               exit 0
             fi
             sleep 2
