@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill, delete_form with context %}
+{% block title %}{{ invoice['invoice_no'] }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/invoices">{{ t('inv.title') }}</a></div>
+
+<div class="pagehead">
+  <div>
+    <h1>{{ invoice['invoice_no'] }} {{ pill(state) }}</h1>
+    <div class="breadcrumb">
+      {{ invoice['issue_date'] }} —
+      <a href="/customers/{{ invoice['customer_id'] }}">{{ loc(invoice, 'customer_name') }}</a>
+      {% if invoice['vehicle_plate'] %}
+        — <a href="/vehicles/{{ invoice['vehicle_id'] }}">{{ invoice['vehicle_plate'] }}</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/invoices/{{ invoice['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+    {% if PDF_AVAILABLE %}
+      <a class="btn" href="/invoices/{{ invoice['id'] }}/pdf" target="_blank">{{ t('action.download_pdf') }}</a>
+    {% endif %}
+    <a class="btn" href="/invoices/{{ invoice['id'] }}/edit">{{ t('action.edit') }}</a>
+    {% if invoice['status'] == 'draft' %}
+      <form method="post" action="/invoices/{{ invoice['id'] }}/status">
+        <input type="hidden" name="status" value="issued">
+        <button class="btn accent" type="submit">{{ t('inv.mark_issued') }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if invoice['status'] == 'draft' %}
+  <div class="flash">{{ t('inv.draft_warning') }}</div>
+{% elif invoice['status'] == 'void' %}
+  <div class="flash error">{{ t('inv.void_warning') }}</div>
+{% endif %}
+
+{# The figure the customer and the front desk both look at first. #}
+<div class="figures">
+  <div class="balance-hero {{ 'settled' if balance == 0 else '' }}">
+    <div class="value">{{ m(balance) }}</div>
+    <div class="label">{{ t('inv.balance') }}</div>
+  </div>
+  <div class="figure">
+    <div class="value">{{ m(invoice['total_minor']) }}</div>
+    <div class="label">{{ t('inv.total') }}</div>
+    <div class="sub">{{ t('inv.vat') }} {{ fmt_rate(invoice['vat_rate_bp']) }}% — {{ m(invoice['vat_minor']) }}</div>
+  </div>
+  <div class="figure">
+    <div class="value">{{ m(invoice['paid_minor']) }}</div>
+    <div class="label">{{ t('inv.paid') }}</div>
+    <div class="sub">{{ payments | length }} {{ t('pay.title') | lower }}</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('inv.lines') }}</h2></div>
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>{{ t('inv.description') }}</th>
+          <th>{{ t('cat.unit') }}</th>
+          <th class="num">{{ t('inv.qty') }}</th>
+          <th class="num">{{ t('inv.unit_price') }}</th>
+          <th class="num">{{ t('inv.line_total') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="secondary">{{ item['line_no'] }}</td>
+          <td>
+            {{ loc(item, 'description') }}
+            <div class="secondary">{{ t('cat.kind_service') if item['kind'] == 'service' else t('cat.kind_part') }}</div>
+          </td>
+          <td class="tight secondary">{{ t('cat.unit_' ~ item['unit']) }}</td>
+          <td class="num">{{ fmt_qty(item['qty_milli']) }}</td>
+          <td class="num">{{ m(item['unit_price_minor']) }}</td>
+          <td class="num">{{ m(item['line_total_minor']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel-body">
+    <div class="totals">
+      <div class="line"><span>{{ t('inv.subtotal') }}</span><span>{{ m(invoice['subtotal_minor']) }}</span></div>
+      {% if invoice['discount_minor'] %}
+        <div class="line"><span>{{ t('inv.discount') }}</span><span>-{{ m(invoice['discount_minor']) }}</span></div>
+      {% endif %}
+      <div class="line"><span>{{ t('inv.taxable') }}</span><span>{{ m(invoice['taxable_minor']) }}</span></div>
+      <div class="line"><span>{{ t('inv.vat') }} ({{ fmt_rate(invoice['vat_rate_bp']) }}%)</span><span>{{ m(invoice['vat_minor']) }}</span></div>
+      <div class="line grand"><span>{{ t('inv.total') }}</span><span>{{ m(invoice['total_minor']) }}</span></div>
+      {% if invoice['paid_minor'] %}
+        <div class="line"><span>{{ t('inv.paid') }}</span><span>-{{ m(invoice['paid_minor']) }}</span></div>
+        <div class="line owed"><span>{{ t('inv.balance') }}</span><span>{{ m(balance) }}</span></div>
+      {% endif %}
+    </div>
+
+    {% if invoice['notes'] %}
+      <h3 style="margin-block-start:var(--space-5)">{{ t('inv.notes') }}</h3>
+      <p style="white-space:pre-wrap;margin-block:var(--space-2) 0">{{ invoice['notes'] }}</p>
+    {% endif %}
+  </div>
+</section>
+
+<div class="cols">
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('pay.title') }}</h2></div>
+    {% if payments %}
+      <div class="panel-body tight scrollx">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>{{ t('pay.date') }}</th>
+              <th>{{ t('pay.method') }}</th>
+              <th class="num">{{ t('pay.amount') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in payments %}
+            <tr>
+              <td class="tight">{{ p['paid_on'] }}</td>
+              <td>
+                {{ t('pay.method_' ~ p['method']) }}
+                {% if p['reference'] %}<div class="secondary">{{ p['reference'] }}</div>{% endif %}
+              </td>
+              <td class="num">{{ m(p['amount_minor']) }}</td>
+              <td>
+                <div class="row-actions">
+                  {{ delete_form('/payments/' ~ p['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty"><p>{{ t('pay.none') }}</p></div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('pay.record') }}</h2></div>
+    <div class="panel-body">
+      {% if invoice['status'] != 'issued' %}
+        <p class="hint">{{ t('inv.draft_warning') if invoice['status'] == 'draft' else t('inv.void_warning') }}</p>
+      {% elif balance == 0 %}
+        <p class="hint">{{ t('status.paid') }} — {{ m(invoice['paid_minor']) }}</p>
+      {% else %}
+      <form method="post" action="/invoices/{{ invoice['id'] }}/payments">
+        <div class="grid-2">
+          <div class="field">
+            <label for="f_amount">{{ t('pay.amount') }} *</label>
+            <input type="text" id="f_amount" name="amount" class="num" inputmode="decimal"
+                   value="{{ from_minor(balance) }}" required>
+            <p class="hint">{{ t('pay.pay_full') }}: {{ m(balance) }}</p>
+          </div>
+          <div class="field">
+            <label for="f_paid_on">{{ t('pay.date') }}</label>
+            <input type="date" id="f_paid_on" name="paid_on" value="{{ today() }}">
+          </div>
+          <div class="field">
+            <label for="f_method">{{ t('pay.method') }}</label>
+            <select id="f_method" name="method">
+              {% for mth in ['cash', 'card', 'transfer', 'cheque', 'other'] %}
+              <option value="{{ mth }}">{{ t('pay.method_' ~ mth) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="f_reference">{{ t('pay.reference') }}</label>
+            <input type="text" id="f_reference" name="reference">
+          </div>
+        </div>
+        <div class="formactions">
+          <button class="btn accent" type="submit">{{ t('pay.record') }}</button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel-body">
+    <div class="row-actions" style="justify-content:flex-start;gap:var(--space-3)">
+      {% if invoice['status'] == 'issued' %}
+        <form method="post" action="/invoices/{{ invoice['id'] }}/status"
+              onsubmit="return confirm('{{ t('action.confirm_delete') }}')">
+          <input type="hidden" name="status" value="void">
+          <button class="btn danger small" type="submit">{{ t('inv.mark_void') }}</button>
+        </form>
+      {% endif %}
+      {% if invoice['status'] == 'void' %}
+        <form method="post" action="/invoices/{{ invoice['id'] }}/status">
+          <input type="hidden" name="status" value="draft">
+          <button class="btn small" type="submit">{{ t('inv.reopen_draft') }}</button>
+        </form>
+      {% endif %}
+      {% if invoice['status'] == 'draft' %}
+        {{ delete_form('/invoices/' ~ invoice['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

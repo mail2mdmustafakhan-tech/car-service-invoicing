@@ -1,0 +1,273 @@
+/* ==========================================================================
+   The printed invoice -- A4
+   ==========================================================================
+
+   This is the only thing the customer ever sees, so it is styled as a formal
+   tax document rather than as a web page: black on white, ruled, with the
+   business details and the totals block where an accountant expects them.
+
+   It is used twice: by the browser's print dialogue (which is also how you
+   get a PDF with no extra software), and by WeasyPrint for the download link.
+   Both honour `@page`, so the margins below are the real paper margins.
+   ========================================================================== */
+
+@page {
+    size: A4;
+    margin: 14mm 14mm 16mm;
+}
+
+:root {
+    --doc-ink: #000;
+    --doc-soft: #555;
+    --doc-rule: #000;
+    --doc-rule-light: #bbb;
+    --doc-wash: #f2f2f2;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: var(--doc-ink);
+    font-family: "Segoe UI", -apple-system, "Noto Sans Arabic", "Noto Kufi Arabic",
+                 Tahoma, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.38;
+}
+
+.sheet {
+    /* On screen the invoice is shown as a page on a grey desk, so what you
+       see before pressing Print is what comes out of the printer. */
+    width: 210mm;
+    min-height: 297mm;
+    margin: 16px auto;
+    padding: 14mm;
+    background: #fff;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.16);
+}
+
+.num, td.num, th.num { font-variant-numeric: tabular-nums; text-align: end; }
+
+/* --------------------------------------------------------------------------
+   Masthead: who issued this, and what it is
+   -------------------------------------------------------------------------- */
+
+.doc-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10mm;
+    padding-block-end: 3mm;
+    border-block-end: 2px solid var(--doc-rule);
+}
+
+.issuer .name { font-size: 15pt; font-weight: 700; line-height: 1.2; }
+.issuer .name-alt { font-size: 12pt; font-weight: 600; }
+.issuer .meta { font-size: 9pt; color: var(--doc-soft); margin-block-start: 2mm; }
+.issuer .meta div { margin-block-start: 0.6mm; }
+
+.doc-title { text-align: end; flex-shrink: 0; }
+.doc-title .kind { font-size: 13pt; font-weight: 700; line-height: 1.25; }
+.doc-title .kind-alt { font-size: 11pt; font-weight: 600; }
+.doc-title .no {
+    font-size: 12pt;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin-block-start: 2mm;
+}
+.doc-title .dates { font-size: 9pt; color: var(--doc-soft); margin-block-start: 1mm; }
+
+/* --------------------------------------------------------------------------
+   Who it is for, and which car
+   -------------------------------------------------------------------------- */
+
+.parties {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin-block: 4mm;
+}
+
+.party { border: 1px solid var(--doc-rule-light); padding: 2.5mm 3mm; }
+.party h4 {
+    margin: 0 0 1.5mm;
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: var(--doc-soft);
+    letter-spacing: 0.02em;
+}
+.party .primary { font-weight: 700; font-size: 11pt; }
+.party dl { margin: 1.5mm 0 0; display: grid; grid-template-columns: auto 1fr; gap: 0.6mm 3mm; font-size: 9pt; }
+.party dt { color: var(--doc-soft); white-space: nowrap; }
+.party dd { margin: 0; }
+
+/* --------------------------------------------------------------------------
+   Items
+   -------------------------------------------------------------------------- */
+
+table.items {
+    width: 100%;
+    border-collapse: collapse;
+    margin-block-start: 2mm;
+}
+
+table.items thead th {
+    text-align: start;
+    font-size: 8.5pt;
+    font-weight: 700;
+    padding: 2mm 2.5mm;
+    background: var(--doc-wash);
+    border-block: 1px solid var(--doc-rule);
+}
+table.items thead th.num { text-align: end; }
+
+table.items tbody td {
+    padding: 2mm 2.5mm;
+    border-block-end: 1px solid var(--doc-rule-light);
+    vertical-align: top;
+}
+
+table.items .line-no { width: 10mm; color: var(--doc-soft); }
+table.items .col-qty { width: 18mm; }
+table.items .col-unit { width: 18mm; }
+table.items .col-price { width: 26mm; }
+table.items .col-amount { width: 30mm; }
+/* `plaintext` lets each description find its own direction from its first
+   strong character -- Arabic reads right-to-left inside the block -- while the
+   block itself stays aligned under the English line above it rather than
+   jumping to the opposite edge of the cell. */
+table.items .desc-alt {
+    font-size: 9pt;
+    color: var(--doc-soft);
+    unicode-bidi: plaintext;
+    text-align: start;
+}
+
+/* Keep a line's two scripts together, and never split the table head. */
+table.items tr { page-break-inside: avoid; }
+table.items thead { display: table-header-group; }
+
+/* --------------------------------------------------------------------------
+   Totals, aligned to the end edge the way a ledger column is
+   -------------------------------------------------------------------------- */
+
+.doc-totals {
+    margin-block-start: 4mm;
+    display: flex;
+    justify-content: flex-end;
+    page-break-inside: avoid;
+}
+
+.doc-totals table { border-collapse: collapse; min-width: 78mm; }
+.doc-totals td { padding: 1.4mm 2.5mm; }
+.doc-totals td:first-child { color: var(--doc-soft); }
+.doc-totals td:last-child { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.doc-totals tr.rule td { border-block-start: 1px solid var(--doc-rule-light); }
+.doc-totals tr.grand td {
+    border-block: 2px solid var(--doc-rule);
+    font-size: 12pt;
+    font-weight: 700;
+    padding-block: 2mm;
+}
+.doc-totals tr.grand td:first-child { color: var(--doc-ink); }
+.doc-totals tr.owed td { font-weight: 700; }
+
+/* --------------------------------------------------------------------------
+   Payments already received, notes, footer
+   -------------------------------------------------------------------------- */
+
+.doc-section { margin-block-start: 4.5mm; page-break-inside: avoid; }
+.doc-section h4 {
+    margin: 0 0 1.5mm;
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: var(--doc-soft);
+}
+.doc-section table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+.doc-section table td { padding: 1.2mm 2.5mm; border-block-end: 1px solid var(--doc-rule-light); }
+
+.doc-notes { font-size: 9.5pt; white-space: pre-wrap; }
+
+.doc-foot {
+    margin-block-start: 5mm;
+    padding-block-start: 2.5mm;
+    border-block-start: 1px solid var(--doc-rule-light);
+    font-size: 8.5pt;
+    color: var(--doc-soft);
+    display: flex;
+    justify-content: space-between;
+    gap: 6mm;
+}
+
+.signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12mm;
+    margin-block-start: 5mm;
+    page-break-inside: avoid;
+}
+.signature { border-block-start: 1px solid var(--doc-rule); padding-block-start: 1.5mm; font-size: 8.5pt; color: var(--doc-soft); }
+
+/* A void invoice must be unmistakable on paper. */
+.void-stamp {
+    margin-block: 4mm;
+    padding: 2.5mm 4mm;
+    border: 2px solid var(--doc-ink);
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 0.08em;
+}
+
+.draft-stamp {
+    margin-block: 4mm;
+    padding: 2mm 4mm;
+    border: 1px dashed var(--doc-soft);
+    color: var(--doc-soft);
+    text-align: center;
+    font-size: 9pt;
+}
+
+/* --------------------------------------------------------------------------
+   The screen-only toolbar above the page
+   -------------------------------------------------------------------------- */
+
+.print-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #16202b;
+    color: #fff;
+    padding: 10px 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+.print-bar a, .print-bar button {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 13px;
+}
+.print-bar a:hover, .print-bar button:hover { background: rgba(255, 255, 255, 0.14); }
+.print-bar .note { color: rgba(255,255,255,0.65); font-size: 12px; }
+
+body.print-view { background: #e9ebee; }
+
+@media print {
+    .print-bar { display: none !important; }
+    body.print-view { background: #fff; }
+    .sheet {
+        width: auto;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+    }
+    a { color: inherit; text-decoration: none; }
+}

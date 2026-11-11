@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field with context %}
+{% set editing = invoice is not none %}
+{% block title %}{{ t('inv.edit') if editing else t('inv.new') }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/invoices">{{ t('inv.title') }}</a>
+  {% if editing %} / <a href="/invoices/{{ invoice['id'] }}">{{ invoice['invoice_no'] }}</a>{% endif %}
+</div>
+
+<div class="pagehead">
+  <div>
+    <h1>{{ t('inv.edit') if editing else t('inv.new') }}</h1>
+    {% if editing %}<div class="breadcrumb">{{ invoice['invoice_no'] }}</div>{% endif %}
+  </div>
+</div>
+
+<form method="post" id="invoice-form"
+      action="{{ '/invoices/' ~ invoice['id'] ~ '/edit' if editing else '/invoices/new' }}">
+
+  {# ---- Who, which car, when ------------------------------------------- #}
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('inv.title') }}</h2></div>
+    <div class="panel-body">
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_customer_id">{{ t('inv.customer') }} *</label>
+          <select id="f_customer_id" name="customer_id" required
+                  data-vehicle-target="f_vehicle_id">
+            <option value="">{{ t('inv.select_customer') }}</option>
+            {% set chosen_customer = invoice['customer_id'] if editing else preset_customer_id %}
+            {% for c in customers %}
+            <option value="{{ c['id'] }}" {% if chosen_customer == c['id'] %}selected{% endif %}>
+              {{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <p class="hint"><a href="/customers/new">{{ t('cust.new') }}</a></p>
+        </div>
+
+        <div class="field">
+          <label for="f_vehicle_id">{{ t('inv.vehicle') }}</label>
+          {% set chosen_vehicle = invoice['vehicle_id'] if editing else preset_vehicle_id %}
+          <select id="f_vehicle_id" name="vehicle_id"
+                  data-selected="{{ chosen_vehicle or '' }}">
+            <option value="">{{ t('inv.no_vehicle') }}</option>
+            {% for v in vehicles %}
+            <option value="{{ v['id'] }}" data-customer="{{ v['customer_id'] }}"
+                    data-odometer="{{ v['odometer'] or '' }}"
+                    {% if chosen_vehicle == v['id'] %}selected{% endif %}>
+              {{ v['plate_no'] }}{% if v['make'] or v['model'] %} — {{ (v['make'] ~ ' ' ~ v['model']) | trim }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <p class="hint"><a href="/vehicles/new">{{ t('veh.new') }}</a></p>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        {{ field('issue_date', t('inv.date'),
+                 invoice['issue_date'] if editing else today(), type='date', required=True) }}
+        {{ field('due_date', t('inv.due_date'), invoice['due_date'] if editing else '', type='date') }}
+        {{ field('odometer', t('inv.odometer'), invoice['odometer'] if editing else '',
+                 type='number', attrs='min="0" step="1" class="num"', hint='km') }}
+      </div>
+    </div>
+  </section>
+
+  {# ---- Lines ----------------------------------------------------------- #}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ t('inv.lines') }}</h2>
+      <button type="button" class="btn small" id="add-line">{{ t('inv.add_line') }}</button>
+    </div>
+    <div class="panel-body">
+      <div class="scrollx">
+        <table id="lines">
+          <thead>
+            <tr>
+              <th class="col-desc">{{ t('inv.description') }}</th>
+              <th style="width:120px">{{ t('cat.unit') }}</th>
+              <th class="col-qty num">{{ t('inv.qty') }}</th>
+              <th class="col-price num">{{ t('inv.unit_price') }}</th>
+              <th class="col-total num">{{ t('inv.line_total') }}</th>
+              <th class="col-kill"></th>
+            </tr>
+          </thead>
+          <tbody id="lines-body">
+            {% for item in items %}
+            <tr class="line-row">
+              <td class="col-desc">
+                <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
+                  <option value="">{{ t('inv.pick_catalog') }}…</option>
+                  {% for ci in catalog %}
+                  <option value="{{ ci['id'] }}" {% if item['catalog_item_id'] == ci['id'] %}selected{% endif %}>
+                    {{ loc(ci, 'name_en') }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <input type="text" name="item_description" class="line-desc"
+                       value="{{ item['description'] }}"
+                       placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px" required>
+                <input type="hidden" name="item_catalog_id" class="line-catalog"
+                       value="{{ item['catalog_item_id'] or '' }}">
+                <input type="hidden" name="item_description_ar" class="line-desc-ar"
+                       value="{{ item['description_ar'] }}">
+                <input type="hidden" name="item_kind" class="line-kind" value="{{ item['kind'] }}">
+              </td>
+              <td>
+                <select name="item_unit" class="line-unit">
+                  {% for u in ['pcs', 'hour', 'litre', 'set', 'km'] %}
+                  <option value="{{ u }}" {% if item['unit'] == u %}selected{% endif %}>{{ t('cat.unit_' ~ u) }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input type="text" name="item_qty" class="line-qty num"
+                         value="{{ fmt_qty(item['qty_milli']) }}" inputmode="decimal" required></td>
+              <td><input type="text" name="item_price" class="line-price num"
+                         value="{{ from_minor(item['unit_price_minor']) }}" inputmode="decimal" required></td>
+              <td class="col-total line-total">0.00</td>
+              <td class="col-kill">
+                <button type="button" class="btn small danger line-remove"
+                        aria-label="{{ t('inv.remove_line') }}">×</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# The browser clones this for every new line. #}
+      <template id="line-template">
+        <tr class="line-row">
+          <td class="col-desc">
+            <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
+              <option value="">{{ t('inv.pick_catalog') }}…</option>
+              {% for ci in catalog %}
+              <option value="{{ ci['id'] }}">{{ loc(ci, 'name_en') }}</option>
+              {% endfor %}
+            </select>
+            <input type="text" name="item_description" class="line-desc" value=""
+                   placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px" required>
+            <input type="hidden" name="item_catalog_id" class="line-catalog" value="">
+            <input type="hidden" name="item_description_ar" class="line-desc-ar" value="">
+            <input type="hidden" name="item_kind" class="line-kind" value="service">
+          </td>
+          <td>
+            <select name="item_unit" class="line-unit">
+              {% for u in ['pcs', 'hour', 'litre', 'set', 'km'] %}
+              <option value="{{ u }}">{{ t('cat.unit_' ~ u) }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input type="text" name="item_qty" class="line-qty num" value="1" inputmode="decimal" required></td>
+          <td><input type="text" name="item_price" class="line-price num" value="" inputmode="decimal" required></td>
+          <td class="col-total line-total">0.00</td>
+          <td class="col-kill">
+            <button type="button" class="btn small danger line-remove"
+                    aria-label="{{ t('inv.remove_line') }}">×</button>
+          </td>
+        </tr>
+      </template>
+
+      {# ---- Tax, discount and the running totals ------------------------ #}
+      <div class="cols" style="margin-block-start:var(--space-5)">
+        <div>
+          <div class="grid-2">
+            {{ field('vat_rate', t('inv.vat_rate'),
+                     fmt_rate(invoice['vat_rate_bp']) if editing else fmt_rate(default_vat_bp),
+                     attrs='inputmode="decimal" class="num" id="f_vat_rate"') }}
+            {{ field('discount', t('inv.discount'),
+                     from_minor(invoice['discount_minor']) if editing and invoice['discount_minor'] else '',
+                     attrs='inputmode="decimal" class="num" id="f_discount"', hint=currency) }}
+          </div>
+          <div class="field">
+            <div class="check">
+              <input type="checkbox" id="f_include_vat" name="prices_include_vat" value="1"
+                     {% if (editing and invoice['prices_include_vat']) or (not editing and default_include_vat) %}checked{% endif %}>
+              <label for="f_include_vat">{{ t('inv.prices_include_vat') }}</label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="f_notes">{{ t('inv.notes') }}</label>
+            <textarea id="f_notes" name="notes">{{ invoice['notes'] if editing else '' }}</textarea>
+          </div>
+        </div>
+
+        <div class="totals" aria-live="polite">
+          <div class="line"><span>{{ t('inv.subtotal') }}</span><span id="t-subtotal">0.00</span></div>
+          <div class="line" id="t-discount-row"><span>{{ t('inv.discount') }}</span><span id="t-discount">0.00</span></div>
+          <div class="line"><span>{{ t('inv.taxable') }}</span><span id="t-taxable">0.00</span></div>
+          <div class="line"><span>{{ t('inv.vat') }} (<span id="t-rate">0</span>%)</span><span id="t-vat">0.00</span></div>
+          <div class="line grand"><span>{{ t('inv.total') }}</span><span id="t-total">0.00</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="formactions">
+    {% if editing and invoice['status'] != 'draft' %}
+      <button class="btn accent" type="submit" name="status" value="{{ invoice['status'] }}">{{ t('action.save') }}</button>
+    {% else %}
+      <button class="btn accent" type="submit" name="status" value="issued">{{ t('inv.mark_issued') }}</button>
+      <button class="btn" type="submit" name="status" value="draft">{{ t('action.save') }} ({{ t('status.draft') }})</button>
+    {% endif %}
+    <a class="btn link spacer" href="{{ '/invoices/' ~ invoice['id'] if editing else '/invoices' }}">{{ t('action.cancel') }}</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script id="catalog-data" type="application/json">{{ catalog_json | tojson }}</script>
+<script src="/static/js/invoice-form.js"></script>
+{% endblock %}

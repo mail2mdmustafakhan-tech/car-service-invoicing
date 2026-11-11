@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ t(detail) }}{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <div class="empty">
+    <h1>{{ t(detail) }}</h1>
+    <p>{{ code }}</p>
+    <a class="btn primary" href="/">{{ t('nav.dashboard') }}</a>
+  </div>
+</div>
+{% endblock %}

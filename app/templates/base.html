@@ -1,0 +1,54 @@
+{#
+  The shell every screen sits inside.
+
+  `lang` and `dir` come from the language cookie. Setting dir="rtl" here is
+  what mirrors the entire interface for Arabic -- the stylesheet uses logical
+  properties throughout, so nothing else has to change.
+#}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ t('app.name') }}{% endblock %} — {{ loc(settings, 'business_name_en') or t('app.name') }}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+{% set path = request.url.path %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="/">
+      {{ loc(settings, 'business_name_en') or t('app.name') }}
+      <span>{{ t('app.name') }}</span>
+    </a>
+
+    <nav class="topnav">
+      <a href="/"          {% if path == '/' %}aria-current="page"{% endif %}>{{ t('nav.dashboard') }}</a>
+      <a href="/invoices"  {% if path.startswith('/invoices') %}aria-current="page"{% endif %}>{{ t('nav.invoices') }}</a>
+      <a href="/customers" {% if path.startswith('/customers') %}aria-current="page"{% endif %}>{{ t('nav.customers') }}</a>
+      <a href="/vehicles"  {% if path.startswith('/vehicles') %}aria-current="page"{% endif %}>{{ t('nav.vehicles') }}</a>
+      <a href="/catalog"   {% if path.startswith('/catalog') %}aria-current="page"{% endif %}>{{ t('nav.catalog') }}</a>
+      <a href="/settings"  {% if path.startswith('/settings') %}aria-current="page"{% endif %}>{{ t('nav.settings') }}</a>
+    </nav>
+
+    <div class="langswitch" role="group" aria-label="{{ t('nav.language') }}">
+      {% for code, name in LANGUAGES.items() %}
+        <a href="/lang/{{ code }}" class="{{ 'active' if code == lang else '' }}"
+           hreflang="{{ code }}">{{ name }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  {% if flash %}<div class="flash">{{ t(flash) }}</div>{% endif %}
+  {% if flash_error %}<div class="flash error">{{ flash_error }}</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

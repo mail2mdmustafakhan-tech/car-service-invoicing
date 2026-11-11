@@ -1,0 +1,36 @@
+# The live database and its write-ahead log. Never commit these: they hold
+# real customer data, and a copy in Git would be a copy you cannot delete.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local configuration
+.env

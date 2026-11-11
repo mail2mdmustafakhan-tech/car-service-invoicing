@@ -1,0 +1,233 @@
+{#
+  The printed invoice -- the only page a customer ever sees.
+
+  Deliberately standalone: it does not extend base.html, so none of the
+  application's navigation can end up on the paper.
+
+  Labels are printed in BOTH languages regardless of the interface language.
+  A workshop in Saudi Arabia hands the same document to Arabic- and
+  English-speaking customers, and printing both costs nothing but a line of
+  type. Values that exist in both scripts (business name, customer name, item
+  descriptions) also print both.
+
+  `dir` still follows the interface language, so the whole sheet mirrors if
+  the user is working in Arabic.
+#}
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ invoice['invoice_no'] }} — {{ loc(settings, 'business_name_en') }}</title>
+  {# When WeasyPrint renders this for the PDF download it is handed the
+     stylesheet directly, so the link (and the on-screen toolbar) are left
+     out of that copy entirely. #}
+  {% if not pdf %}<link rel="stylesheet" href="/static/css/print.css">{% endif %}
+</head>
+<body class="print-view">
+
+{% if not pdf %}
+<div class="print-bar">
+  <button type="button" onclick="window.print()">{{ t('action.print') }}</button>
+  {% if PDF_AVAILABLE %}
+    <a href="/invoices/{{ invoice['id'] }}/pdf">{{ t('action.download_pdf') }}</a>
+  {% endif %}
+  <a href="/invoices/{{ invoice['id'] }}">{{ t('action.back') }}</a>
+  <span class="note">
+    {{ 'Choose "Save as PDF" in the print dialogue to keep a copy.' if lang == 'en'
+       else 'اختر "حفظ كملف PDF" في نافذة الطباعة للاحتفاظ بنسخة.' }}
+  </span>
+</div>
+{% endif %}
+
+<div class="sheet">
+
+  {# ---- Masthead ------------------------------------------------------- #}
+  <div class="doc-head">
+    <div class="issuer">
+      <div class="name">{{ settings['business_name_en'] }}</div>
+      {% if settings['business_name_ar'] %}
+        <div class="name-alt" dir="rtl">{{ settings['business_name_ar'] }}</div>
+      {% endif %}
+      {# Each bilingual label and each value is wrapped in <bdi>, which stops
+         the browser reordering a line that mixes Arabic with Latin text or
+         digits. Without it "Tel / هاتف: +966 11 234 5678" comes out with the
+         number reversed and the colon in the wrong place. #}
+      <div class="meta">
+        {% if settings['address_en'] %}<div>{{ settings['address_en'] }}</div>{% endif %}
+        {% if settings['address_ar'] %}<div dir="rtl">{{ settings['address_ar'] }}</div>{% endif %}
+        {% if settings['phone'] %}<div><bdi>Tel / هاتف</bdi>: <bdi>{{ settings['phone'] }}</bdi></div>{% endif %}
+        {% if settings['email'] %}<div><bdi>{{ settings['email'] }}</bdi></div>{% endif %}
+        {% if settings['vat_number'] %}<div><bdi>VAT No. / الرقم الضريبي</bdi>: <bdi>{{ settings['vat_number'] }}</bdi></div>{% endif %}
+        {% if settings['cr_number'] %}<div><bdi>CR No. / السجل التجاري</bdi>: <bdi>{{ settings['cr_number'] }}</bdi></div>{% endif %}
+      </div>
+    </div>
+
+    <div class="doc-title">
+      <div class="kind">{{ 'TAX INVOICE' if invoice['vat_rate_bp'] else 'INVOICE' }}</div>
+      <div class="kind-alt" dir="rtl">{{ 'فاتورة ضريبية' if invoice['vat_rate_bp'] else 'فاتورة' }}</div>
+      <div class="no">{{ invoice['invoice_no'] }}</div>
+      <div class="dates">
+        <div><bdi>Date / التاريخ</bdi>: <bdi>{{ invoice['issue_date'] }}</bdi></div>
+        {% if invoice['due_date'] %}<div><bdi>Due / الاستحقاق</bdi>: <bdi>{{ invoice['due_date'] }}</bdi></div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if invoice['status'] == 'void' %}
+    <div class="void-stamp">VOID — ملغاة</div>
+  {% elif invoice['status'] == 'draft' %}
+    <div class="draft-stamp">DRAFT — NOT A VALID INVOICE / مسودة — غير صالحة كفاتورة</div>
+  {% endif %}
+
+  {# ---- Customer and vehicle ------------------------------------------- #}
+  <div class="parties">
+    <div class="party">
+      <h4>BILL TO / فاتورة إلى</h4>
+      <div class="primary">{{ invoice['customer_name'] }}</div>
+      {% if invoice['customer_name_ar'] %}
+        <div class="primary" dir="rtl">{{ invoice['customer_name_ar'] }}</div>
+      {% endif %}
+      <dl>
+        {% if invoice['customer_phone'] %}<dt><bdi>Tel / هاتف</bdi></dt><dd><bdi>{{ invoice['customer_phone'] }}</bdi></dd>{% endif %}
+        {% if invoice['customer_email'] %}<dt>Email</dt><dd><bdi>{{ invoice['customer_email'] }}</bdi></dd>{% endif %}
+        {% if invoice['customer_address'] %}<dt><bdi>Address / العنوان</bdi></dt><dd><bdi>{{ invoice['customer_address'] }}</bdi></dd>{% endif %}
+        {% if invoice['customer_vat_number'] %}<dt><bdi>VAT No. / الرقم الضريبي</bdi></dt><dd><bdi>{{ invoice['customer_vat_number'] }}</bdi></dd>{% endif %}
+      </dl>
+    </div>
+
+    <div class="party">
+      <h4>VEHICLE / المركبة</h4>
+      {% if invoice['vehicle_plate'] %}
+        <div class="primary"><bdi>{{ invoice['vehicle_plate'] }}</bdi></div>
+        <dl>
+          {% if invoice['vehicle_make'] or invoice['vehicle_model'] %}
+            <dt><bdi>Vehicle / السيارة</bdi></dt>
+            <dd><bdi>{{ (invoice['vehicle_make'] ~ ' ' ~ invoice['vehicle_model']) | trim }}{% if invoice['vehicle_year'] %} ({{ invoice['vehicle_year'] }}){% endif %}</bdi></dd>
+          {% endif %}
+          {% if invoice['vehicle_colour'] %}<dt><bdi>Colour / اللون</bdi></dt><dd><bdi>{{ invoice['vehicle_colour'] }}</bdi></dd>{% endif %}
+          {% if invoice['vehicle_vin'] %}<dt><bdi>VIN / الهيكل</bdi></dt><dd><bdi>{{ invoice['vehicle_vin'] }}</bdi></dd>{% endif %}
+          {% if invoice['odometer'] %}<dt><bdi>Odometer / العداد</bdi></dt><dd><bdi>{{ '{:,}'.format(invoice['odometer']) }} km</bdi></dd>{% endif %}
+        </dl>
+      {% else %}
+        <div class="primary">—</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Items ----------------------------------------------------------- #}
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="line-no">#</th>
+        <th>Description / الوصف</th>
+        <th class="col-qty num">Qty<br>الكمية</th>
+        <th class="col-unit">Unit<br>الوحدة</th>
+        <th class="col-price num">Unit price<br>سعر الوحدة</th>
+        <th class="col-amount num">Amount<br>المبلغ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="line-no">{{ item['line_no'] }}</td>
+        <td>
+          <bdi>{{ item['description'] }}</bdi>
+          {% if item['description_ar'] and item['description_ar'] != item['description'] %}
+            <div class="desc-alt">{{ item['description_ar'] }}</div>
+          {% endif %}
+        </td>
+        <td class="col-qty num">{{ fmt_qty(item['qty_milli']) }}</td>
+        <td class="col-unit">{{ item['unit'] }}</td>
+        <td class="col-price num">{{ m_plain(item['unit_price_minor']) }}</td>
+        <td class="col-amount num">{{ m_plain(item['line_total_minor']) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ---- Totals ---------------------------------------------------------- #}
+  <div class="doc-totals">
+    <table>
+      <tr>
+        <td>Subtotal / المجموع</td>
+        <td>{{ m(invoice['subtotal_minor']) }}</td>
+      </tr>
+      {% if invoice['discount_minor'] %}
+      <tr>
+        <td>Discount / الخصم</td>
+        <td>-{{ m(invoice['discount_minor']) }}</td>
+      </tr>
+      {% endif %}
+      <tr class="rule">
+        <td>Taxable amount / المبلغ الخاضع للضريبة</td>
+        <td>{{ m(invoice['taxable_minor']) }}</td>
+      </tr>
+      <tr>
+        <td>VAT {{ fmt_rate(invoice['vat_rate_bp']) }}% / ضريبة القيمة المضافة</td>
+        <td>{{ m(invoice['vat_minor']) }}</td>
+      </tr>
+      <tr class="grand">
+        <td>Total / الإجمالي</td>
+        <td>{{ m(invoice['total_minor']) }}</td>
+      </tr>
+      {% if invoice['paid_minor'] %}
+      <tr>
+        <td>Paid / المدفوع</td>
+        <td>-{{ m(invoice['paid_minor']) }}</td>
+      </tr>
+      <tr class="owed">
+        <td>Balance due / المتبقي</td>
+        <td>{{ m(balance) }}</td>
+      </tr>
+      {% endif %}
+    </table>
+  </div>
+
+  {# ---- Payments received ----------------------------------------------- #}
+  {% if payments %}
+  <div class="doc-section">
+    <h4>PAYMENTS RECEIVED / المدفوعات المستلمة</h4>
+    <table>
+      {% for p in payments %}
+      <tr>
+        <td style="width:28mm">{{ p['paid_on'] }}</td>
+        <td><bdi>{{ t2('pay.method_' ~ p['method']) }}</bdi>{% if p['reference'] %} — <bdi>{{ p['reference'] }}</bdi>{% endif %}</td>
+        <td class="num" style="width:30mm">{{ m_plain(p['amount_minor']) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  {# ---- Notes ----------------------------------------------------------- #}
+  {% if invoice['notes'] %}
+  <div class="doc-section">
+    <h4>NOTES / ملاحظات</h4>
+    <div class="doc-notes">{{ invoice['notes'] }}</div>
+  </div>
+  {% endif %}
+
+  <div class="signatures">
+    <div class="signature">Customer signature / توقيع العميل</div>
+    <div class="signature">For {{ settings['business_name_en'] }} / عن المنشأة</div>
+  </div>
+
+  <div class="doc-foot">
+    <div>
+      {% if settings['invoice_footer_en'] %}<div>{{ settings['invoice_footer_en'] }}</div>{% endif %}
+      {% if settings['invoice_footer_ar'] %}<div dir="rtl">{{ settings['invoice_footer_ar'] }}</div>{% endif %}
+    </div>
+    <div style="white-space:nowrap">{{ invoice['invoice_no'] }}</div>
+  </div>
+</div>
+
+{% if autoprint %}
+<script>
+  /* Open the print dialogue once the page has settled, so the user lands
+     straight on "Print" or "Save as PDF". */
+  window.addEventListener("load", function () { window.setTimeout(window.print, 250); });
+</script>
+{% endif %}
+</body>
+</html>

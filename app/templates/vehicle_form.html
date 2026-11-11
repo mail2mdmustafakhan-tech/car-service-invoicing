@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, check with context %}
+{% set editing = vehicle is not none %}
+{% block title %}{{ t('veh.edit') if editing else t('veh.new') }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/vehicles">{{ t('veh.title') }}</a>
+  {% if editing %} / <a href="/vehicles/{{ vehicle['id'] }}">{{ vehicle['plate_no'] }}</a>{% endif %}
+</div>
+
+<div class="pagehead"><h1>{{ t('veh.edit') if editing else t('veh.new') }}</h1></div>
+
+<form method="post"
+      action="{{ '/vehicles/' ~ vehicle['id'] ~ '/edit' if editing else '/vehicles/new' }}">
+  <div class="panel">
+    <div class="panel-body">
+      {% set selected_customer = vehicle['customer_id'] if editing else preset_customer_id %}
+      <div class="field">
+        <label for="f_customer_id">{{ t('veh.owner') }} *</label>
+        <select id="f_customer_id" name="customer_id" required>
+          <option value="">{{ t('inv.select_customer') }}</option>
+          {% for c in customers %}
+          <option value="{{ c['id'] }}" {% if selected_customer == c['id'] %}selected{% endif %}>
+            {{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid-3">
+        {{ field('plate_no', t('veh.plate'), vehicle['plate_no'] if editing else '', required=True) }}
+        {{ field('make', t('veh.make'), vehicle['make'] if editing else '') }}
+        {{ field('model', t('veh.model'), vehicle['model'] if editing else '') }}
+        {{ field('model_year', t('veh.year'), vehicle['model_year'] if editing else '',
+                 type='number', attrs='min="1900" max="2100" step="1"') }}
+        {{ field('colour', t('veh.colour'), vehicle['colour'] if editing else '') }}
+        {{ field('odometer', t('veh.odometer'), vehicle['odometer'] if editing else '',
+                 type='number', attrs='min="0" step="1"') }}
+      </div>
+
+      {{ field('vin', t('veh.vin'), vehicle['vin'] if editing else '') }}
+
+      <div class="field">
+        <label for="f_notes">{{ t('veh.notes') }}</label>
+        <textarea id="f_notes" name="notes">{{ vehicle['notes'] if editing else '' }}</textarea>
+      </div>
+
+      {% if editing %}{{ check('is_active', t('cust.active'), vehicle['is_active']) }}{% endif %}
+
+      <div class="formactions">
+        <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+        <a class="btn" href="{{ '/vehicles/' ~ vehicle['id'] if editing else '/vehicles' }}">{{ t('action.cancel') }}</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

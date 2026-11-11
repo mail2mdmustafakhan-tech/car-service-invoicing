@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ t('cust.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('cust.title') }}</h1>
+  <div class="actions">
+    <a class="btn accent" href="/customers/new">{{ t('cust.new') }}</a>
+  </div>
+</div>
+
+<form class="toolbar" method="get" action="/customers">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('cust.search_hint') }}" aria-label="{{ t('action.search') }}">
+  <div class="check">
+    <input type="checkbox" id="inactive" name="inactive" value="1" {% if inactive %}checked{% endif %}>
+    <label for="inactive">{{ t('cust.show_inactive') }}</label>
+  </div>
+  <button class="btn" type="submit">{{ t('action.search') }}</button>
+  {% if q or inactive %}<a class="btn link" href="/customers">{{ t('action.clear') }}</a>{% endif %}
+</form>
+
+<div class="panel">
+  {% if customers %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('cust.name') }}</th>
+          <th>{{ t('cust.phone') }}</th>
+          <th class="num">{{ t('cust.vehicles') }}</th>
+          <th class="num">{{ t('cust.balance') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in customers %}
+        <tr>
+          <td>
+            <a href="/customers/{{ c['id'] }}">{{ loc(c, 'name') }}</a>
+            {% if not c['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
+            {% if c['vat_number'] %}<div class="secondary">{{ t('cust.vat_number') }}: {{ c['vat_number'] }}</div>{% endif %}
+          </td>
+          <td class="tight">{{ c['phone'] or '—' }}</td>
+          <td class="num">{{ c['vehicle_count'] }}</td>
+          <td class="num">{% if c['balance_minor'] %}<strong style="color:var(--amber)">{{ m(c['balance_minor']) }}</strong>{% else %}—{% endif %}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/invoices/new?customer_id={{ c['id'] }}">{{ t('inv.new') }}</a>
+              <a class="btn small" href="/customers/{{ c['id'] }}/edit">{{ t('action.edit') }}</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>{{ t('cust.none') if not q else t('msg.no_results') }}</p>
+    <a class="btn primary" href="/customers/new">{{ t('cust.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

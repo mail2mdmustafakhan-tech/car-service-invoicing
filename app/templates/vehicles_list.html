@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ t('veh.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('veh.title') }}</h1>
+  <div class="actions"><a class="btn accent" href="/vehicles/new">{{ t('veh.new') }}</a></div>
+</div>
+
+<form class="toolbar" method="get" action="/vehicles">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('veh.search_hint') }}" aria-label="{{ t('action.search') }}">
+  <div class="check">
+    <input type="checkbox" id="inactive" name="inactive" value="1" {% if inactive %}checked{% endif %}>
+    <label for="inactive">{{ t('cust.show_inactive') }}</label>
+  </div>
+  <button class="btn" type="submit">{{ t('action.search') }}</button>
+  {% if q or inactive %}<a class="btn link" href="/vehicles">{{ t('action.clear') }}</a>{% endif %}
+</form>
+
+<div class="panel">
+  {% if vehicles %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('veh.plate') }}</th>
+          <th>{{ t('veh.make') }} / {{ t('veh.model') }}</th>
+          <th>{{ t('veh.owner') }}</th>
+          <th class="num">{{ t('veh.odometer') }}</th>
+          <th class="num">{{ t('nav.invoices') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in vehicles %}
+        <tr>
+          <td class="tight">
+            <a href="/vehicles/{{ v['id'] }}">{{ v['plate_no'] }}</a>
+            {% if not v['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
+          </td>
+          <td>
+            {{ (v['make'] ~ ' ' ~ v['model']) | trim or '—' }}
+            {% if v['model_year'] %}<div class="secondary">{{ v['model_year'] }}{% if v['colour'] %} — {{ v['colour'] }}{% endif %}</div>{% endif %}
+          </td>
+          <td><a href="/customers/{{ v['customer_id'] }}">{{ v['customer_name'] }}</a></td>
+          <td class="num">{% if v['odometer'] %}{{ '{:,}'.format(v['odometer']) }}{% else %}—{% endif %}</td>
+          <td class="num">{{ v['invoice_count'] }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/invoices/new?customer_id={{ v['customer_id'] }}&vehicle_id={{ v['id'] }}">{{ t('inv.new') }}</a>
+              <a class="btn small" href="/vehicles/{{ v['id'] }}/edit">{{ t('action.edit') }}</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>{{ t('veh.none') if not q else t('msg.no_results') }}</p>
+    <a class="btn primary" href="/vehicles/new">{{ t('veh.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

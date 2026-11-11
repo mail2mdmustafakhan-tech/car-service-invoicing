@@ -1,0 +1,12 @@
+# Everything in requirements.txt, plus the tools used to test and check the
+# code. Install these only on a machine where you are editing the code --
+# the service centre's PC does not need them.
+#
+#   pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+pytest>=8.0
+httpx>=0.27          # lets the tests call the app without a running server
+ruff>=0.4            # linter and formatter
+weasyprint>=60       # so the PDF path is covered by the tests too

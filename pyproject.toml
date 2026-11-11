@@ -1,0 +1,44 @@
+[project]
+name = "car-service-invoicing"
+version = "1.0.0"
+description = "Lightweight on-premise invoicing for a car service centre"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+# Server-side PDF download. Everything works without it -- the Print button
+# and the browser's "Save as PDF" cover the same ground. See app/pdf.py.
+pdf = ["weasyprint>=60"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.4"]
+
+[project.scripts]
+car-service-invoicing = "app.main:run"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The examples in money.py and invoicing.py are run as tests too, so the
+# documentation cannot drift away from what the code actually does.
+addopts = "-q --doctest-modules --ignore=app/main.py --ignore=app/pdf.py"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",  # long lines are usually long SQL or long translated strings
+    "B008",  # FastAPI's Depends()/Form() in defaults is the documented style
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # conftest sets an env var before importing the app

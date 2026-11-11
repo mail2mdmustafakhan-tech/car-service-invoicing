@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import delete_form with context %}
+{% block title %}{{ t('cat.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ t('cat.title') }}</h1>
+  </div>
+  <div class="actions"><a class="btn accent" href="/catalog/new">{{ t('cat.new') }}</a></div>
+</div>
+
+<p class="hint" style="margin-block:0 var(--space-4);color:var(--ink-faint)">{{ t('cat.hint') }}</p>
+
+<form class="toolbar" method="get" action="/catalog">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('action.search') }}" aria-label="{{ t('action.search') }}">
+  <select name="kind" aria-label="{{ t('cat.kind') }}">
+    <option value="">{{ t('status.all') }}</option>
+    <option value="service" {% if kind == 'service' %}selected{% endif %}>{{ t('cat.kind_service') }}</option>
+    <option value="part"    {% if kind == 'part' %}selected{% endif %}>{{ t('cat.kind_part') }}</option>
+  </select>
+  <div class="check">
+    <input type="checkbox" id="inactive" name="inactive" value="1" {% if inactive %}checked{% endif %}>
+    <label for="inactive">{{ t('cust.show_inactive') }}</label>
+  </div>
+  <button class="btn" type="submit">{{ t('action.search') }}</button>
+  {% if q or kind or inactive %}<a class="btn link" href="/catalog">{{ t('action.clear') }}</a>{% endif %}
+</form>
+
+<div class="panel">
+  {% if items %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('cat.name_en') }}</th>
+          <th>{{ t('cat.kind') }}</th>
+          <th>{{ t('cat.code') }}</th>
+          <th>{{ t('cat.unit') }}</th>
+          <th class="num">{{ t('cat.unit_price') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in items %}
+        <tr>
+          <td>
+            {{ i['name_en'] }}
+            {% if not i['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
+            {% if i['name_ar'] %}<div class="secondary" dir="rtl">{{ i['name_ar'] }}</div>{% endif %}
+          </td>
+          <td class="tight">{{ t('cat.kind_service') if i['kind'] == 'service' else t('cat.kind_part') }}</td>
+          <td class="tight secondary">{{ i['code'] or '—' }}</td>
+          <td class="tight secondary">{{ t('cat.unit_' ~ i['unit']) }}</td>
+          <td class="num">{{ m(i['unit_price_minor']) }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/catalog/{{ i['id'] }}/edit">{{ t('action.edit') }}</a>
+              {{ delete_form('/catalog/' ~ i['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>{{ t('cat.none') if not q else t('msg.no_results') }}</p>
+    <a class="btn primary" href="/catalog/new">{{ t('cat.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, check with context %}
+{% set editing = item is not none %}
+{% block title %}{{ t('cat.edit') if editing else t('cat.new') }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/catalog">{{ t('cat.title') }}</a></div>
+<div class="pagehead"><h1>{{ t('cat.edit') if editing else t('cat.new') }}</h1></div>
+
+<form method="post"
+      action="{{ '/catalog/' ~ item['id'] ~ '/edit' if editing else '/catalog/new' }}">
+  <div class="panel">
+    <div class="panel-body">
+      <div class="grid-2">
+        {{ field('name_en', t('cat.name_en'), item['name_en'] if editing else '', required=True) }}
+        {{ field('name_ar', t('cat.name_ar'), item['name_ar'] if editing else '', attrs='dir="rtl"') }}
+      </div>
+
+      <div class="grid-3">
+        <div class="field">
+          <label for="f_kind">{{ t('cat.kind') }}</label>
+          <select id="f_kind" name="kind">
+            <option value="service" {% if editing and item['kind'] == 'service' %}selected{% endif %}>{{ t('cat.kind_service') }}</option>
+            <option value="part"    {% if editing and item['kind'] == 'part' %}selected{% endif %}>{{ t('cat.kind_part') }}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="f_unit">{{ t('cat.unit') }}</label>
+          <select id="f_unit" name="unit">
+            {% for u in ['pcs', 'hour', 'litre', 'set', 'km'] %}
+            <option value="{{ u }}" {% if editing and item['unit'] == u %}selected{% endif %}>{{ t('cat.unit_' ~ u) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {{ field('unit_price', t('cat.unit_price'),
+                 from_minor(item['unit_price_minor']) if editing else '',
+                 attrs='inputmode="decimal" class="num"', hint=currency) }}
+      </div>
+
+      {{ field('code', t('cat.code'), item['code'] if editing else '',
+               hint='Optional. Must be unique if used.' if lang == 'en' else 'اختياري. يجب أن يكون فريداً إن استُخدم.') }}
+
+      {% if editing %}{{ check('is_active', t('cust.active'), item['is_active']) }}{% endif %}
+
+      <div class="formactions">
+        <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+        <a class="btn" href="/catalog">{{ t('action.cancel') }}</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

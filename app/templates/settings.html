@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field with context %}
+{% block title %}{{ t('set.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead"><h1>{{ t('set.title') }}</h1></div>
+
+<form method="post" action="/settings">
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.business') }}</h2></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-block-start:0">
+        {{ 'These details appear at the top of every printed invoice.' if lang == 'en'
+           else 'تظهر هذه البيانات في أعلى كل فاتورة مطبوعة.' }}
+      </p>
+      <div class="grid-2">
+        {{ field('business_name_en', t('set.business_name_en'), settings['business_name_en'], required=True) }}
+        {{ field('business_name_ar', t('set.business_name_ar'), settings['business_name_ar'], attrs='dir="rtl"') }}
+        {{ field('vat_number', t('set.vat_number'), settings['vat_number']) }}
+        {{ field('cr_number', t('set.cr_number'), settings['cr_number']) }}
+        {{ field('phone', t('set.phone'), settings['phone'], attrs='inputmode="tel"') }}
+        {{ field('email', t('set.email'), settings['email'], type='email') }}
+        <div class="field">
+          <label for="f_address_en">{{ t('set.address_en') }}</label>
+          <textarea id="f_address_en" name="address_en">{{ settings['address_en'] }}</textarea>
+        </div>
+        <div class="field">
+          <label for="f_address_ar">{{ t('set.address_ar') }}</label>
+          <textarea id="f_address_ar" name="address_ar" dir="rtl">{{ settings['address_ar'] }}</textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.tax') }}</h2></div>
+    <div class="panel-body">
+      <div class="grid-3">
+        {{ field('vat_rate', t('set.vat_rate'), fmt_rate(settings['vat_rate_bp']),
+                 attrs='inputmode="decimal" class="num"',
+                 hint=('Set 0 if you are not VAT registered.' if lang == 'en'
+                       else 'اضبطها على 0 إن لم تكن مسجلاً في الضريبة.')) }}
+        {{ field('currency_code', t('set.currency'), settings['currency_code'],
+                 attrs='maxlength="5" style="text-transform:uppercase"') }}
+      </div>
+      <div class="field">
+        <div class="check">
+          <input type="checkbox" id="f_prices_include_vat" name="prices_include_vat" value="1"
+                 {% if settings['prices_include_vat'] %}checked{% endif %}>
+          <label for="f_prices_include_vat">{{ t('set.prices_include_vat') }}</label>
+        </div>
+        <p class="hint">
+          {{ 'Tick this if the prices you quote customers already contain VAT. The invoice then works the tax backwards out of the price instead of adding it on top.'
+             if lang == 'en' else
+             'حدد هذا الخيار إذا كانت الأسعار التي تعطيها للعميل تشمل الضريبة. ستحسب الفاتورة الضريبة من داخل السعر بدلاً من إضافتها عليه.' }}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.numbering') }}</h2></div>
+    <div class="panel-body">
+      <div class="grid-2">
+        {{ field('invoice_prefix', t('set.invoice_prefix'), settings['invoice_prefix'],
+                 hint=settings['invoice_prefix'] ~ '00001') }}
+        {{ field('next_invoice_seq', t('set.next_seq'), settings['next_invoice_seq'],
+                 type='number', attrs='min="1" step="1" class="num"',
+                 hint=('Change this only if you are continuing a number series from another system.'
+                       if lang == 'en' else
+                       'غيّر هذا فقط إذا كنت تكمل تسلسل أرقام من نظام آخر.')) }}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.appearance') }}</h2></div>
+    <div class="panel-body">
+      <div class="field" style="max-width:320px">
+        <label for="f_default_language">{{ t('set.default_language') }}</label>
+        <select id="f_default_language" name="default_language">
+          {% for code, name in LANGUAGES.items() %}
+          <option value="{{ code }}" {% if settings['default_language'] == code %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_invoice_footer_en">{{ t('set.footer_en') }}</label>
+          <textarea id="f_invoice_footer_en" name="invoice_footer_en">{{ settings['invoice_footer_en'] }}</textarea>
+          <p class="hint">
+            {{ 'Printed at the bottom of each invoice — warranty terms, thanks, bank details.'
+               if lang == 'en' else 'يُطبع في أسفل كل فاتورة — شروط الضمان أو الشكر أو بيانات الحساب البنكي.' }}
+          </p>
+        </div>
+        <div class="field">
+          <label for="f_invoice_footer_ar">{{ t('set.footer_ar') }}</label>
+          <textarea id="f_invoice_footer_ar" name="invoice_footer_ar" dir="rtl">{{ settings['invoice_footer_ar'] }}</textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="formactions">
+    <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+  </div>
+</form>
+
+<section class="panel" style="margin-block-start:var(--space-6)">
+  <div class="panel-head"><h2>{{ t('set.backup') }}</h2></div>
+  <div class="panel-body">
+    <p class="hint" style="margin-block-start:0">{{ t('set.backup_hint') }}</p>
+    <a class="btn" href="/settings/backup">{{ t('set.download_backup') }}</a>
+  </div>
+</section>
+{% endblock %}

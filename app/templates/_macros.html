@@ -1,0 +1,46 @@
+{#
+  Small reusable fragments. Imported `with context` so they can use the
+  translation helper `t` without it being passed in every time:
+
+      {% from "_macros.html" import pill with context %}
+#}
+
+{# A status badge. The colour carries the meaning, so there is no icon. #}
+{% macro pill(state) %}
+<span class="pill {{ state }}">{{ t('status.' ~ state) }}</span>
+{%- endmacro %}
+
+{# Plate number plus make/model, however much of it is filled in. #}
+{% macro vehicle_label(plate, make, model) %}
+{%- if plate %}{{ plate }}{% endif %}
+{%- if make or model %} · {{ (make ~ ' ' ~ model) | trim }}{% endif %}
+{%- endmacro %}
+
+{# A labelled text input. Keeps the markup for ~40 form fields consistent. #}
+{% macro field(name, label, value='', type='text', required=False, hint='', attrs='') %}
+<div class="field">
+  <label for="f_{{ name }}">{{ label }}{% if required %} *{% endif %}</label>
+  <input type="{{ type }}" id="f_{{ name }}" name="{{ name }}"
+         value="{{ value if value is not none else '' }}"
+         {% if required %}required{% endif %} {{ attrs | safe }}>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{# A checkbox that posts "1" when ticked and nothing when not. #}
+{% macro check(name, label, checked=False) %}
+<div class="field">
+  <div class="check">
+    <input type="checkbox" id="f_{{ name }}" name="{{ name }}" value="1"
+           {% if checked %}checked{% endif %}>
+    <label for="f_{{ name }}">{{ label }}</label>
+  </div>
+</div>
+{%- endmacro %}
+
+{# Delete button wrapped in its own form, with a confirmation prompt. #}
+{% macro delete_form(action, label, confirm) %}
+<form method="post" action="{{ action }}" onsubmit="return confirm('{{ confirm }}')">
+  <button type="submit" class="btn danger small">{{ label }}</button>
+</form>
+{%- endmacro %}

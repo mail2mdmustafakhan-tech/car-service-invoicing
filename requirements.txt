@@ -1,0 +1,18 @@
+# Runtime dependencies.
+#
+#   pip install -r requirements.txt
+#
+# Four packages, all pure-Python wheels, so this installs in seconds on
+# Windows, macOS and Linux with no compiler and no system libraries.
+
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+jinja2>=3.1,<4.0
+python-multipart>=0.0.9
+
+# Optional: server-side PDF download. Left out on purpose -- it needs the
+# Pango and Cairo system libraries, which are awkward to install on Windows.
+# Everything works without it; the Print button plus the browser's own
+# "Save as PDF" produces the same file. The Docker image installs it.
+#
+#   pip install weasyprint

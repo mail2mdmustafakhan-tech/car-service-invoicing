@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill with context %}
+{% block title %}{{ t('dash.title') }}{% endblock %}
+
+{% block content %}
+{% if not settings['business_name_en'] or settings['business_name_en'] == 'My Auto Service' %}
+  <div class="flash">
+    {{ t('msg.first_run') }}
+    <a href="/settings">{{ t('nav.settings') }}</a>
+  </div>
+{% endif %}
+
+<div class="pagehead">
+  <div>
+    <h1>{{ t('dash.title') }}</h1>
+  </div>
+  <div class="actions">
+    <a class="btn accent" href="/invoices/new">{{ t('dash.quick_new_invoice') }}</a>
+  </div>
+</div>
+
+{# The month's takings and what is still owed: the two numbers the owner
+   checks first. Amber is reserved for money that has not arrived yet. #}
+<div class="figures">
+  <div class="figure">
+    <div class="value">{{ m(stats.month_total_minor) }}</div>
+    <div class="label">{{ t('dash.this_month') }}</div>
+    <div class="sub">{{ stats.month_label }} — {{ stats.month_invoice_count }} {{ t('dash.invoices_count') }}</div>
+  </div>
+
+  <div class="figure owed">
+    <div class="value">{{ m(stats.outstanding_minor) }}</div>
+    <div class="label">{{ t('dash.outstanding') }}</div>
+    <div class="sub">{{ stats.outstanding_count }} {{ t('dash.invoices_count') }}</div>
+  </div>
+
+  <div class="figure">
+    <div class="value">{{ m(stats.month_vat_minor) }}</div>
+    <div class="label">{{ t('dash.vat_collected') }}</div>
+    <div class="sub">{{ stats.month_label }}</div>
+  </div>
+
+  <div class="figure">
+    <div class="value">{{ stats.customer_count }}</div>
+    <div class="label">{{ t('dash.customers') }}</div>
+    <div class="sub">{{ stats.vehicle_count }} {{ t('dash.vehicles') | lower }}{% if stats.draft_count %} — {{ stats.draft_count }} {{ t('dash.drafts') | lower }}{% endif %}</div>
+  </div>
+</div>
+
+<div class="cols">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ t('dash.recent_invoices') }}</h2>
+      <a class="btn small" href="/invoices">{{ t('action.view') }}</a>
+    </div>
+    {% if recent %}
+      <div class="panel-body tight scrollx">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>{{ t('inv.number') }}</th>
+              <th>{{ t('inv.customer') }}</th>
+              <th class="num">{{ t('inv.total') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in recent %}
+            <tr>
+              <td class="tight">
+                <a href="/invoices/{{ inv['id'] }}">{{ inv['invoice_no'] }}</a>
+                <div class="secondary">{{ inv['issue_date'] }}</div>
+              </td>
+              <td>
+                {{ inv['customer_name'] }}
+                {% if inv['vehicle_plate'] %}<div class="secondary">{{ inv['vehicle_plate'] }}</div>{% endif %}
+              </td>
+              <td class="num">{{ m(inv['total_minor']) }}</td>
+              <td class="tight">{{ pill(inv['payment_state']) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty">
+        <p>{{ t('dash.nothing_yet') }}</p>
+        <a class="btn primary" href="/customers/new">{{ t('cust.new') }}</a>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ t('dash.unpaid') }}</h2>
+      {% if unpaid %}<a class="btn small" href="/invoices?state=unpaid">{{ t('action.view') }}</a>{% endif %}
+    </div>
+    {% if unpaid %}
+      <div class="panel-body tight scrollx">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>{{ t('inv.number') }}</th>
+              <th>{{ t('inv.customer') }}</th>
+              <th class="num">{{ t('inv.balance') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in unpaid %}
+            <tr>
+              <td class="tight">
+                <a href="/invoices/{{ inv['id'] }}">{{ inv['invoice_no'] }}</a>
+                <div class="secondary">{{ inv['issue_date'] }}</div>
+              </td>
+              <td>{{ inv['customer_name'] }}</td>
+              <td class="num">{{ m(inv['total_minor'] - inv['paid_minor']) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty"><p>{{ t('msg.no_results') }}</p></div>
+    {% endif %}
+  </section>
+</div>
+
+{% if revenue | length > 1 %}
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('dash.this_month') }}</h2></div>
+  <div class="panel-body tight">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('inv.date') }}</th>
+          <th class="num">{{ t('dash.invoices_count') }}</th>
+          <th class="num">{{ t('inv.total') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set peak = revenue | map(attribute='total_minor') | max %}
+        {% for row in revenue %}
+        <tr>
+          <td class="tight">{{ row['month'] }}</td>
+          <td class="num">{{ row['invoice_count'] }}</td>
+          <td class="num">
+            {{ m(row['total_minor']) }}
+            {# A proportional rule under each figure: a trend you can read at a
+               glance without pulling in a charting library. #}
+            <div style="height:3px;background:var(--rule);margin-top:4px;">
+              <div style="height:3px;background:var(--ink);width:{{ (row['total_minor'] / peak * 100) | round(1) if peak else 0 }}%"></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

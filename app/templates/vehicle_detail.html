@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill, delete_form with context %}
+{% block title %}{{ vehicle['plate_no'] }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/vehicles">{{ t('veh.title') }}</a> /
+  <a href="/customers/{{ vehicle['customer_id'] }}">{{ vehicle['customer_name'] }}</a>
+</div>
+
+<div class="pagehead">
+  <div>
+    <h1>{{ vehicle['plate_no'] }}
+      {% if not vehicle['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
+    </h1>
+  </div>
+  <div class="actions">
+    <a class="btn accent" href="/invoices/new?customer_id={{ vehicle['customer_id'] }}&vehicle_id={{ vehicle['id'] }}">{{ t('inv.new') }}</a>
+    <a class="btn" href="/vehicles/{{ vehicle['id'] }}/edit">{{ t('action.edit') }}</a>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('veh.title') }}</h2></div>
+  <div class="panel-body">
+    <dl class="facts">
+      <dt>{{ t('veh.owner') }}</dt>
+      <dd><a href="/customers/{{ vehicle['customer_id'] }}">{{ vehicle['customer_name'] }}</a></dd>
+      {% if vehicle['make'] or vehicle['model'] %}
+        <dt>{{ t('veh.make') }} / {{ t('veh.model') }}</dt>
+        <dd>{{ (vehicle['make'] ~ ' ' ~ vehicle['model']) | trim }}</dd>
+      {% endif %}
+      {% if vehicle['model_year'] %}<dt>{{ t('veh.year') }}</dt><dd>{{ vehicle['model_year'] }}</dd>{% endif %}
+      {% if vehicle['colour'] %}<dt>{{ t('veh.colour') }}</dt><dd>{{ vehicle['colour'] }}</dd>{% endif %}
+      {% if vehicle['vin'] %}<dt>{{ t('veh.vin') }}</dt><dd>{{ vehicle['vin'] }}</dd>{% endif %}
+      {% if vehicle['odometer'] %}<dt>{{ t('veh.odometer') }}</dt><dd>{{ '{:,}'.format(vehicle['odometer']) }} km</dd>{% endif %}
+      {% if vehicle['notes'] %}<dt>{{ t('veh.notes') }}</dt><dd>{{ vehicle['notes'] }}</dd>{% endif %}
+    </dl>
+    <div class="formactions">
+      {{ delete_form('/vehicles/' ~ vehicle['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('veh.service_history') }}</h2></div>
+  {% if history %}
+    <div class="panel-body tight scrollx">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>{{ t('inv.number') }}</th>
+            <th>{{ t('inv.date') }}</th>
+            <th class="num">{{ t('inv.odometer') }}</th>
+            <th class="num">{{ t('inv.total') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in history %}
+          <tr>
+            <td class="tight"><a href="/invoices/{{ inv['id'] }}">{{ inv['invoice_no'] }}</a></td>
+            <td class="tight">{{ inv['issue_date'] }}</td>
+            <td class="num">{% if inv['odometer'] %}{{ '{:,}'.format(inv['odometer']) }}{% else %}—{% endif %}</td>
+            <td class="num">{{ m(inv['total_minor']) }}</td>
+            <td class="tight">{{ pill(payment_state(inv['status'], inv['total_minor'], inv['paid_minor'])) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty"><p>{{ t('inv.none') }}</p></div>
+  {% endif %}
+</section>
+{% endblock %}

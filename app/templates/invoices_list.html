@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill with context %}
+{% block title %}{{ t('inv.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('inv.title') }}</h1>
+  <div class="actions"><a class="btn accent" href="/invoices/new">{{ t('inv.new') }}</a></div>
+</div>
+
+<form class="toolbar" method="get" action="/invoices">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('inv.search_hint') }}" aria-label="{{ t('action.search') }}">
+
+  <select name="status" aria-label="{{ t('inv.status') }}">
+    <option value="">{{ t('inv.status') }}: {{ t('status.all') }}</option>
+    {% for s in ['draft', 'issued', 'void'] %}
+    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ t('status.' ~ s) }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="state" aria-label="{{ t('pay.title') }}">
+    <option value="">{{ t('pay.title') }}: {{ t('status.all') }}</option>
+    {% for s in ['unpaid', 'partially_paid', 'paid'] %}
+    <option value="{{ s }}" {% if state == s %}selected{% endif %}>{{ t('status.' ~ s) }}</option>
+    {% endfor %}
+  </select>
+
+  <input type="date" name="date_from" value="{{ date_from }}" aria-label="{{ t('inv.date') }}">
+  <input type="date" name="date_to" value="{{ date_to }}" aria-label="{{ t('inv.due_date') }}">
+
+  <button class="btn" type="submit">{{ t('action.apply') }}</button>
+  {% if q or status or state or date_from or date_to %}
+    <a class="btn link" href="/invoices">{{ t('action.clear') }}</a>
+  {% endif %}
+</form>
+
+<div class="panel">
+  {% if invoices %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('inv.number') }}</th>
+          <th>{{ t('inv.date') }}</th>
+          <th>{{ t('inv.customer') }}</th>
+          <th>{{ t('inv.vehicle') }}</th>
+          <th class="num">{{ t('inv.total') }}</th>
+          <th class="num">{{ t('inv.balance') }}</th>
+          <th>{{ t('inv.status') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        {% set balance = inv['total_minor'] - inv['paid_minor'] %}
+        <tr>
+          <td class="tight"><a href="/invoices/{{ inv['id'] }}">{{ inv['invoice_no'] }}</a></td>
+          <td class="tight">{{ inv['issue_date'] }}</td>
+          <td>
+            <a href="/customers/{{ inv['customer_id'] }}">{{ inv['customer_name'] }}</a>
+            {% if inv['customer_phone'] %}<div class="secondary">{{ inv['customer_phone'] }}</div>{% endif %}
+          </td>
+          <td>
+            {% if inv['vehicle_plate'] %}
+              <a href="/vehicles/{{ inv['vehicle_id'] }}">{{ inv['vehicle_plate'] }}</a>
+              {% if inv['vehicle_description'] %}<div class="secondary">{{ inv['vehicle_description'] }}</div>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="num">{{ m(inv['total_minor']) }}</td>
+          <td class="num">
+            {% if inv['status'] == 'issued' and balance > 0 %}
+              <strong style="color:var(--amber)">{{ m(balance) }}</strong>
+            {% else %}—{% endif %}
+          </td>
+          <td class="tight">{{ pill(inv['payment_state']) }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/invoices/{{ inv['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>{{ t('inv.none') if not (q or status or state) else t('msg.no_results') }}</p>
+    <a class="btn primary" href="/invoices/new">{{ t('inv.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

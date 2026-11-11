@@ -1,0 +1,36 @@
+# Start the application:
+#
+#     docker compose up -d
+#
+# Then open http://localhost:8000 in a browser.
+#
+# Stop it with `docker compose down`. The data is in the ./data folder on
+# this machine, so stopping or rebuilding the container never loses invoices.
+
+services:
+  app:
+    build: .
+    image: car-service-invoicing:latest
+    container_name: car-service-invoicing
+    restart: unless-stopped
+
+    ports:
+      # "127.0.0.1:8000:8000" would restrict access to this computer only.
+      # As written, any computer on the office network can reach it, which is
+      # what you want if the manager's PC should open it too.
+      - "8000:8000"
+
+    volumes:
+      # The database file lives here, next to this compose file. Back it up by
+      # copying this folder, or use the Backup button on the Settings page.
+      - ./data:/data
+
+    environment:
+      CARSERVICE_DB: /data/carservice.db
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

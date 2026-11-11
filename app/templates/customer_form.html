@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, check with context %}
+{% set editing = customer is not none %}
+{% block title %}{{ t('cust.edit') if editing else t('cust.new') }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/customers">{{ t('cust.title') }}</a>
+  {% if editing %} / <a href="/customers/{{ customer['id'] }}">{{ loc(customer, 'name') }}</a>{% endif %}
+</div>
+
+<div class="pagehead">
+  <h1>{{ t('cust.edit') if editing else t('cust.new') }}</h1>
+</div>
+
+<form method="post"
+      action="{{ '/customers/' ~ customer['id'] ~ '/edit' if editing else '/customers/new' }}">
+  <div class="panel">
+    <div class="panel-body">
+      <div class="grid-2">
+        {{ field('name', t('cust.name'), customer['name'] if editing else '', required=True) }}
+        {{ field('name_ar', t('cust.name_ar'), customer['name_ar'] if editing else '', attrs='dir="rtl"') }}
+        {{ field('phone', t('cust.phone'), customer['phone'] if editing else '', attrs='inputmode="tel"') }}
+        {{ field('email', t('cust.email'), customer['email'] if editing else '', type='email') }}
+        {{ field('vat_number', t('cust.vat_number'), customer['vat_number'] if editing else '',
+                 hint=('Only for business customers' if lang == 'en' else 'للعملاء من المنشآت فقط')) }}
+        <div class="field">
+          <label for="f_address">{{ t('cust.address') }}</label>
+          <textarea id="f_address" name="address">{{ customer['address'] if editing else '' }}</textarea>
+        </div>
+        <div class="field span-2">
+          <label for="f_notes">{{ t('cust.notes') }}</label>
+          <textarea id="f_notes" name="notes">{{ customer['notes'] if editing else '' }}</textarea>
+        </div>
+      </div>
+
+      {% if editing %}
+        {{ check('is_active', t('cust.active'), customer['is_active']) }}
+      {% endif %}
+
+      <div class="formactions">
+        <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+        <a class="btn" href="{{ '/customers/' ~ customer['id'] if editing else '/customers' }}">{{ t('action.cancel') }}</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
