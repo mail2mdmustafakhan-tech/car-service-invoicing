@@ -73,6 +73,11 @@ SETTINGS_FIELDS = (
     "prices_include_vat", "currency_code", "invoice_prefix",
     "next_invoice_seq", "default_language", "invoice_footer_en",
     "invoice_footer_ar",
+    # Added in migration 002, for the printed repair contract.
+    "business_tagline_en", "business_tagline_ar",
+    "contract_terms_en", "contract_terms_ar",
+    "contract_authorization_en", "contract_authorization_ar",
+    "contract_prefix", "next_contract_seq", "parts_markup_bp",
 )
 
 
@@ -108,6 +113,24 @@ def reserve_invoice_no(conn: sqlite3.Connection) -> str:
         """
     ).fetchone()
     return f"{row['invoice_prefix']}{row['seq']:05d}"
+
+
+def reserve_contract_no(conn: sqlite3.Connection) -> str:
+    """Take the next repair contract number and bump its counter.
+
+    Contracts are numbered in their own series, separate from invoices: a car
+    can be booked in and the job then abandoned, and the invoice numbering
+    should not carry a gap where that happened.
+    """
+    row = conn.execute(
+        """
+        UPDATE settings
+           SET next_contract_seq = next_contract_seq + 1
+         WHERE id = 1
+        RETURNING contract_prefix, next_contract_seq - 1 AS seq
+        """
+    ).fetchone()
+    return f"{row['contract_prefix']}{row['seq']:05d}"
 
 
 # ==========================================================================
@@ -671,6 +694,342 @@ def delete_payment(conn: sqlite3.Connection, payment_id: int) -> int:
 
 
 # ==========================================================================
+# Repair contracts (job cards)
+# ==========================================================================
+# The contract is written when the car arrives and signed by the owner. It
+# holds estimates and the technician's findings; the money owed only becomes
+# real when it is converted into an invoice.
+
+ORDER_HEADER_FIELDS = (
+    "customer_id", "vehicle_id", "date_in", "expected_date_out", "odometer",
+    "car_code", "status", "technician_name", "customer_signed", "signed_on",
+    "damage_notes", "notes",
+)
+
+ORDER_ITEM_FIELDS = (
+    "catalog_item_id", "description", "description_ar", "expense_minor",
+    "technician_remarks",
+)
+
+ORDER_PART_FIELDS = (
+    "catalog_item_id", "part_number", "description", "description_ar",
+    "qty_milli", "unit_price_minor", "sourced_externally",
+)
+
+
+def list_repair_orders(
+    conn: sqlite3.Connection,
+    *,
+    search: str = "",
+    status: str = "",
+    customer_id: int | None = None,
+    vehicle_id: int | None = None,
+    limit: int = 500,
+) -> list[Row]:
+    where, params = ["1 = 1"], []
+    if search:
+        where.append(
+            "(ro.contract_no LIKE ? OR ro.customer_name LIKE ? OR ro.vehicle_plate LIKE ?)"
+        )
+        like = f"%{search}%"
+        params += [like, like, like]
+    if status:
+        where.append("ro.status = ?")
+        params.append(status)
+    if customer_id is not None:
+        where.append("o.customer_id = ?")
+        params.append(customer_id)
+    if vehicle_id is not None:
+        where.append("o.vehicle_id = ?")
+        params.append(vehicle_id)
+
+    params.append(limit)
+    return _all(
+        conn,
+        f"""
+        SELECT ro.*, o.customer_id, o.vehicle_id, o.invoice_id
+          FROM v_repair_orders ro
+          JOIN repair_orders   o ON o.id = ro.id
+         WHERE {' AND '.join(where)}
+         ORDER BY ro.date_in DESC, ro.id DESC
+         LIMIT ?
+        """,
+        params,
+    )
+
+
+def get_repair_order(conn: sqlite3.Connection, order_id: int) -> Row:
+    return _require(
+        _one(
+            conn,
+            """
+            SELECT o.*,
+                   c.name       AS customer_name,
+                   c.name_ar    AS customer_name_ar,
+                   c.phone      AS customer_phone,
+                   c.email      AS customer_email,
+                   c.address    AS customer_address,
+                   c.vat_number AS customer_vat_number,
+                   v.plate_no   AS vehicle_plate,
+                   v.make       AS vehicle_make,
+                   v.model      AS vehicle_model,
+                   v.model_year AS vehicle_year,
+                   v.vin        AS vehicle_vin,
+                   v.colour     AS vehicle_colour,
+                   i.invoice_no AS invoice_no
+              FROM repair_orders o
+              JOIN customers c ON c.id = o.customer_id
+         LEFT JOIN vehicles  v ON v.id = o.vehicle_id
+         LEFT JOIN invoices  i ON i.id = o.invoice_id
+             WHERE o.id = ?
+            """,
+            (order_id,),
+        ),
+        "Repair contract",
+    )
+
+
+def get_order_items(conn: sqlite3.Connection, order_id: int) -> list[Row]:
+    return _all(
+        conn,
+        "SELECT * FROM repair_order_items WHERE repair_order_id = ? ORDER BY line_no",
+        (order_id,),
+    )
+
+
+def get_order_parts(conn: sqlite3.Connection, order_id: int) -> list[Row]:
+    return _all(
+        conn,
+        "SELECT * FROM repair_order_parts WHERE repair_order_id = ? ORDER BY line_no",
+        (order_id,),
+    )
+
+
+def order_totals(conn: sqlite3.Connection, order_id: int) -> dict[str, int]:
+    """Estimated labour, parts and combined total for a contract, in minor units.
+
+    These are estimates written on the contract, not amounts owed. Nothing is
+    due until the contract becomes an invoice.
+    """
+    labour = conn.execute(
+        "SELECT COALESCE(SUM(expense_minor), 0) AS t FROM repair_order_items WHERE repair_order_id = ?",
+        (order_id,),
+    ).fetchone()["t"]
+    parts = conn.execute(
+        "SELECT COALESCE(SUM(line_total_minor), 0) AS t FROM repair_order_parts WHERE repair_order_id = ?",
+        (order_id,),
+    ).fetchone()["t"]
+    return {
+        "labour_minor": labour,
+        "parts_minor": parts,
+        "total_minor": labour + parts,
+    }
+
+
+def _write_order_items(
+    conn: sqlite3.Connection, order_id: int, items: Sequence[Mapping[str, Any]]
+) -> None:
+    conn.execute(
+        "DELETE FROM repair_order_items WHERE repair_order_id = ?", (order_id,)
+    )
+    for line_no, raw in enumerate(items, start=1):
+        values = _pick(raw, ORDER_ITEM_FIELDS)
+        values["repair_order_id"] = order_id
+        values["line_no"] = line_no
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        conn.execute(
+            f"INSERT INTO repair_order_items ({cols}) VALUES ({marks})",
+            list(values.values()),
+        )
+
+
+def _write_order_parts(
+    conn: sqlite3.Connection, order_id: int, parts: Sequence[Mapping[str, Any]]
+) -> None:
+    conn.execute(
+        "DELETE FROM repair_order_parts WHERE repair_order_id = ?", (order_id,)
+    )
+    for line_no, raw in enumerate(parts, start=1):
+        values = _pick(raw, ORDER_PART_FIELDS)
+        values["repair_order_id"] = order_id
+        values["line_no"] = line_no
+        values["line_total_minor"] = line_total(
+            int(raw["qty_milli"]), int(raw["unit_price_minor"])
+        )
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        conn.execute(
+            f"INSERT INTO repair_order_parts ({cols}) VALUES ({marks})",
+            list(values.values()),
+        )
+
+
+def create_repair_order(
+    conn: sqlite3.Connection,
+    header: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]] = (),
+    parts: Sequence[Mapping[str, Any]] = (),
+) -> int:
+    values = _pick(header, ORDER_HEADER_FIELDS)
+    values.setdefault("date_in", date.today().isoformat())
+    with transaction(conn):
+        values["contract_no"] = reserve_contract_no(conn)
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        cur = conn.execute(
+            f"INSERT INTO repair_orders ({cols}) VALUES ({marks})",
+            list(values.values()),
+        )
+        order_id = int(cur.lastrowid)
+        _write_order_items(conn, order_id, items)
+        _write_order_parts(conn, order_id, parts)
+    return order_id
+
+
+def update_repair_order(
+    conn: sqlite3.Connection,
+    order_id: int,
+    header: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]] = (),
+    parts: Sequence[Mapping[str, Any]] = (),
+) -> None:
+    order = get_repair_order(conn, order_id)
+    if order["invoice_id"] is not None:
+        raise InUse(
+            f"This contract has already been invoiced as {order['invoice_no']}. "
+            "Edit that invoice instead."
+        )
+    with transaction(conn):
+        _update(conn, "repair_orders", order_id, _pick(header, ORDER_HEADER_FIELDS))
+        _write_order_items(conn, order_id, items)
+        _write_order_parts(conn, order_id, parts)
+
+
+def set_order_status(conn: sqlite3.Connection, order_id: int, status: str) -> None:
+    if status not in {"open", "completed", "invoiced", "cancelled"}:
+        raise ValueError(f"Unknown contract status: {status}")
+    get_repair_order(conn, order_id)
+    with transaction(conn):
+        conn.execute(
+            "UPDATE repair_orders SET status = ?, updated_at = datetime('now') WHERE id = ?",
+            (status, order_id),
+        )
+
+
+def sign_repair_order(conn: sqlite3.Connection, order_id: int, signed: bool) -> None:
+    """Record that the customer has signed (or un-signed) the printed contract."""
+    get_repair_order(conn, order_id)
+    with transaction(conn):
+        conn.execute(
+            """
+            UPDATE repair_orders
+               SET customer_signed = ?, signed_on = ?, updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (1 if signed else 0, date.today().isoformat() if signed else None, order_id),
+        )
+
+
+def delete_repair_order(conn: sqlite3.Connection, order_id: int) -> None:
+    order = get_repair_order(conn, order_id)
+    if order["invoice_id"] is not None:
+        raise InUse(
+            f"This contract has been invoiced as {order['invoice_no']} and cannot be deleted. "
+            "Cancel it instead."
+        )
+    with transaction(conn):
+        conn.execute("DELETE FROM repair_orders WHERE id = ?", (order_id,))
+
+
+def convert_order_to_invoice(conn: sqlite3.Connection, order_id: int) -> int:
+    """Raise an invoice from a repair contract, and link the two together.
+
+    Labour estimates become one service line each; every spare part becomes a
+    part line with its quantity and price. The contract is left in place and
+    marked as invoiced, so the job can be traced from the signed paper the
+    customer holds through to the money that was charged for it.
+    """
+    order = get_repair_order(conn, order_id)
+    if order["invoice_id"] is not None:
+        raise InUse(f"Already invoiced as {order['invoice_no']}.")
+    if order["status"] == "cancelled":
+        raise InUse("This contract was cancelled, so it cannot be invoiced.")
+
+    settings = get_settings(conn)
+    lines: list[dict[str, Any]] = []
+
+    for item in get_order_items(conn, order_id):
+        if item["expense_minor"] <= 0:
+            continue  # inspection notes with no charge are not invoice lines
+        lines.append(
+            {
+                "catalog_item_id": item["catalog_item_id"],
+                "description": item["description"],
+                "description_ar": item["description_ar"],
+                "kind": "service",
+                "unit": "pcs",
+                "qty_milli": 1000,
+                "unit_price_minor": item["expense_minor"],
+            }
+        )
+
+    for part in get_order_parts(conn, order_id):
+        lines.append(
+            {
+                "catalog_item_id": part["catalog_item_id"],
+                "description": part["description"],
+                "description_ar": part["description_ar"],
+                "kind": "part",
+                "unit": "pcs",
+                "qty_milli": part["qty_milli"],
+                "unit_price_minor": part["unit_price_minor"],
+            }
+        )
+
+    if not lines:
+        raise InUse(
+            "There is nothing to invoice: no repair has a charge and no parts are listed."
+        )
+
+    invoice_id = create_invoice(
+        conn,
+        {
+            "customer_id": order["customer_id"],
+            "vehicle_id": order["vehicle_id"],
+            "issue_date": date.today().isoformat(),
+            "odometer": order["odometer"],
+            "status": "draft",
+            "vat_rate_bp": settings["vat_rate_bp"],
+            "prices_include_vat": settings["prices_include_vat"],
+            "currency_code": settings["currency_code"],
+            "notes": order["notes"],
+        },
+        lines,
+    )
+
+    with transaction(conn):
+        conn.execute(
+            """
+            UPDATE repair_orders
+               SET invoice_id = ?, status = 'invoiced', updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (invoice_id, order_id),
+        )
+    return invoice_id
+
+
+def order_for_invoice(conn: sqlite3.Connection, invoice_id: int) -> Row | None:
+    """The contract an invoice came from, if it came from one."""
+    return _one(
+        conn,
+        "SELECT id, contract_no FROM repair_orders WHERE invoice_id = ?",
+        (invoice_id,),
+    )
+
+
+# ==========================================================================
 # Dashboard
 # ==========================================================================
 
@@ -709,7 +1068,10 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         """
         SELECT (SELECT COUNT(*) FROM customers WHERE is_active = 1) AS customers,
                (SELECT COUNT(*) FROM vehicles  WHERE is_active = 1) AS vehicles,
-               (SELECT COUNT(*) FROM invoices  WHERE status = 'draft') AS drafts
+               (SELECT COUNT(*) FROM invoices  WHERE status = 'draft') AS drafts,
+               (SELECT COUNT(*) FROM repair_orders WHERE status = 'open') AS open_contracts,
+               (SELECT COUNT(*) FROM repair_orders
+                 WHERE status = 'completed') AS contracts_to_invoice
         """,
     )
 
@@ -723,6 +1085,8 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "customer_count": counts["customers"],
         "vehicle_count": counts["vehicles"],
         "draft_count": counts["drafts"],
+        "open_contract_count": counts["open_contracts"],
+        "contracts_to_invoice": counts["contracts_to_invoice"],
     }
 
 
@@ -746,3 +1110,19 @@ def monthly_revenue(conn: sqlite3.Connection, months: int = 12) -> list[Row]:
 
 def unpaid_invoices(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:
     return list_invoices(conn, status="issued", payment_state="unpaid", limit=limit)
+
+
+def cars_in_workshop(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:
+    """Open contracts: the cars currently in the workshop, longest first."""
+    return _all(
+        conn,
+        """
+        SELECT ro.*, o.customer_id, o.vehicle_id
+          FROM v_repair_orders ro
+          JOIN repair_orders   o ON o.id = ro.id
+         WHERE ro.status = 'open'
+         ORDER BY ro.date_in ASC
+         LIMIT ?
+        """,
+        (limit,),
+    )

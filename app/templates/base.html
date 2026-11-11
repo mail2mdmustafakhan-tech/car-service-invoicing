@@ -25,6 +25,7 @@
 
     <nav class="topnav">
       <a href="/"          {% if path == '/' %}aria-current="page"{% endif %}>{{ t('nav.dashboard') }}</a>
+      <a href="/contracts" {% if path.startswith('/contracts') %}aria-current="page"{% endif %}>{{ t('nav.contracts') }}</a>
       <a href="/invoices"  {% if path.startswith('/invoices') %}aria-current="page"{% endif %}>{{ t('nav.invoices') }}</a>
       <a href="/customers" {% if path.startswith('/customers') %}aria-current="page"{% endif %}>{{ t('nav.customers') }}</a>
       <a href="/vehicles"  {% if path.startswith('/vehicles') %}aria-current="page"{% endif %}>{{ t('nav.vehicles') }}</a>

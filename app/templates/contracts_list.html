@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill with context %}
+{% block title %}{{ t('con.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('con.title') }}</h1>
+  <div class="actions"><a class="btn accent" href="/contracts/new">{{ t('con.new') }}</a></div>
+</div>
+
+<form class="toolbar" method="get" action="/contracts">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('con.search_hint') }}" aria-label="{{ t('action.search') }}">
+  <select name="status" aria-label="{{ t('inv.status') }}">
+    <option value="">{{ t('inv.status') }}: {{ t('status.all') }}</option>
+    {% for s in ['open', 'completed', 'invoiced', 'cancelled'] %}
+    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ t('status.' ~ s) }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">{{ t('action.apply') }}</button>
+  {% if q or status %}<a class="btn link" href="/contracts">{{ t('action.clear') }}</a>{% endif %}
+</form>
+
+<div class="panel">
+  {% if contracts %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('con.number') }}</th>
+          <th>{{ t('con.date_in') }}</th>
+          <th>{{ t('inv.customer') }}</th>
+          <th>{{ t('inv.vehicle') }}</th>
+          <th class="num">{{ t('con.estimate_total') }}</th>
+          <th>{{ t('inv.status') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in contracts %}
+        <tr>
+          <td class="tight">
+            <a href="/contracts/{{ c['id'] }}">{{ c['contract_no'] }}</a>
+            {% if c['invoice_no'] %}<div class="secondary">{{ c['invoice_no'] }}</div>{% endif %}
+          </td>
+          <td class="tight">
+            {{ c['date_in'] }}
+            {% if c['expected_date_out'] %}<div class="secondary">→ {{ c['expected_date_out'] }}</div>{% endif %}
+          </td>
+          <td>
+            <a href="/customers/{{ c['customer_id'] }}">{{ c['customer_name'] }}</a>
+            {% if c['customer_phone'] %}<div class="secondary">{{ c['customer_phone'] }}</div>{% endif %}
+          </td>
+          <td>
+            {% if c['vehicle_plate'] %}
+              <a href="/vehicles/{{ c['vehicle_id'] }}">{{ c['vehicle_plate'] }}</a>
+              {% if c['vehicle_description'] %}<div class="secondary">{{ c['vehicle_description'] }}</div>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td class="num">{{ m((c['estimate_total'] * 100) | round | int) }}</td>
+          <td class="tight">
+            {{ pill(c['status']) }}
+            {% if c['status'] == 'open' and not c['customer_signed'] %}
+              <div class="secondary">{{ t('con.not_signed') }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/contracts/{{ c['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>{{ t('con.none') if not (q or status) else t('msg.no_results') }}</p>
+    <a class="btn primary" href="/contracts/new">{{ t('con.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

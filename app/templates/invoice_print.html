@@ -14,7 +14,14 @@
   the user is working in Arabic.
 #}
 <!doctype html>
-<html lang="{{ lang }}" dir="{{ dir }}">
+{#
+  The printed document is always laid out left-to-right, whatever language the
+  interface happens to be set to. Two reasons: the copy handed to the customer
+  should look identical no matter who printed it, and mirroring a page whose
+  labels deliberately mix English and Arabic puts punctuation at the wrong end
+  of half of them. Arabic text inside carries its own dir="rtl" where needed.
+#}
+<html lang="{{ lang }}" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -11,7 +11,7 @@
    The totals shown here are a *preview*. The figures that get stored are
    always recalculated on the server by app/invoicing.py -- this file never
    submits a total. The arithmetic below deliberately mirrors that module
-   step for step (integer minor units, half-up rounding) so the preview and
+   step for step, using the shared helpers in money.js, so the preview and
    the saved invoice always agree.
 
    Plain browser JavaScript, no libraries, no build step.
@@ -20,62 +20,16 @@
 (function () {
     "use strict";
 
+    var M = window.CSMoney;
     var BP_PER_UNIT = 10000;   // 15% is 1500 basis points
-    var MINOR = 100;           // halalas per riyal
-    var MILLI = 1000;          // thousandths per unit
 
     var form = document.getElementById("invoice-form");
-    if (!form) { return; }
+    if (!form || !M) { return; }
 
     var body = document.getElementById("lines-body");
     var template = document.getElementById("line-template");
-    var lang = document.documentElement.lang === "ar" ? "ar" : "en";
-
-    var catalog = [];
-    try {
-        catalog = JSON.parse(document.getElementById("catalog-data").textContent) || [];
-    } catch (err) {
-        catalog = [];
-    }
-
-    var catalogById = {};
-    catalog.forEach(function (item) { catalogById[String(item.id)] = item; });
-
-    /* ---------------------------------------------------------------------
-       Number handling. Mirrors app/money.py: parse to integer minor units,
-       round halves up, never carry a fraction in a float.
-       --------------------------------------------------------------------- */
-
-    function parseNumber(text) {
-        if (text === null || text === undefined) { return 0; }
-        var cleaned = String(text)
-            .replace(/[٠-٩]/g, function (d) {       // Arabic-Indic digits
-                return String(d.charCodeAt(0) - 0x0660);
-            })
-            .replace(/[۰-۹]/g, function (d) {       // Eastern Arabic-Indic
-                return String(d.charCodeAt(0) - 0x06F0);
-            })
-            .replace(/٫/g, ".")                          // Arabic decimal mark
-            .replace(/[,٬\s]/g, "")                      // separators
-            .trim();
-        var value = parseFloat(cleaned);
-        return isFinite(value) ? value : 0;
-    }
-
-    /* Math.round takes halves upward for positive numbers, which is the same
-       convention as ROUND_HALF_UP on the server. Every amount here is
-       positive, so the two agree. */
-    function toMinor(text) { return Math.round(parseNumber(text) * MINOR); }
-    function toMilli(text) { return Math.round(parseNumber(text) * MILLI); }
-
-    function formatMinor(minor) {
-        var sign = minor < 0 ? "-" : "";
-        var abs = Math.abs(minor);
-        var whole = Math.floor(abs / MINOR);
-        var cents = abs % MINOR;
-        return sign + whole.toLocaleString("en-US") + "." +
-               (cents < 10 ? "0" + cents : String(cents));
-    }
+    var lang = M.lang();
+    var catalogById = M.readCatalog();
 
     /* ---------------------------------------------------------------------
        Totals -- the same sequence of steps as invoicing.compute_totals()
@@ -85,18 +39,18 @@
         var subtotal = 0;
 
         Array.prototype.forEach.call(body.querySelectorAll(".line-row"), function (row) {
-            var qtyMilli = toMilli(row.querySelector(".line-qty").value);
-            var priceMinor = toMinor(row.querySelector(".line-price").value);
-            var lineTotal = Math.round((qtyMilli * priceMinor) / MILLI);
-
-            row.querySelector(".line-total").textContent = formatMinor(lineTotal);
-            subtotal += lineTotal;
+            var total = M.lineTotal(
+                M.toMilli(row.querySelector(".line-qty").value),
+                M.toMinor(row.querySelector(".line-price").value)
+            );
+            row.querySelector(".line-total").textContent = M.formatMinor(total);
+            subtotal += total;
         });
 
-        var rateBp = Math.round(parseNumber(document.getElementById("f_vat_rate").value) * 100);
+        var rateBp = Math.round(M.parseNumber(document.getElementById("f_vat_rate").value) * 100);
         if (rateBp < 0) { rateBp = 0; }
 
-        var discount = toMinor(document.getElementById("f_discount").value);
+        var discount = M.toMinor(document.getElementById("f_discount").value);
         if (discount > subtotal) { discount = subtotal; }   // never go negative
 
         var afterDiscount = subtotal - discount;
@@ -113,11 +67,11 @@
             total = taxable + vat;
         }
 
-        document.getElementById("t-subtotal").textContent = formatMinor(subtotal);
-        document.getElementById("t-discount").textContent = "-" + formatMinor(discount);
-        document.getElementById("t-taxable").textContent = formatMinor(taxable);
-        document.getElementById("t-vat").textContent = formatMinor(vat);
-        document.getElementById("t-total").textContent = formatMinor(total);
+        document.getElementById("t-subtotal").textContent = M.formatMinor(subtotal);
+        document.getElementById("t-discount").textContent = "-" + M.formatMinor(discount);
+        document.getElementById("t-taxable").textContent = M.formatMinor(taxable);
+        document.getElementById("t-vat").textContent = M.formatMinor(vat);
+        document.getElementById("t-total").textContent = M.formatMinor(total);
         document.getElementById("t-rate").textContent = String(rateBp / 100);
 
         // The discount row only earns its space when there is a discount.
@@ -137,9 +91,8 @@
         }
 
         row.querySelector(".line-catalog").value = item.id;
-        row.querySelector(".line-desc").value = lang === "ar" && item.name_ar
-            ? item.name_ar
-            : item.name_en;
+        row.querySelector(".line-desc").value =
+            lang === "ar" && item.name_ar ? item.name_ar : item.name_en;
         row.querySelector(".line-desc-ar").value = item.name_ar || "";
         row.querySelector(".line-kind").value = item.kind || "service";
         row.querySelector(".line-price").value = item.price;
@@ -181,8 +134,9 @@
 
     body.addEventListener("change", function (event) {
         var row = event.target.closest(".line-row");
-        if (!row) { return; }
-        if (event.target.classList.contains("line-picker")) { applyCatalogPick(row); }
+        if (row && event.target.classList.contains("line-picker")) {
+            applyCatalogPick(row);
+        }
     });
 
     body.addEventListener("click", function (event) {
@@ -203,64 +157,15 @@
     });
 
     /* ---------------------------------------------------------------------
-       Customer -> vehicle
-       --------------------------------------------------------------------- */
-
-    var customerSelect = document.getElementById("f_customer_id");
-    var vehicleSelect = document.getElementById("f_vehicle_id");
-
-    function filterVehicles(keepSelection) {
-        if (!customerSelect || !vehicleSelect) { return; }
-        var customerId = customerSelect.value;
-        var current = keepSelection ? vehicleSelect.value : "";
-        var stillValid = false;
-
-        Array.prototype.forEach.call(vehicleSelect.options, function (option) {
-            if (!option.value) { return; }              // the "no vehicle" option
-            var belongs = option.getAttribute("data-customer") === customerId;
-            option.hidden = !belongs;
-            option.disabled = !belongs;
-            if (belongs && option.value === current) { stillValid = true; }
-        });
-
-        vehicleSelect.value = stillValid ? current : "";
-
-        // If the customer owns exactly one car, pick it -- that is the common
-        // case at a service centre and saves a click on every invoice.
-        if (!vehicleSelect.value) {
-            var visible = Array.prototype.filter.call(vehicleSelect.options, function (o) {
-                return o.value && !o.hidden;
-            });
-            if (visible.length === 1) { vehicleSelect.value = visible[0].value; }
-        }
-
-        copyOdometer();
-    }
-
-    function copyOdometer() {
-        var odometer = document.getElementById("f_odometer");
-        if (!odometer || odometer.value || !vehicleSelect) { return; }
-        var option = vehicleSelect.selectedOptions[0];
-        if (option) {
-            var last = option.getAttribute("data-odometer");
-            if (last) { odometer.value = last; }
-        }
-    }
-
-    if (customerSelect) {
-        customerSelect.addEventListener("change", function () { filterVehicles(false); });
-    }
-    if (vehicleSelect) {
-        vehicleSelect.addEventListener("change", copyOdometer);
-    }
-
-    /* ---------------------------------------------------------------------
        Start-up
        --------------------------------------------------------------------- */
 
-    if (!body.querySelectorAll(".line-row").length) {
-        addLine(false);
-    }
-    filterVehicles(true);
+    M.linkCustomerToVehicle(
+        document.getElementById("f_customer_id"),
+        document.getElementById("f_vehicle_id"),
+        document.getElementById("f_odometer")
+    );
+
+    if (!body.querySelectorAll(".line-row").length) { addLine(false); }
     recalculate();
 })();

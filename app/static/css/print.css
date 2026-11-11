@@ -139,7 +139,7 @@ table.items .col-amount { width: 30mm; }
 table.items .desc-alt {
     font-size: 9pt;
     color: var(--doc-soft);
-    unicode-bidi: plaintext;
+    unicode-bidi: isolate;
     text-align: start;
 }
 
@@ -226,6 +226,174 @@ table.items thead { display: table-header-group; }
     text-align: center;
     font-size: 9pt;
 }
+
+/* ==========================================================================
+   The repair contract
+   ==========================================================================
+   Laid out to match the workshop's existing paper form, so the people filling
+   it in find everything where they expect it.
+   ========================================================================== */
+
+/* The numbered notice: English and Arabic side by side, as on the paper. */
+.notice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6mm;
+    margin-block: 2.5mm;
+    padding-block-end: 2.5mm;
+    border-block-end: 1px solid var(--doc-rule-light);
+    font-size: 7.2pt;
+    line-height: 1.25;
+}
+.notice h4 {
+    margin: 0 0 1mm;
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: var(--doc-ink);
+}
+.notice ol { margin: 0; padding-inline-start: 4.5mm; }
+/* Arabic documents number their lists with Arabic-Indic digits. */
+.notice .ar ol { list-style-type: arabic-indic; }
+.notice li { margin-block-end: 0.5mm; }
+.notice .ar { direction: rtl; text-align: right; }
+
+/* The document's own title band. */
+.contract-title {
+    text-align: center;
+    margin-block: 2mm 1.5mm;
+}
+.contract-title .en {
+    font-size: 12pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+.contract-title .ar { font-size: 12pt; font-weight: 700; }
+
+/* Field rows with a ruled line to write on, as on the paper form. */
+.fields { margin-block: 2mm 3mm; }
+.field-row {
+    display: flex;
+    gap: 3mm;
+    align-items: baseline;
+    margin-block-end: 1.2mm;
+}
+.field-cell { flex: 1 1 0; display: flex; gap: 1.5mm; align-items: baseline; min-width: 0; }
+.field-cell > .label {
+    font-size: 7.2pt;
+    color: var(--doc-soft);
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+.field-cell > .value {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-block-end: 1px dotted var(--doc-soft);
+    padding-block-end: 0.4mm;
+    font-weight: 600;
+    unicode-bidi: plaintext;
+}
+.field-cell.grow { flex: 2 1 0; }
+
+/* Repairs requested / cost / technician's remarks. */
+table.repairs {
+    width: 100%;
+    border-collapse: collapse;
+    margin-block-start: 1mm;
+}
+table.repairs th {
+    font-size: 8pt;
+    font-weight: 700;
+    padding: 1.6mm 2mm;
+    background: var(--doc-wash);
+    border: 1px solid var(--doc-rule);
+    text-align: start;
+}
+table.repairs th.num { text-align: end; }
+table.repairs td {
+    padding: 1.2mm 2mm;
+    border: 1px solid var(--doc-rule-light);
+    vertical-align: top;
+}
+table.repairs td.num { text-align: end; }
+table.repairs .line-no { width: 8mm; color: var(--doc-soft); text-align: center; }
+table.repairs .col-cost { width: 26mm; }
+table.repairs .col-remarks { width: 58mm; }
+table.repairs tr { page-break-inside: avoid; }
+/* Blank rows so the form can still be completed by hand at the counter. */
+table.repairs tr.blank td { height: 5.4mm; }
+
+/* The car, for marking existing damage before work starts. */
+.condition {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin-block-start: 4mm;
+    page-break-inside: avoid;
+}
+.condition h4 {
+    margin: 0 0 1.5mm;
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: var(--doc-soft);
+}
+.diagram-box { border: 1px solid var(--doc-rule-light); padding: 2mm; }
+.car-diagram { width: 100%; height: auto; display: block; }
+.car-diagram .body {
+    fill: none;
+    stroke: var(--doc-ink);
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+.car-diagram .panel { fill: none; stroke: var(--doc-rule-light); stroke-width: 1.5; }
+.car-diagram .wheel { fill: var(--doc-wash); stroke: var(--doc-soft); stroke-width: 1.5; }
+.car-diagram .caption { font-size: 7px; fill: var(--doc-soft); }
+.damage-text {
+    border: 1px solid var(--doc-rule-light);
+    padding: 2mm 2.5mm;
+    min-height: 26mm;
+    font-size: 9pt;
+    white-space: pre-wrap;
+    unicode-bidi: plaintext;
+}
+
+/* The spare parts sheet, printed as two blocks side by side like the
+   workshop's own continuation page. */
+.parts-sheet {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm;
+    margin-block-start: 2mm;
+}
+table.parts { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+table.parts th {
+    font-size: 7.4pt;
+    font-weight: 700;
+    padding: 1.2mm 1.5mm;
+    border: 1px solid var(--doc-rule);
+    background: var(--doc-wash);
+    text-align: start;
+    line-height: 1.15;
+}
+table.parts th.num { text-align: end; }
+table.parts td {
+    padding: 1.2mm 1.5mm;
+    border: 1px solid var(--doc-rule-light);
+    height: 5.6mm;
+    unicode-bidi: plaintext;
+}
+table.parts td.num { text-align: end; }
+table.parts .col-pn { width: 24mm; }
+table.parts .col-qty { width: 11mm; }
+table.parts .col-price { width: 18mm; }
+
+
+/* The printed pages are laid out left-to-right whatever the interface
+   language (see the note at the top of the print templates), so mixed
+   English/Arabic labels resolve correctly on their own. These isolate values
+   that are wholly Arabic or wholly numeric from the text around them.
+   `isolate` is used rather than `plaintext`: the PDF renderer implements the
+   first and quietly ignores the second. */
+bdi { unicode-bidi: isolate; }
 
 /* --------------------------------------------------------------------------
    The screen-only toolbar above the page

@@ -165,3 +165,108 @@ def parse_invoice_lines(
     if not lines:
         raise FormError("Add at least one item to the invoice.")
     return lines
+
+
+# --------------------------------------------------------------------------
+# Repair contract lines
+# --------------------------------------------------------------------------
+
+def _at(seq: Sequence[str], index: int) -> str:
+    return seq[index] if index < len(seq) else ""
+
+
+def parse_contract_items(
+    *,
+    descriptions: Sequence[str],
+    descriptions_ar: Sequence[str],
+    expenses: Sequence[str],
+    remarks: Sequence[str],
+    catalog_ids: Sequence[str],
+) -> list[dict[str, Any]]:
+    """The three columns of the repair contract's main table.
+
+    Unlike an invoice line, a contract line may legitimately carry no money:
+    "check the air conditioning" with the technician's finding beside it and
+    nothing in the expenses column is a perfectly normal row. Only the
+    description is required.
+    """
+    row_count = max(len(descriptions), len(expenses), len(remarks), 0)
+    items: list[dict[str, Any]] = []
+
+    for i in range(row_count):
+        description = text(_at(descriptions, i))
+        expense_raw = text(_at(expenses, i))
+        remark = text(_at(remarks, i))
+
+        if not description and not expense_raw and not remark:
+            continue  # untouched spare row
+        if not description:
+            raise FormError(
+                f"Repair line {len(items) + 1}: describe the work before adding a cost or a remark."
+            )
+
+        items.append(
+            {
+                "catalog_item_id": opt_int(_at(catalog_ids, i)),
+                "description": description,
+                "description_ar": text(_at(descriptions_ar, i)),
+                "expense_minor": money(
+                    expense_raw, field=f"Repair line {len(items) + 1} cost"
+                ),
+                "technician_remarks": remark,
+            }
+        )
+
+    if not items:
+        raise FormError("Add at least one repair to the contract.")
+    return items
+
+
+def parse_contract_parts(
+    *,
+    part_numbers: Sequence[str],
+    descriptions: Sequence[str],
+    descriptions_ar: Sequence[str],
+    quantities: Sequence[str],
+    prices: Sequence[str],
+    sourced: Sequence[str],
+    catalog_ids: Sequence[str],
+) -> list[dict[str, Any]]:
+    """The spare parts sheet. A contract may have no parts at all.
+
+    ``sourced`` is a select rather than a checkbox on purpose: an unticked
+    checkbox is simply absent from the submission, which would shift every
+    later row's value up by one and silently attach the wrong flag to the
+    wrong part. A select always submits, so the columns stay aligned.
+    """
+    row_count = max(len(descriptions), len(quantities), len(prices), 0)
+    parts: list[dict[str, Any]] = []
+
+    for i in range(row_count):
+        description = text(_at(descriptions, i))
+        part_number = text(_at(part_numbers, i))
+        qty_raw = text(_at(quantities, i))
+        price_raw = text(_at(prices, i))
+
+        if not description and not part_number and not price_raw:
+            continue
+        if not description:
+            raise FormError(f"Part line {len(parts) + 1}: a part name is required.")
+
+        parts.append(
+            {
+                "catalog_item_id": opt_int(_at(catalog_ids, i)),
+                "part_number": part_number,
+                "description": description,
+                "description_ar": text(_at(descriptions_ar, i)),
+                "qty_milli": quantity(
+                    qty_raw or "1", field=f"Part line {len(parts) + 1} quantity"
+                ),
+                "unit_price_minor": money(
+                    price_raw, field=f"Part line {len(parts) + 1} price"
+                ),
+                "sourced_externally": 1 if text(_at(sourced, i)) == "1" else 0,
+            }
+        )
+
+    return parts

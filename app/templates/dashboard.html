@@ -15,7 +15,8 @@
     <h1>{{ t('dash.title') }}</h1>
   </div>
   <div class="actions">
-    <a class="btn accent" href="/invoices/new">{{ t('dash.quick_new_invoice') }}</a>
+    <a class="btn accent" href="/contracts/new">{{ t('dash.new_contract') }}</a>
+    <a class="btn" href="/invoices/new">{{ t('dash.quick_new_invoice') }}</a>
   </div>
 </div>
 
@@ -41,11 +42,58 @@
   </div>
 
   <div class="figure">
-    <div class="value">{{ stats.customer_count }}</div>
-    <div class="label">{{ t('dash.customers') }}</div>
-    <div class="sub">{{ stats.vehicle_count }} {{ t('dash.vehicles') | lower }}{% if stats.draft_count %} — {{ stats.draft_count }} {{ t('dash.drafts') | lower }}{% endif %}</div>
+    <div class="value">{{ stats.open_contract_count }}</div>
+    <div class="label">{{ t('dash.in_workshop') }}</div>
+    <div class="sub">
+      {% if stats.contracts_to_invoice %}{{ stats.contracts_to_invoice }} {{ t('dash.to_invoice') | lower }}{% else %}{{ stats.customer_count }} {{ t('dash.customers') | lower }}{% endif %}
+    </div>
   </div>
 </div>
+
+{% if in_workshop %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ t('dash.in_workshop') }}</h2>
+    <a class="btn small" href="/contracts?status=open">{{ t('action.view') }}</a>
+  </div>
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('con.number') }}</th>
+          <th>{{ t('inv.customer') }}</th>
+          <th>{{ t('inv.vehicle') }}</th>
+          <th>{{ t('con.date_in') }}</th>
+          <th class="num">{{ t('con.estimate_total') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in in_workshop %}
+        <tr>
+          <td class="tight"><a href="/contracts/{{ c['id'] }}">{{ c['contract_no'] }}</a></td>
+          <td>{{ c['customer_name'] }}</td>
+          <td class="tight">
+            {{ c['vehicle_plate'] or '—' }}
+            {% if c['vehicle_description'] %}<div class="secondary">{{ c['vehicle_description'] }}</div>{% endif %}
+          </td>
+          <td class="tight">
+            {{ c['date_in'] }}
+            {% if c['days_in_workshop'] and c['days_in_workshop'] > 2 %}
+              <div class="secondary">{{ c['days_in_workshop'] }} {{ t('con.days_in') | lower }}</div>
+            {% endif %}
+          </td>
+          <td class="num">{{ m((c['estimate_total'] * 100) | round | int) }}</td>
+          <td class="tight">
+            {% if not c['customer_signed'] %}<span class="pill unpaid">{{ t('con.not_signed') }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 <div class="cols">
   <section class="panel">

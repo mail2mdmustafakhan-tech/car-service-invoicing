@@ -7,14 +7,37 @@ Built to be small enough that one person can understand the whole thing.
 
 ---
 
+## How a job flows through
+
+```
+car arrives ──► repair contract written ──► customer signs ──► work done
+                                                                  │
+            invoice paid ◄── invoice issued ◄── contract converted ┘
+```
+
+The repair contract is the document the workshop actually runs on. It records
+what the owner asked for, what the technician found, which parts went on, and
+the owner's signed authorization — all before any money is owed. When the work
+is finished, one click turns it into a draft invoice carrying the labour and
+parts across, and the two stay linked so any job can be traced from the signed
+paper back to what was charged for it.
+
+You can still raise an invoice on its own, for a walk-in who just needs a part.
+
+---
+
 ## What it does
 
+- **Repair contracts** — the signed job card: owner and vehicle details, repairs
+  requested, technician's remarks, spare parts, a car diagram to mark existing
+  damage on, and the bilingual notice and authorization text, all printable on A4
 - **Customers and vehicles** — contact details, and the cars each customer owns
   (plate, make, model, year, VIN, colour, odometer)
 - **Service and parts catalogue** — your common jobs and parts with prices, so
   invoice lines are picked from a list instead of typed every time
-- **Invoices** — line items, configurable VAT, discounts, draft → issued → void,
-  and an A4 printable copy that saves as PDF from any browser
+- **Invoices** — raised from a contract or on their own: line items, configurable
+  VAT, discounts, draft → issued → void, and an A4 printable copy that saves as
+  PDF from any browser
 - **Payments** — record full or partial payments, see who still owes you money
 - **Arabic and English** — switch at any time; the whole interface mirrors to
   right-to-left, and the printed invoice is labelled in both languages
@@ -30,7 +53,8 @@ Being honest about the boundaries, so you know what you are starting from:
   current ZATCA requirements before relying on this for tax filing
 - No inventory levels or stock reordering — the catalogue holds prices, not
   quantities on hand
-- No appointments, job cards, or technician scheduling
+- No appointments or technician scheduling — a contract records who worked on
+  the car, but nothing plans the week
 - No accounting ledger, expenses, or payroll
 
 Each of these can be added later. See [Where to take it next](#where-to-take-it-next).
@@ -106,9 +130,13 @@ login, so anyone who can reach the address can edit invoices.
 3. **Settings → Invoice numbering** — set the prefix and the next number. If
    you are moving from another system or a paper book, continue that series
    here so your numbering never restarts.
-4. **Services & Parts** — add your ten or fifteen most common jobs with prices.
-   This is what makes writing an invoice fast later.
-5. **Customers** → add one → add their vehicle → **New invoice**.
+4. **Settings → Repair contract** — the notice and authorization text that print
+   on the contract come pre-filled. Read them, correct the wording to match your
+   own form, and set the contract number series. Write `{business}` in the
+   authorization text wherever your business name should appear.
+5. **Services & Parts** — add your ten or fifteen most common jobs with prices.
+   This is what makes writing up a car fast later.
+6. **Customers** → add one → add their vehicle → **Book a car in**.
 
 Want to see it populated before entering anything real?
 
@@ -121,7 +149,22 @@ CARSERVICE_DB=data/demo.db ./run.sh
 
 ## Day to day
 
-**Writing an invoice.** New invoice → pick the customer (their vehicle fills in
+**Booking a car in.** New contract → pick the customer (their vehicle fills in
+automatically if they only have one) → list what they asked for → note existing
+damage → **Print**. The customer signs the paper copy; record that with *Mark as
+signed*. As the technician works, add findings in the remarks column and parts
+to the spare parts table.
+
+**Finishing a job.** *Mark work complete*, then **Create invoice**. Every repair
+with a cost becomes a service line and every part becomes a part line on a new
+draft invoice. Check it, then issue it. The contract locks at that point — it is
+the signed record of what was agreed, so it stops being editable.
+
+A repair line with a remark but no cost (*"checked the air conditioning — gas
+topped up under warranty"*) stays on the contract and is simply not carried onto
+the invoice.
+
+**Writing an invoice directly.** New invoice → pick the customer (their vehicle fills in
 automatically if they only have one) → pick items from the catalogue → the
 totals update as you type. *Issue invoice* makes it final; *Save (Draft)* keeps
 it editable.
@@ -223,8 +266,9 @@ app/
 ├── i18n.py          every piece of visible text, English and Arabic side by side
 ├── pdf.py           the optional PDF download
 ├── migrations/      numbered .sql files; new ones run automatically on restart
-├── templates/       the HTML pages
-└── static/          one stylesheet for the screen, one for paper, one script
+├── templates/       the HTML pages, including the two printable documents
+└── static/          one stylesheet for the screen, one for paper, and the
+                     editors' scripts (money.js holds the arithmetic both share)
 ```
 
 The rules that keep it understandable:
@@ -244,6 +288,8 @@ The rules that keep it understandable:
 | Reword a label, or fix a translation | `app/i18n.py` |
 | Change how a page looks | `app/templates/…` and `app/static/css/app.css` |
 | Change the printed invoice | `app/templates/invoice_print.html`, `static/css/print.css` |
+| Change the printed contract | `app/templates/contract_print.html`, `static/css/print.css` |
+| Change the notice or authorization wording | Settings → Repair contract, in the app |
 | Change how a total is worked out | `app/invoicing.py` (and its tests) |
 | Add a field to a table | a new file in `app/migrations/`, then `repository.py` |
 
@@ -266,7 +312,7 @@ changing it will not re-run it. Always add a new numbered file.
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                # 137 tests, about three seconds
+pytest                # 175 tests, about five seconds
 ruff check .          # style and common mistakes
 ```
 
@@ -280,6 +326,9 @@ The tests are in three groups, and the split is intentional:
 - `tests/test_repository.py` — what the database stores and what it refuses:
   invoice numbers never repeating, an issued invoice never being deletable, a
   catalogue price change never altering an invoice already issued.
+- `tests/test_contracts.py` — the contract and its conversion: contracts
+  numbered in their own series, a contract invoiced exactly once and frozen
+  afterwards, and the printed copy looking the same in either language.
 - `tests/test_web.py` — the pages load, forms save, bad input comes back as a
   message instead of a crash, Arabic flips the page.
 
@@ -336,9 +385,7 @@ Roughly in order of how much they would be worth against how hard they are:
    spend. The views above do most of the work already.
 4. **Inventory** — stock levels on parts, decremented when an invoice is
    issued, with a low-stock list.
-5. **Job cards** — what came in, what was found, what was approved, before it
-   becomes an invoice.
-6. **ZATCA e-invoicing** — the real project if the business is in scope for
+5. **ZATCA e-invoicing** — the real project if the business is in scope for
    Phase 2. Check the current requirements first; it is XML generation,
    cryptographic stamping and a portal integration, and it is considerably more
    work than everything above put together.

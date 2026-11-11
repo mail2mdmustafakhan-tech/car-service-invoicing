@@ -198,6 +198,7 @@ def dashboard(request: Request, conn: Connection = Depends(get_conn)) -> HTMLRes
         recent=repo.list_invoices(conn, limit=8),
         unpaid=repo.unpaid_invoices(conn, limit=6),
         revenue=repo.monthly_revenue(conn, months=6),
+        in_workshop=repo.cars_in_workshop(conn, limit=8),
     )
 
 
@@ -824,6 +825,9 @@ def invoice_detail(
             invoice["status"], invoice["total_minor"], invoice["paid_minor"]
         ),
         balance=balance_due(invoice["total_minor"], invoice["paid_minor"]),
+        # Shown as a link back to the signed paperwork, when this invoice
+        # came from a repair contract.
+        contract=repo.order_for_invoice(conn, invoice_id),
     )
 
 
@@ -1045,6 +1049,384 @@ def payment_delete(payment_id: int, conn: Connection = Depends(get_conn)):
 
 
 # --------------------------------------------------------------------------
+# Repair contracts
+# --------------------------------------------------------------------------
+# The paper the customer signs when the car is booked in. It records what was
+# asked for, what the technician found and which parts went on, and is later
+# converted into an invoice.
+
+@app.get("/contracts", response_class=HTMLResponse)
+def contracts_list(
+    request: Request,
+    q: str = "",
+    status: str = "",
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "contracts_list.html",
+        contracts=repo.list_repair_orders(conn, search=q, status=status),
+        q=q,
+        status=status,
+    )
+
+
+def _contract_form_context(
+    conn: Connection, *, order: Any = None, items: Any = None, parts: Any = None,
+    error: str = "",
+) -> dict[str, Any]:
+    settings = repo.get_settings(conn)
+    catalog = repo.list_catalog(conn)
+    return {
+        "order": order,
+        "items": items or [],
+        "parts": parts or [],
+        "customers": repo.list_customers(conn),
+        "vehicles": repo.list_vehicles(conn),
+        "catalog": catalog,
+        "services": [c for c in catalog if c["kind"] == "service"],
+        "catalog_json": [
+            {
+                "id": i["id"],
+                "name_en": i["name_en"],
+                "name_ar": i["name_ar"],
+                "kind": i["kind"],
+                "unit": i["unit"],
+                "price": str(from_minor(i["unit_price_minor"])),
+            }
+            for i in catalog
+        ],
+        "parts_markup_bp": settings["parts_markup_bp"],
+        "error": error,
+    }
+
+
+@app.get("/contracts/new", response_class=HTMLResponse)
+def contract_new(
+    request: Request,
+    customer_id: int | None = None,
+    vehicle_id: int | None = None,
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "contract_form.html",
+        preset_customer_id=customer_id,
+        preset_vehicle_id=vehicle_id,
+        **_contract_form_context(conn),
+    )
+
+
+def _contract_payload(
+    *,
+    customer_id: str,
+    vehicle_id: str,
+    date_in: str,
+    expected_date_out: str,
+    odometer: str,
+    car_code: str,
+    technician_name: str,
+    damage_notes: str,
+    notes: str,
+    status: str | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "customer_id": forms.opt_int(customer_id),
+        "vehicle_id": forms.opt_int(vehicle_id),
+        "date_in": forms.iso_date(date_in, default_today=True),
+        "expected_date_out": forms.iso_date(expected_date_out),
+        "odometer": forms.opt_int(odometer),
+        "car_code": forms.text(car_code),
+        "technician_name": forms.text(technician_name),
+        "damage_notes": forms.text(damage_notes),
+        "notes": forms.text(notes),
+    }
+    if data["customer_id"] is None:
+        raise FormError("Choose the customer this contract is for.")
+    if status is not None:
+        data["status"] = forms.one_of(
+            status, ("open", "completed", "invoiced", "cancelled"), default="open"
+        )
+    return data
+
+
+def _contract_lines(
+    item_description: list[str],
+    item_description_ar: list[str],
+    item_expense: list[str],
+    item_remarks: list[str],
+    item_catalog_id: list[str],
+    part_number: list[str],
+    part_description: list[str],
+    part_description_ar: list[str],
+    part_qty: list[str],
+    part_price: list[str],
+    part_sourced: list[str],
+    part_catalog_id: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    items = forms.parse_contract_items(
+        descriptions=item_description,
+        descriptions_ar=item_description_ar,
+        expenses=item_expense,
+        remarks=item_remarks,
+        catalog_ids=item_catalog_id,
+    )
+    parts = forms.parse_contract_parts(
+        part_numbers=part_number,
+        descriptions=part_description,
+        descriptions_ar=part_description_ar,
+        quantities=part_qty,
+        prices=part_price,
+        sourced=part_sourced,
+        catalog_ids=part_catalog_id,
+    )
+    return items, parts
+
+
+@app.post("/contracts/new")
+def contract_create(
+    request: Request,
+    customer_id: str = Form(""),
+    vehicle_id: str = Form(""),
+    date_in: str = Form(""),
+    expected_date_out: str = Form(""),
+    odometer: str = Form(""),
+    car_code: str = Form(""),
+    technician_name: str = Form(""),
+    damage_notes: str = Form(""),
+    notes: str = Form(""),
+    status: str = Form("open"),
+    item_catalog_id: list[str] = Form([]),
+    item_description: list[str] = Form([]),
+    item_description_ar: list[str] = Form([]),
+    item_expense: list[str] = Form([]),
+    item_remarks: list[str] = Form([]),
+    part_catalog_id: list[str] = Form([]),
+    part_number: list[str] = Form([]),
+    part_description: list[str] = Form([]),
+    part_description_ar: list[str] = Form([]),
+    part_qty: list[str] = Form([]),
+    part_price: list[str] = Form([]),
+    part_sourced: list[str] = Form([]),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        header = _contract_payload(
+            customer_id=customer_id, vehicle_id=vehicle_id, date_in=date_in,
+            expected_date_out=expected_date_out, odometer=odometer,
+            car_code=car_code, technician_name=technician_name,
+            damage_notes=damage_notes, notes=notes, status=status,
+        )
+        items, parts = _contract_lines(
+            item_description, item_description_ar, item_expense, item_remarks,
+            item_catalog_id, part_number, part_description, part_description_ar,
+            part_qty, part_price, part_sourced, part_catalog_id,
+        )
+    except FormError as exc:
+        return render(
+            request,
+            conn,
+            "contract_form.html",
+            preset_customer_id=forms.opt_int(customer_id),
+            preset_vehicle_id=forms.opt_int(vehicle_id),
+            **_contract_form_context(conn, error=str(exc)),
+        )
+
+    order_id = repo.create_repair_order(conn, header, items, parts)
+    return go(f"/contracts/{order_id}", msg="msg.created")
+
+
+@app.get("/contracts/{order_id}", response_class=HTMLResponse)
+def contract_detail(
+    order_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "contract_detail.html",
+        order=repo.get_repair_order(conn, order_id),
+        items=repo.get_order_items(conn, order_id),
+        parts=repo.get_order_parts(conn, order_id),
+        totals=repo.order_totals(conn, order_id),
+    )
+
+
+@app.get("/contracts/{order_id}/edit", response_class=HTMLResponse)
+def contract_edit(
+    order_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "contract_form.html",
+        preset_customer_id=None,
+        preset_vehicle_id=None,
+        **_contract_form_context(
+            conn,
+            order=repo.get_repair_order(conn, order_id),
+            items=repo.get_order_items(conn, order_id),
+            parts=repo.get_order_parts(conn, order_id),
+        ),
+    )
+
+
+@app.post("/contracts/{order_id}/edit")
+def contract_update(
+    order_id: int,
+    request: Request,
+    customer_id: str = Form(""),
+    vehicle_id: str = Form(""),
+    date_in: str = Form(""),
+    expected_date_out: str = Form(""),
+    odometer: str = Form(""),
+    car_code: str = Form(""),
+    technician_name: str = Form(""),
+    damage_notes: str = Form(""),
+    notes: str = Form(""),
+    status: str = Form("open"),
+    item_catalog_id: list[str] = Form([]),
+    item_description: list[str] = Form([]),
+    item_description_ar: list[str] = Form([]),
+    item_expense: list[str] = Form([]),
+    item_remarks: list[str] = Form([]),
+    part_catalog_id: list[str] = Form([]),
+    part_number: list[str] = Form([]),
+    part_description: list[str] = Form([]),
+    part_description_ar: list[str] = Form([]),
+    part_qty: list[str] = Form([]),
+    part_price: list[str] = Form([]),
+    part_sourced: list[str] = Form([]),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        header = _contract_payload(
+            customer_id=customer_id, vehicle_id=vehicle_id, date_in=date_in,
+            expected_date_out=expected_date_out, odometer=odometer,
+            car_code=car_code, technician_name=technician_name,
+            damage_notes=damage_notes, notes=notes, status=status,
+        )
+        items, parts = _contract_lines(
+            item_description, item_description_ar, item_expense, item_remarks,
+            item_catalog_id, part_number, part_description, part_description_ar,
+            part_qty, part_price, part_sourced, part_catalog_id,
+        )
+        repo.update_repair_order(conn, order_id, header, items, parts)
+    except FormError as exc:
+        return render(
+            request,
+            conn,
+            "contract_form.html",
+            preset_customer_id=None,
+            preset_vehicle_id=None,
+            **_contract_form_context(
+                conn,
+                order=repo.get_repair_order(conn, order_id),
+                items=repo.get_order_items(conn, order_id),
+                parts=repo.get_order_parts(conn, order_id),
+                error=str(exc),
+            ),
+        )
+    except repo.InUse as exc:
+        return go(f"/contracts/{order_id}", err=str(exc))
+
+    return go(f"/contracts/{order_id}", msg="msg.saved")
+
+
+@app.post("/contracts/{order_id}/status")
+def contract_status(
+    order_id: int, status: str = Form(...), conn: Connection = Depends(get_conn)
+):
+    try:
+        repo.set_order_status(conn, order_id, status)
+    except ValueError as exc:
+        return go(f"/contracts/{order_id}", err=str(exc))
+    return go(f"/contracts/{order_id}", msg="msg.saved")
+
+
+@app.post("/contracts/{order_id}/sign")
+def contract_sign(
+    order_id: int, signed: str = Form("1"), conn: Connection = Depends(get_conn)
+):
+    repo.sign_repair_order(conn, order_id, signed == "1")
+    return go(f"/contracts/{order_id}", msg="msg.saved")
+
+
+@app.post("/contracts/{order_id}/delete")
+def contract_delete(order_id: int, conn: Connection = Depends(get_conn)):
+    try:
+        repo.delete_repair_order(conn, order_id)
+    except repo.InUse as exc:
+        return go(f"/contracts/{order_id}", err=str(exc))
+    return go("/contracts", msg="msg.deleted")
+
+
+@app.post("/contracts/{order_id}/invoice")
+def contract_to_invoice(order_id: int, conn: Connection = Depends(get_conn)):
+    """Turn a signed, finished contract into a draft invoice."""
+    try:
+        invoice_id = repo.convert_order_to_invoice(conn, order_id)
+    except repo.InUse as exc:
+        return go(f"/contracts/{order_id}", err=str(exc))
+    return go(f"/invoices/{invoice_id}", msg="msg.invoice_from_contract")
+
+
+@app.get("/contracts/{order_id}/print", response_class=HTMLResponse)
+def contract_print(
+    order_id: int,
+    request: Request,
+    conn: Connection = Depends(get_conn),
+    autoprint: int = 1,
+) -> HTMLResponse:
+    """The contract as it is printed for the customer to sign."""
+    return render(
+        request,
+        conn,
+        "contract_print.html",
+        order=repo.get_repair_order(conn, order_id),
+        items=repo.get_order_items(conn, order_id),
+        parts=repo.get_order_parts(conn, order_id),
+        totals=repo.order_totals(conn, order_id),
+        autoprint=bool(autoprint),
+    )
+
+
+@app.get("/contracts/{order_id}/pdf")
+def contract_pdf(
+    order_id: int, request: Request, conn: Connection = Depends(get_conn)
+):
+    order = repo.get_repair_order(conn, order_id)
+    if not PDF_AVAILABLE:
+        return go(f"/contracts/{order_id}/print")
+
+    html = render(
+        request,
+        conn,
+        "contract_print.html",
+        order=order,
+        items=repo.get_order_items(conn, order_id),
+        parts=repo.get_order_parts(conn, order_id),
+        totals=repo.order_totals(conn, order_id),
+        autoprint=False,
+        pdf=True,
+    ).body.decode("utf-8")
+
+    pdf_bytes = html_to_pdf(
+        html,
+        base_url=str(BASE_DIR),
+        stylesheets=[BASE_DIR / "static" / "css" / "print.css"],
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{order["contract_no"]}.pdf"'
+        },
+    )
+
+
+# --------------------------------------------------------------------------
 # Settings
 # --------------------------------------------------------------------------
 
@@ -1056,51 +1438,100 @@ def settings_page(request: Request, conn: Connection = Depends(get_conn)) -> HTM
 @app.post("/settings")
 def settings_save(
     request: Request,
-    business_name_en: str = Form(""),
-    business_name_ar: str = Form(""),
-    vat_number: str = Form(""),
-    cr_number: str = Form(""),
-    address_en: str = Form(""),
-    address_ar: str = Form(""),
-    phone: str = Form(""),
-    email: str = Form(""),
-    vat_rate: str = Form(""),
+    # Every field defaults to None rather than "" so the handler can tell a
+    # box the user cleared (which arrives as "") from one the submission did
+    # not contain at all. Only what was actually sent is written, so posting
+    # part of this form can never silently wipe the rest of the settings.
+    business_name_en: str = Form(None),
+    business_name_ar: str = Form(None),
+    vat_number: str = Form(None),
+    cr_number: str = Form(None),
+    address_en: str = Form(None),
+    address_ar: str = Form(None),
+    phone: str = Form(None),
+    email: str = Form(None),
+    vat_rate: str = Form(None),
     prices_include_vat: str = Form(None),
-    currency_code: str = Form("SAR"),
-    invoice_prefix: str = Form("INV-"),
-    next_invoice_seq: str = Form(""),
-    default_language: str = Form("en"),
-    invoice_footer_en: str = Form(""),
-    invoice_footer_ar: str = Form(""),
+    currency_code: str = Form(None),
+    invoice_prefix: str = Form(None),
+    next_invoice_seq: str = Form(None),
+    default_language: str = Form(None),
+    invoice_footer_en: str = Form(None),
+    invoice_footer_ar: str = Form(None),
+    business_tagline_en: str = Form(None),
+    business_tagline_ar: str = Form(None),
+    contract_terms_en: str = Form(None),
+    contract_terms_ar: str = Form(None),
+    contract_authorization_en: str = Form(None),
+    contract_authorization_ar: str = Form(None),
+    contract_prefix: str = Form(None),
+    next_contract_seq: str = Form(None),
+    parts_markup: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
     current = repo.get_settings(conn)
+    data: dict[str, Any] = {}
+
+    def submitted(column: str, raw: str | None, convert) -> None:
+        """Record a column only when the form actually carried that field."""
+        if raw is not None:
+            data[column] = convert(raw)
+
     try:
-        seq = forms.opt_int(next_invoice_seq) or current["next_invoice_seq"]
-        if seq < 1:
-            raise FormError("The next invoice number must be 1 or higher.")
-        data = {
-            "business_name_en": forms.required_text(
-                business_name_en, field="Business name"
-            ),
-            "business_name_ar": forms.text(business_name_ar),
-            "vat_number": forms.text(vat_number),
-            "cr_number": forms.text(cr_number),
-            "address_en": forms.text(address_en),
-            "address_ar": forms.text(address_ar),
-            "phone": forms.text(phone),
-            "email": forms.text(email),
-            "vat_rate_bp": forms.vat_rate(vat_rate, default=current["vat_rate_bp"]),
-            "prices_include_vat": forms.checkbox(prices_include_vat),
-            "currency_code": forms.text(currency_code, default="SAR").upper()[:5],
-            "invoice_prefix": forms.text(invoice_prefix),
-            "next_invoice_seq": seq,
-            "default_language": forms.one_of(
-                default_language, tuple(LANGUAGES), default="en"
-            ),
-            "invoice_footer_en": forms.text(invoice_footer_en),
-            "invoice_footer_ar": forms.text(invoice_footer_ar),
-        }
+        submitted(
+            "business_name_en", business_name_en,
+            lambda v: forms.required_text(v, field="Business name"),
+        )
+        submitted("business_name_ar", business_name_ar, forms.text)
+        submitted("vat_number", vat_number, forms.text)
+        submitted("cr_number", cr_number, forms.text)
+        submitted("address_en", address_en, forms.text)
+        submitted("address_ar", address_ar, forms.text)
+        submitted("phone", phone, forms.text)
+        submitted("email", email, forms.text)
+        submitted(
+            "vat_rate_bp", vat_rate,
+            lambda v: forms.vat_rate(v, default=current["vat_rate_bp"]),
+        )
+        submitted("currency_code", currency_code,
+                  lambda v: forms.text(v, default="SAR").upper()[:5])
+        submitted("invoice_prefix", invoice_prefix, forms.text)
+        submitted("invoice_footer_en", invoice_footer_en, forms.text)
+        submitted("invoice_footer_ar", invoice_footer_ar, forms.text)
+        submitted("business_tagline_en", business_tagline_en, forms.text)
+        submitted("business_tagline_ar", business_tagline_ar, forms.text)
+        submitted("contract_terms_en", contract_terms_en, forms.text)
+        submitted("contract_terms_ar", contract_terms_ar, forms.text)
+        submitted("contract_authorization_en", contract_authorization_en, forms.text)
+        submitted("contract_authorization_ar", contract_authorization_ar, forms.text)
+        submitted("contract_prefix", contract_prefix, forms.text)
+        submitted(
+            "default_language", default_language,
+            lambda v: forms.one_of(v, tuple(LANGUAGES), default="en"),
+        )
+        submitted(
+            "parts_markup_bp", parts_markup,
+            lambda v: forms.vat_rate(v, default=current["parts_markup_bp"]),
+        )
+
+        # The checkbox is the exception: unticked means absent, so it can only
+        # be read when the form it belongs to was the one submitted.
+        if business_name_en is not None:
+            data["prices_include_vat"] = forms.checkbox(prices_include_vat)
+
+        if next_invoice_seq is not None:
+            seq = forms.opt_int(next_invoice_seq) or current["next_invoice_seq"]
+            if seq < 1:
+                raise FormError("The next invoice number must be 1 or higher.")
+            data["next_invoice_seq"] = seq
+
+        if next_contract_seq is not None:
+            contract_seq = (
+                forms.opt_int(next_contract_seq) or current["next_contract_seq"]
+            )
+            if contract_seq < 1:
+                raise FormError("The next contract number must be 1 or higher.")
+            data["next_contract_seq"] = contract_seq
     except FormError as exc:
         return render(request, conn, "settings.html", error=str(exc))
 

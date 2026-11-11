@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill, delete_form with context %}
+{% block title %}{{ order['contract_no'] }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/contracts">{{ t('con.title') }}</a></div>
+
+<div class="pagehead">
+  <div>
+    <h1>{{ order['contract_no'] }} {{ pill(order['status']) }}</h1>
+    <div class="breadcrumb">
+      {{ order['date_in'] }} —
+      <a href="/customers/{{ order['customer_id'] }}">{{ loc(order, 'customer_name') }}</a>
+      {% if order['vehicle_plate'] %}
+        — <a href="/vehicles/{{ order['vehicle_id'] }}">{{ order['vehicle_plate'] }}</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/contracts/{{ order['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+    {% if PDF_AVAILABLE %}
+      <a class="btn" href="/contracts/{{ order['id'] }}/pdf" target="_blank">{{ t('action.download_pdf') }}</a>
+    {% endif %}
+    {% if not order['invoice_id'] %}
+      <a class="btn" href="/contracts/{{ order['id'] }}/edit">{{ t('action.edit') }}</a>
+    {% endif %}
+    {% if order['status'] in ('open', 'completed') %}
+      <form method="post" action="/contracts/{{ order['id'] }}/invoice">
+        <button class="btn accent" type="submit">{{ t('con.to_invoice') }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if order['invoice_id'] %}
+  <div class="flash">
+    {{ t('con.invoiced_as') }}
+    <a href="/invoices/{{ order['invoice_id'] }}">{{ order['invoice_no'] }}</a>
+  </div>
+{% elif order['status'] == 'cancelled' %}
+  <div class="flash error">{{ t('status.cancelled') }}</div>
+{% elif not order['customer_signed'] %}
+  <div class="flash error">
+    {{ t('con.not_signed') }} —
+    <a href="/contracts/{{ order['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+  </div>
+{% endif %}
+
+<div class="figures">
+  <div class="figure">
+    <div class="value">{{ m(totals.total_minor) }}</div>
+    <div class="label">{{ t('con.estimate_total') }}</div>
+    <div class="sub">{{ t('con.estimate_note') }}</div>
+  </div>
+  <div class="figure">
+    <div class="value">{{ m(totals.labour_minor) }}</div>
+    <div class="label">{{ t('con.labour_estimate') }}</div>
+    <div class="sub">{{ items | length }}</div>
+  </div>
+  <div class="figure">
+    <div class="value">{{ m(totals.parts_minor) }}</div>
+    <div class="label">{{ t('con.parts_estimate') }}</div>
+    <div class="sub">{{ parts | length }}</div>
+  </div>
+</div>
+
+<div class="cols">
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('con.details') }}</h2></div>
+    <div class="panel-body">
+      <dl class="facts">
+        <dt>{{ t('con.date_in') }}</dt><dd>{{ order['date_in'] }}</dd>
+        {% if order['expected_date_out'] %}
+          <dt>{{ t('con.date_out') }}</dt><dd>{{ order['expected_date_out'] }}</dd>
+        {% endif %}
+        {% if order['odometer'] %}
+          <dt>{{ t('con.odometer') }}</dt><dd>{{ '{:,}'.format(order['odometer']) }} km</dd>
+        {% endif %}
+        {% if order['car_code'] %}<dt>{{ t('con.car_code') }}</dt><dd>{{ order['car_code'] }}</dd>{% endif %}
+        {% if order['vehicle_vin'] %}<dt>{{ t('veh.vin') }}</dt><dd>{{ order['vehicle_vin'] }}</dd>{% endif %}
+        {% if order['technician_name'] %}
+          <dt>{{ t('con.technician') }}</dt><dd>{{ order['technician_name'] }}</dd>
+        {% endif %}
+        <dt>{{ t('con.signed') }}</dt>
+        <dd>{% if order['customer_signed'] %}{{ order['signed_on'] or t('con.signed') }}{% else %}{{ t('con.not_signed') }}{% endif %}</dd>
+      </dl>
+
+      {% if order['damage_notes'] %}
+        <h3 style="margin-block-start:var(--space-4)">{{ t('con.damage_notes') }}</h3>
+        <p style="white-space:pre-wrap;margin-block:var(--space-2) 0">{{ order['damage_notes'] }}</p>
+      {% endif %}
+      {% if order['notes'] %}
+        <h3 style="margin-block-start:var(--space-4)">{{ t('inv.notes') }}</h3>
+        <p style="white-space:pre-wrap;margin-block:var(--space-2) 0">{{ order['notes'] }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('con.signed') }}</h2></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-block-start:0">
+        {{ 'Print the contract, have the customer sign it, then record it here.'
+           if lang == 'en' else 'اطبع العقد ووقّعه مع العميل ثم سجّل ذلك هنا.' }}
+      </p>
+      <form method="post" action="/contracts/{{ order['id'] }}/sign">
+        <input type="hidden" name="signed" value="{{ 0 if order['customer_signed'] else 1 }}">
+        <button class="btn {{ '' if order['customer_signed'] else 'accent' }}" type="submit">
+          {{ t('con.mark_unsigned') if order['customer_signed'] else t('con.mark_signed') }}
+        </button>
+      </form>
+
+      {% if order['status'] in ('open', 'completed') %}
+      <div class="formactions">
+        {% if order['status'] == 'open' %}
+          <form method="post" action="/contracts/{{ order['id'] }}/status">
+            <input type="hidden" name="status" value="completed">
+            <button class="btn small" type="submit">{{ t('con.mark_completed') }}</button>
+          </form>
+        {% else %}
+          <form method="post" action="/contracts/{{ order['id'] }}/status">
+            <input type="hidden" name="status" value="open">
+            <button class="btn small" type="submit">{{ t('con.reopen') }}</button>
+          </form>
+        {% endif %}
+        <form method="post" action="/contracts/{{ order['id'] }}/status"
+              onsubmit="return confirm('{{ t('action.confirm_delete') }}')">
+          <input type="hidden" name="status" value="cancelled">
+          <button class="btn danger small" type="submit">{{ t('con.cancel_job') }}</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('con.repairs_requested') }}</h2></div>
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>{{ t('con.repairs') }}</th>
+          <th>{{ t('con.remarks') }}</th>
+          <th class="num">{{ t('con.expenses') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="secondary">{{ item['line_no'] }}</td>
+          <td>{{ loc(item, 'description') }}</td>
+          <td class="secondary">{{ item['technician_remarks'] or '—' }}</td>
+          <td class="num">{% if item['expense_minor'] %}{{ m(item['expense_minor']) }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('con.parts') }}</h2></div>
+  {% if parts %}
+    <div class="panel-body tight scrollx">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>{{ t('con.part_number') }}</th>
+            <th>{{ t('con.part_name') }}</th>
+            <th>{{ t('con.sourced') }}</th>
+            <th class="num">{{ t('inv.qty') }}</th>
+            <th class="num">{{ t('inv.unit_price') }}</th>
+            <th class="num">{{ t('inv.line_total') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in parts %}
+          <tr>
+            <td class="tight secondary">{{ p['part_number'] or '—' }}</td>
+            <td>{{ loc(p, 'description') }}</td>
+            <td class="tight secondary">
+              {{ t('con.sourced_agency') if p['sourced_externally'] else t('con.sourced_own') }}
+            </td>
+            <td class="num">{{ fmt_qty(p['qty_milli']) }}</td>
+            <td class="num">{{ m(p['unit_price_minor']) }}</td>
+            <td class="num">{{ m(p['line_total_minor']) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty"><p>{{ t('con.no_parts') }}</p></div>
+  {% endif %}
+</section>
+
+{% if not order['invoice_id'] %}
+<section class="panel">
+  <div class="panel-body">
+    <div class="row-actions" style="justify-content:flex-start">
+      {{ delete_form('/contracts/' ~ order['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

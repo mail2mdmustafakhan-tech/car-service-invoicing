@@ -1,0 +1,377 @@
+{#
+  The repair contract as it is printed for the customer to sign.
+
+  Laid out to follow the workshop's existing paper form: the bilingual notice
+  across the top, the car and owner details on ruled lines, the three-column
+  repairs table, a car diagram to mark existing damage on, and the
+  authorisation the owner signs. The spare parts sheet follows on its own page.
+
+  Blank rows are printed after the filled ones on purpose. A contract often
+  gets written up at the counter before everything is known, and the extra
+  work the technician finds goes on in pen.
+#}
+{% set rows_to_fill = 8 %}
+{% set part_rows_per_block = 17 %}
+<!doctype html>
+{#
+  The printed document is always laid out left-to-right, whatever language the
+  interface happens to be set to. Two reasons: the copy handed to the customer
+  should look identical no matter who printed it, and mirroring a page whose
+  labels deliberately mix English and Arabic puts punctuation at the wrong end
+  of half of them. Arabic text inside carries its own dir="rtl" where needed.
+#}
+<html lang="{{ lang }}" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ order['contract_no'] }} — {{ settings['business_name_en'] }}</title>
+  {% if not pdf %}<link rel="stylesheet" href="/static/css/print.css">{% endif %}
+</head>
+<body class="print-view">
+
+{% if not pdf %}
+<div class="print-bar">
+  <button type="button" onclick="window.print()">{{ t('action.print') }}</button>
+  {% if PDF_AVAILABLE %}
+    <a href="/contracts/{{ order['id'] }}/pdf">{{ t('action.download_pdf') }}</a>
+  {% endif %}
+  <a href="/contracts/{{ order['id'] }}">{{ t('action.back') }}</a>
+  <span class="note">
+    {{ 'Print two copies: one for the customer, one for the file.' if lang == 'en'
+       else 'اطبع نسختين: واحدة للعميل وأخرى للملف.' }}
+  </span>
+</div>
+{% endif %}
+
+<div class="sheet">
+
+  {# ---- Masthead -------------------------------------------------------- #}
+  <div class="doc-head">
+    <div class="issuer">
+      <div class="name">{{ settings['business_name_en'] }}</div>
+      {% if settings['business_tagline_en'] %}
+        <div class="meta"><strong>{{ settings['business_tagline_en'] }}</strong></div>
+      {% endif %}
+      <div class="meta">
+        {% if settings['address_en'] %}<div>{{ settings['address_en'] }}</div>{% endif %}
+        {% if settings['phone'] %}<div><bdi>Tel / هاتف</bdi>: <bdi>{{ settings['phone'] }}</bdi></div>{% endif %}
+        {% if settings['vat_number'] %}<div><bdi>VAT No. / الرقم الضريبي</bdi>: <bdi>{{ settings['vat_number'] }}</bdi></div>{% endif %}
+        {% if settings['cr_number'] %}<div><bdi>CR No. / السجل التجاري</bdi>: <bdi>{{ settings['cr_number'] }}</bdi></div>{% endif %}
+      </div>
+    </div>
+
+    <div class="doc-title">
+      {% if settings['business_name_ar'] %}
+        <div class="kind" dir="rtl">{{ settings['business_name_ar'] }}</div>
+      {% endif %}
+      {% if settings['business_tagline_ar'] %}
+        <div class="kind-alt" dir="rtl">{{ settings['business_tagline_ar'] }}</div>
+      {% endif %}
+      <div class="no">{{ order['contract_no'] }}</div>
+      <div class="dates"><bdi>Date / التاريخ</bdi>: <bdi>{{ order['date_in'] }}</bdi></div>
+    </div>
+  </div>
+
+  {# ---- The notice, both languages, numbered automatically --------------- #}
+  {% set terms_en = settings['contract_terms_en'].split('\n') | map('trim') | select | list %}
+  {% set terms_ar = settings['contract_terms_ar'].split('\n') | map('trim') | select | list %}
+  {% if terms_en or terms_ar %}
+  <div class="notice">
+    <div>
+      <h4>Important Notice</h4>
+      <ol>{% for line in terms_en %}<li>{{ line }}</li>{% endfor %}</ol>
+    </div>
+    <div class="ar">
+      <h4>ملاحظة هامة</h4>
+      <ol>{% for line in terms_ar %}<li>{{ line }}</li>{% endfor %}</ol>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="contract-title">
+    <div class="ar" dir="rtl">عقد اصلاح سيارة</div>
+    <div class="en">CAR REPAIR CONTRACT</div>
+  </div>
+
+  {% if order['status'] == 'cancelled' %}
+    <div class="void-stamp">CANCELLED — ملغي</div>
+  {% endif %}
+
+  {# ---- Owner and car ---------------------------------------------------- #}
+  <div class="fields">
+    <div class="field-row">
+      <div class="field-cell grow">
+        <span class="label"><bdi>Owner of Car / اسم مالك السيارة</bdi></span>
+        <span class="value">{{ order['customer_name'] }}{% if order['customer_name_ar'] %} — {{ order['customer_name_ar'] }}{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-cell">
+        <span class="label"><bdi>Type of car / نوع السيارة</bdi></span>
+        <span class="value">{{ order['vehicle_make'] or '' }}</span>
+      </div>
+      <div class="field-cell">
+        <span class="label"><bdi>Model / موديلها</bdi></span>
+        <span class="value">{{ order['vehicle_model'] or '' }}{% if order['vehicle_year'] %} {{ order['vehicle_year'] }}{% endif %}</span>
+      </div>
+      <div class="field-cell">
+        <span class="label"><bdi>Colour / اللون</bdi></span>
+        <span class="value">{{ order['vehicle_colour'] or '' }}</span>
+      </div>
+      <div class="field-cell">
+        <span class="label"><bdi>Plate No. / رقم اللوحة</bdi></span>
+        <span class="value">{{ order['vehicle_plate'] or '' }}</span>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-cell grow">
+        <span class="label"><bdi>Tel. / Address — العنوان أو الهاتف</bdi></span>
+        <span class="value">{{ order['customer_phone'] }}{% if order['customer_address'] %} — {{ order['customer_address'] }}{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-cell">
+        <span class="label"><bdi>Odometer / العداد</bdi></span>
+        <span class="value">{% if order['odometer'] %}{{ '{:,}'.format(order['odometer']) }} km{% endif %}</span>
+      </div>
+      <div class="field-cell">
+        <span class="label"><bdi>Car code / رمز السيارة</bdi></span>
+        <span class="value">{{ order['car_code'] }}</span>
+      </div>
+      <div class="field-cell grow">
+        <span class="label"><bdi>Chassis No. / رقم الهيكل</bdi></span>
+        <span class="value">{{ order['vehicle_vin'] or '' }}</span>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-cell">
+        <span class="label"><bdi>Date In / تاريخ الإدخال</bdi></span>
+        <span class="value">{{ order['date_in'] }}</span>
+      </div>
+      <div class="field-cell">
+        <span class="label"><bdi>Date Out / تاريخ الاستلام</bdi></span>
+        <span class="value">{{ order['expected_date_out'] or '' }}</span>
+      </div>
+    </div>
+  </div>
+
+  {# ---- Repairs requested ------------------------------------------------ #}
+  <table class="repairs">
+    <thead>
+      <tr>
+        <th class="line-no">#</th>
+        <th>Repairs Requested By Owner of Car<br><span dir="rtl">الاصلاحات المطلوبة من قبل مالك السيارة</span></th>
+        <th class="col-cost num">Expenses S.R.<br><span dir="rtl">ر.س تكلفة الأجور</span></th>
+        <th class="col-remarks">Technician's Remarks<br><span dir="rtl">ملاحظات الميكانيكي</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="line-no">{{ item['line_no'] }}</td>
+        <td>
+          <bdi>{{ item['description'] }}</bdi>
+          {% if item['description_ar'] and item['description_ar'] != item['description'] %}
+            <div class="desc-alt">{{ item['description_ar'] }}</div>
+          {% endif %}
+        </td>
+        <td class="num">{% if item['expense_minor'] %}{{ m_plain(item['expense_minor']) }}{% endif %}</td>
+        <td>{{ item['technician_remarks'] }}</td>
+      </tr>
+      {% endfor %}
+
+      {# Room to add work found after the car was booked in. #}
+      {% for n in range(items | length + 1, rows_to_fill + 1) %}
+      <tr class="blank">
+        <td class="line-no">{{ n }}</td><td></td><td></td><td></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" style="text-align:end;font-weight:700">
+          <bdi>Labour total / إجمالي الأجور</bdi>
+        </td>
+        <td class="num" style="font-weight:700">{{ m_plain(totals.labour_minor) }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {# ---- Condition of the car on arrival ---------------------------------- #}
+  <div class="condition">
+    <div>
+      <h4><bdi>Condition on arrival / حالة السيارة عند الدخول</bdi></h4>
+      <div class="diagram-box">
+        {# An outline to mark dents and scratches on. Drawn here rather than
+           loaded as an image so the contract prints with no external file. #}
+        {# Colours are set as attributes on each shape rather than through the
+           stylesheet: the PDF renderer treats inline SVG as an image and does
+           not cascade the page's CSS into it, which silently filled every
+           shape with the default black. #}
+        <svg class="car-diagram" viewBox="0 0 340 172" xmlns="http://www.w3.org/2000/svg"
+             role="img" aria-label="Top view of a car for marking damage">
+          <g fill="#ffffff" stroke="#777777" stroke-width="1.5">
+            <rect x="74"  y="20"  width="46" height="16" rx="6"/>
+            <rect x="222" y="20"  width="46" height="16" rx="6"/>
+            <rect x="74"  y="136" width="46" height="16" rx="6"/>
+            <rect x="222" y="136" width="46" height="16" rx="6"/>
+          </g>
+
+          <rect x="30" y="32" width="282" height="108" rx="34"
+                fill="#ffffff" stroke="#000000" stroke-width="2"/>
+
+          <g fill="none" stroke="#bbbbbb" stroke-width="1.4">
+            <path d="M106 38 L130 68 L130 104 L106 134"/>
+            <path d="M236 38 L212 68 L212 104 L236 134"/>
+            <path d="M130 68 L212 68"/>
+            <path d="M130 104 L212 104"/>
+            <path d="M68 34 L68 138"/>
+            <path d="M274 34 L274 138"/>
+          </g>
+
+          <g fill="#777777" font-size="8" font-family="sans-serif" text-anchor="middle">
+            <text x="49"  y="89">REAR</text>
+            <text x="293" y="89">FRONT</text>
+            <text x="171" y="89">ROOF</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div>
+      <h4><bdi>Notes / ملاحظات</bdi></h4>
+      <div class="damage-text">{{ order['damage_notes'] }}</div>
+      <div class="signature" style="margin-block-start:6mm">
+        <bdi>Technician Sig. / توقيع الميكانيكي</bdi>
+        {% if order['technician_name'] %} — {{ order['technician_name'] }}{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ---- What the customer signs ------------------------------------------ #}
+  {% set auth_en = settings['contract_authorization_en'].replace('{business}', settings['business_name_en']) %}
+  {% set auth_ar = settings['contract_authorization_ar'].replace('{business}', settings['business_name_ar'] or settings['business_name_en']) %}
+  <div class="doc-section">
+    {% if auth_ar %}
+      <p class="doc-notes" dir="rtl" style="margin:0 0 2mm">{{ auth_ar }}</p>
+    {% endif %}
+    {% if auth_en %}
+      <p class="doc-notes" style="margin:0">{{ auth_en }}</p>
+    {% endif %}
+  </div>
+
+  <div class="signatures">
+    <div class="signature"><bdi>Name / الاسم</bdi>: {{ order['customer_name'] }}</div>
+    <div class="signature"><bdi>Signature / التوقيع</bdi></div>
+  </div>
+
+  <div class="doc-foot">
+    <div>
+      {% if settings['invoice_footer_en'] %}<div>{{ settings['invoice_footer_en'] }}</div>{% endif %}
+    </div>
+    <div style="white-space:nowrap">{{ order['contract_no'] }}</div>
+  </div>
+</div>
+
+{# ---- Page 2: the spare parts sheet -------------------------------------- #}
+<div class="sheet" style="page-break-before:always">
+  <div class="doc-head">
+    <div class="issuer">
+      <div class="name">{{ settings['business_name_en'] }}</div>
+      {% if settings['business_name_ar'] %}
+        <div class="name-alt" dir="rtl">{{ settings['business_name_ar'] }}</div>
+      {% endif %}
+    </div>
+    <div class="doc-title">
+      <div class="kind">SPARE PARTS</div>
+      <div class="kind-alt" dir="rtl">قطع الغيار</div>
+      <div class="no">{{ order['contract_no'] }}</div>
+      <div class="dates">
+        <bdi>{{ order['customer_name'] }}</bdi>
+        {% if order['vehicle_plate'] %}<div><bdi>{{ order['vehicle_plate'] }}</bdi></div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Two blocks side by side, as on the workshop's own continuation sheet.
+     The parts recorded so far fill the first block, then both are padded out
+     with ruled rows for anything fitted later. #}
+  <div class="parts-sheet">
+    {% for block in [0, 1] %}
+    <table class="parts">
+      <thead>
+        <tr>
+          <th class="col-pn">Part Number<br><span dir="rtl">رقم القطعة الأصلي</span></th>
+          <th>Type of Spare<br><span dir="rtl">مسمى القطعة</span></th>
+          <th class="col-qty num">Qty.<br><span dir="rtl">الكمية</span></th>
+          <th class="col-price num">Price<br><span dir="rtl">سعر</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in range(part_rows_per_block) %}
+          {% set index = block * part_rows_per_block + n %}
+          {% if index < parts | length %}
+            {% set p = parts[index] %}
+            <tr>
+              <td>{{ p['part_number'] }}</td>
+              <td>
+                <bdi>{{ p['description'] }}</bdi>
+                {% if p['sourced_externally'] %}<span class="desc-alt"> *</span>{% endif %}
+              </td>
+              <td class="num">{{ fmt_qty(p['qty_milli']) }}</td>
+              <td class="num">{{ m_plain(p['line_total_minor']) }}</td>
+            </tr>
+          {% else %}
+            <tr><td></td><td></td><td></td><td></td></tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+  </div>
+
+  <div class="doc-totals">
+    <table>
+      <tr>
+        <td><bdi>Parts total / إجمالي قطع الغيار</bdi></td>
+        <td>{{ m(totals.parts_minor) }}</td>
+      </tr>
+      <tr class="rule">
+        <td><bdi>Labour total / إجمالي الأجور</bdi></td>
+        <td>{{ m(totals.labour_minor) }}</td>
+      </tr>
+      <tr class="grand">
+        <td><bdi>Estimated total / الإجمالي التقديري</bdi></td>
+        <td>{{ m(totals.total_minor) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="doc-section">
+    <p style="font-size:8.5pt;color:var(--doc-soft);margin:0">
+      {% if settings['parts_markup_bp'] %}
+        * <bdi>Parts obtained from an agency carry a handling charge of {{ fmt_rate(settings['parts_markup_bp']) }}%.</bdi>
+        <span dir="rtl">القطع المؤمنة من الوكالة تخضع لرسوم تأمين قدرها {{ fmt_rate(settings['parts_markup_bp']) }}٪.</span>
+        <br>
+      {% endif %}
+      <bdi>This is an estimate, not a tax invoice. / هذا تقدير وليس فاتورة ضريبية.</bdi>
+    </p>
+  </div>
+
+  <div class="doc-foot">
+    <div><bdi>{{ settings['business_name_en'] }}</bdi></div>
+    <div style="white-space:nowrap">{{ order['contract_no'] }}</div>
+  </div>
+</div>
+
+{% if autoprint %}
+<script>
+  window.addEventListener("load", function () { window.setTimeout(window.print, 250); });
+</script>
+{% endif %}
+</body>
+</html>

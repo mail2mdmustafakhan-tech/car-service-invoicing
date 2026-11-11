@@ -75,7 +75,7 @@
     </div>
     <div class="panel-body">
       <div class="scrollx">
-        <table id="lines">
+        <table id="lines" class="linetable">
           <thead>
             <tr>
               <th class="col-desc">{{ t('inv.description') }}</th>
@@ -211,5 +211,6 @@
 
 {% block scripts %}
 <script id="catalog-data" type="application/json">{{ catalog_json | tojson }}</script>
+<script src="/static/js/money.js"></script>
 <script src="/static/js/invoice-form.js"></script>
 {% endblock %}

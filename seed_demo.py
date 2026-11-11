@@ -58,6 +58,16 @@ VEHICLES = [
     (5, "د ر ق 9087", "Kia", "Sportage", 2023, "Grey", 18200, ""),
 ]
 
+TECHNICIANS = ["Rashid", "Imran", "Saleh", "Bilal"]
+
+DAMAGE_NOTES = [
+    "",
+    "Scratch on rear bumper, left side.",
+    "Small dent on front passenger door.",
+    "Front right wheel trim missing. Windscreen chip, driver's side.",
+    "Paint scuffed along offside sill.",
+]
+
 JOBS = [
     ([("SVC-OIL", 1), ("PRT-OF", 1), ("SVC-LAB", 0.5)], "Next service due in 10,000 km."),
     ([("SVC-AC", 1), ("PRT-CF", 1)], ""),
@@ -130,69 +140,95 @@ def seed(db_file: Path, *, invoice_count: int = 24, force: bool = False) -> None
     catalogue = {c[0]: c for c in CATALOGUE}
     today = date.today()
 
+    # Every job starts life as a repair contract, the way it does in the
+    # workshop. Most are then converted to an invoice; a few are left open with
+    # the car still in, and a couple are finished but not yet invoiced.
     for n in range(invoice_count):
         vehicle = VEHICLES[rng.randrange(len(VEHICLES))]
-        customer_id, plate = vehicle[0], vehicle[1]
+        customer_id = vehicle[0]
         vehicle_id = VEHICLES.index(vehicle) + 1
 
         lines_spec, note = JOBS[rng.randrange(len(JOBS))]
-        items = []
+        items, parts = [], []
         for code, qty in lines_spec:
             _, name_en, name_ar, kind, unit, price = catalogue[code]
+            if kind == "part":
+                parts.append(
+                    {"catalog_item_id": by_code[code], "part_number": "",
+                     "description": name_en, "description_ar": name_ar,
+                     "qty_milli": int(qty * 1000), "unit_price_minor": price,
+                     "sourced_externally": 1 if rng.random() < 0.3 else 0}
+                )
+            else:
+                items.append(
+                    {"catalog_item_id": by_code[code], "description": name_en,
+                     "description_ar": name_ar,
+                     "expense_minor": int(price * qty),
+                     "technician_remarks": rng.choice(
+                         ["Done", "Completed and tested", "OK", ""]
+                     )}
+                )
+        if not items:   # a parts-only job still needs fitting
             items.append(
-                {"catalog_item_id": by_code[code], "description": name_en,
-                 "description_ar": name_ar, "kind": kind, "unit": unit,
-                 "qty_milli": int(qty * 1000), "unit_price_minor": price}
+                {"catalog_item_id": by_code["SVC-LAB"], "description": "Labour",
+                 "description_ar": "أجرة عمل", "expense_minor": 9000,
+                 "technician_remarks": "Fitted"}
             )
 
-        # Spread the history over about five months, but keep a third of it
-        # inside the last two weeks so the dashboard's "this month" figures
-        # have something in them.
         days_back = rng.randrange(0, 14) if n % 3 == 0 else rng.randrange(0, 150)
-        issue_date = today - timedelta(days=days_back)
-        # A couple of recent ones are left as drafts, the way a real workshop
-        # has a job written up but not yet handed over.
-        status = "draft" if n >= invoice_count - 2 else "issued"
+        date_in = today - timedelta(days=days_back)
 
-        invoice_id = repo.create_invoice(
+        order_id = repo.create_repair_order(
             conn,
             {"customer_id": customer_id, "vehicle_id": vehicle_id,
-             "issue_date": issue_date.isoformat(), "status": status,
-             "vat_rate_bp": 1500, "odometer": vehicle[6] - rng.randrange(0, 9000),
-             "discount_minor": rng.choice([0, 0, 0, 2500, 5000]),
-             "notes": note, "currency_code": "SAR"},
+             "date_in": date_in.isoformat(),
+             "expected_date_out": (date_in + timedelta(days=2)).isoformat(),
+             "odometer": vehicle[6] - rng.randrange(0, 9000),
+             "car_code": "", "technician_name": rng.choice(TECHNICIANS),
+             "status": "open", "notes": note,
+             "damage_notes": rng.choice(DAMAGE_NOTES)},
             items,
+            parts,
         )
+        repo.sign_repair_order(conn, order_id, True)
 
-        if status != "issued":
+        # The most recent handful are still in the workshop.
+        if n >= invoice_count - 3:
+            continue
+        if n >= invoice_count - 5:
+            repo.set_order_status(conn, order_id, "completed")
             continue
 
-        # Most invoices are settled on the day; a few are left outstanding or
-        # part-paid, so the dashboard has something to show.
+        invoice_id = repo.convert_order_to_invoice(conn, order_id)
+        repo.update_invoice(
+            conn,
+            invoice_id,
+            {"issue_date": date_in.isoformat(), "status": "issued",
+             "discount_minor": rng.choice([0, 0, 0, 2500, 5000])},
+            [dict(line) for line in repo.get_invoice_items(conn, invoice_id)],
+        )
+
         total = repo.get_invoice(conn, invoice_id)["total_minor"]
         roll = rng.random()
-        if roll < 0.65:
-            paid = total
-        elif roll < 0.85:
-            paid = total // 2
-        else:
-            paid = 0
-
+        paid = total if roll < 0.65 else (total // 2 if roll < 0.85 else 0)
         if paid:
             repo.add_payment(
                 conn,
                 {"invoice_id": invoice_id, "amount_minor": paid,
-                 "paid_on": issue_date.isoformat(),
+                 "paid_on": date_in.isoformat(),
                  "method": rng.choice(["cash", "card", "transfer"])},
             )
 
     stats = repo.dashboard_stats(conn)
+    invoices = conn.execute("SELECT COUNT(*) AS n FROM invoices").fetchone()["n"]
     conn.close()
 
     print(
         f"\nDemo data written to {db_file}\n"
         f"  {len(CUSTOMERS)} customers, {len(VEHICLES)} vehicles, "
-        f"{len(CATALOGUE)} catalogue items, {invoice_count} invoices\n"
+        f"{len(CATALOGUE)} catalogue items\n"
+        f"  {invoice_count} repair contracts, {invoices} invoices, "
+        f"{stats['open_contract_count']} cars still in the workshop\n"
         f"  Outstanding: {stats['outstanding_minor'] / 100:,.2f} SAR "
         f"across {stats['outstanding_count']} invoice(s)\n"
     )
