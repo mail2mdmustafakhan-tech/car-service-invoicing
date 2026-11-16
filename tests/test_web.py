@@ -22,6 +22,21 @@ def test_unknown_page_returns_404(client):
     assert client.get("/no-such-page").status_code == 404
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/customers/999", "/vehicles/999", "/invoices/999", "/contracts/999",
+        "/estimates/999", "/attachments/999", "/catalog/999/edit",
+        "/invoices/999/print", "/estimates/999/print",
+    ],
+)
+def test_a_record_that_does_not_exist_is_a_404_not_a_crash(client, url):
+    """Stale links and mistyped numbers should not produce a stack trace."""
+    response = client.get(url)
+    assert response.status_code == 404
+    assert "Not found" in response.text
+
+
 def test_health_check_reports_the_database(client):
     body = client.get("/healthz").json()
     assert body["status"] == "ok"
@@ -305,10 +320,30 @@ def test_invoice_filters_narrow_the_list(shop):
     assert "T-00001" in shop.get("/invoices?state=unpaid").text
 
 
-def test_backup_downloads_a_database_file(shop):
+def test_backup_downloads_everything_not_just_the_database(shop):
+    """Attachments live beside the database, so a bare .db would omit them."""
+    import io
+    import zipfile
+
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+        b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    shop.post(
+        "/customers/1/attachments",
+        files={"document": ("old-invoice.png", png, "image/png")},
+        data={"kind": "invoice"},
+    )
+
     response = shop.get("/settings/backup")
     assert response.status_code == 200
-    assert response.content.startswith(b"SQLite format 3")
+
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    names = archive.namelist()
+    assert "carservice.db" in names
+    assert any(n.startswith("attachments/") for n in names), names
+    assert archive.read("carservice.db").startswith(b"SQLite format 3")
 
 
 # --------------------------------------------------------------------------

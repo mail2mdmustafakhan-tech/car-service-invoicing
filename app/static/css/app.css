@@ -123,6 +123,25 @@ h3 { font-size: 0.95rem; color: var(--ink-soft); font-weight: 600; }
     flex-wrap: wrap;
 }
 
+.brandmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+}
+.brandmark:hover { text-decoration: none; opacity: 0.9; }
+/* Logos are usually dark ink, which would disappear against the dark bar,
+   so the image sits on a white chip. */
+.brandmark img {
+    height: 34px;
+    width: auto;
+    max-width: 56px;
+    background: #fff;
+    border-radius: 4px;
+    padding: 3px;
+    object-fit: contain;
+}
+
 .wordmark {
     color: #fff;
     font-weight: 600;

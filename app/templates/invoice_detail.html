@@ -7,7 +7,12 @@
 
 <div class="pagehead">
   <div>
-    <h1>{{ invoice['invoice_no'] }} {{ pill(state) }}</h1>
+    <h1>
+      {{ invoice['invoice_no'] }} {{ pill(state) }}
+      {% if invoice['doc_type'] == 'plain' %}
+        <span class="pill draft">{{ t('inv.doc_plain') }}</span>
+      {% endif %}
+    </h1>
     <div class="breadcrumb">
       {{ invoice['issue_date'] }} —
       <a href="/customers/{{ invoice['customer_id'] }}">{{ loc(invoice, 'customer_name') }}</a>
@@ -17,6 +22,10 @@
       {% if contract %}
         — {{ t('con.from_contract') }}
         <a href="/contracts/{{ contract['id'] }}">{{ contract['contract_no'] }}</a>
+      {% endif %}
+      {% if estimate %}
+        — {{ t('est.from_estimate') }}
+        <a href="/estimates/{{ estimate['id'] }}">{{ estimate['estimate_no'] }}</a>
       {% endif %}
     </div>
   </div>
@@ -50,7 +59,11 @@
   <div class="figure">
     <div class="value">{{ m(invoice['total_minor']) }}</div>
     <div class="label">{{ t('inv.total') }}</div>
-    <div class="sub">{{ t('inv.vat') }} {{ fmt_rate(invoice['vat_rate_bp']) }}% — {{ m(invoice['vat_minor']) }}</div>
+    <div class="sub">
+      {% if invoice['doc_type'] == 'tax' %}
+        {{ t('inv.vat') }} {{ fmt_rate(invoice['vat_rate_bp']) }}% — {{ m(invoice['vat_minor']) }}
+      {% else %}{{ t('inv.doc_plain') }}{% endif %}
+    </div>
   </div>
   <div class="figure">
     <div class="value">{{ m(invoice['paid_minor']) }}</div>
@@ -101,8 +114,10 @@
       {% if invoice['discount_minor'] %}
         <div class="line"><span>{{ t('inv.discount') }}</span><span>-{{ m(invoice['discount_minor']) }}</span></div>
       {% endif %}
-      <div class="line"><span>{{ t('inv.taxable') }}</span><span>{{ m(invoice['taxable_minor']) }}</span></div>
-      <div class="line"><span>{{ t('inv.vat') }} ({{ fmt_rate(invoice['vat_rate_bp']) }}%)</span><span>{{ m(invoice['vat_minor']) }}</span></div>
+      {% if invoice['doc_type'] == 'tax' %}
+        <div class="line"><span>{{ t('inv.taxable') }}</span><span>{{ m(invoice['taxable_minor']) }}</span></div>
+        <div class="line"><span>{{ t('inv.vat') }} ({{ fmt_rate(invoice['vat_rate_bp']) }}%)</span><span>{{ m(invoice['vat_minor']) }}</span></div>
+      {% endif %}
       <div class="line grand"><span>{{ t('inv.total') }}</span><span>{{ m(invoice['total_minor']) }}</span></div>
       {% if invoice['paid_minor'] %}
         <div class="line"><span>{{ t('inv.paid') }}</span><span>-{{ m(invoice['paid_minor']) }}</span></div>

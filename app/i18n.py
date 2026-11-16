@@ -27,6 +27,7 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "nav.invoices": ("Invoices", "الفواتير"),
     "nav.customers": ("Customers", "العملاء"),
     "nav.vehicles": ("Vehicles", "المركبات"),
+    "nav.estimates": ("Estimates", "عروض الأسعار"),
     "nav.contracts": ("Repair contracts", "عقود الإصلاح"),
     "nav.catalog": ("Services & Parts", "الخدمات وقطع الغيار"),
     "nav.settings": ("Settings", "الإعدادات"),
@@ -68,6 +69,10 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "dash.open_contracts": ("Open contracts", "عقود مفتوحة"),
     "dash.to_invoice": ("Ready to invoice", "جاهزة للفوترة"),
     "dash.new_contract": ("Book a car in", "إدخال سيارة"),
+    "dash.new_estimate": ("New estimate", "عرض سعر جديد"),
+    "dash.estimates_waiting": ("Estimates awaiting a decision", "عروض بانتظار الرد"),
+    "dash.open_estimates": ("Open estimates", "عروض مفتوحة"),
+    "dash.tax_vs_plain": ("Tax / plain", "ضريبية / عادية"),
     "dash.nothing_yet": (
         "Nothing here yet. Start by adding a customer.",
         "لا يوجد شيء بعد. ابدأ بإضافة عميل.",
@@ -184,6 +189,121 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     ),
     "inv.void_warning": ("This invoice is void.", "هذه الفاتورة ملغاة."),
     "inv.needs_line": ("Add at least one item.", "أضف بنداً واحداً على الأقل."),
+    "inv.doc_type": ("Invoice type", "نوع الفاتورة"),
+    "inv.doc_tax": ("Tax invoice (with VAT)", "فاتورة ضريبية (شاملة الضريبة)"),
+    "inv.doc_plain": ("Plain invoice (no VAT)", "فاتورة عادية (بدون ضريبة)"),
+    "inv.plain_invoice": ("INVOICE", "فاتورة"),
+    "inv.doc_type_hint": (
+        "A tax invoice charges VAT and prints the tax-invoice wording. "
+        "A plain invoice is a simple bill with no VAT line. Both are recorded here "
+        "and both appear in your reports.",
+        "الفاتورة الضريبية تحتسب ضريبة القيمة المضافة وتُطبع بصيغة الفاتورة الضريبية. "
+        "الفاتورة العادية فاتورة بسيطة بدون سطر ضريبة. كلاهما مسجل هنا ويظهر في التقارير.",
+    ),
+
+    # -- Customer attachments ----------------------------------------------
+    "att.title": ("Documents", "المستندات"),
+    "att.add": ("Attach a document", "إرفاق مستند"),
+    "att.none": ("No documents attached.", "لا توجد مستندات مرفقة."),
+    "att.hint": (
+        "Scans of older invoices and paperwork, so everything for this customer "
+        "is in one place. PDF, JPEG or PNG, up to 10 MB each.",
+        "صور الفواتير والمستندات القديمة، ليكون كل ما يخص العميل في مكان واحد. "
+        "صيغة PDF أو JPEG أو PNG، وبحد أقصى ١٠ ميجابايت لكل ملف.",
+    ),
+    "att.file": ("File", "الملف"),
+    "att.kind": ("Type", "النوع"),
+    "att.kind_invoice": ("Old invoice", "فاتورة قديمة"),
+    "att.kind_document": ("Document", "مستند"),
+    "att.kind_photo": ("Photo", "صورة"),
+    "att.kind_other": ("Other", "أخرى"),
+    "att.description": ("Description", "الوصف"),
+    "att.date": ("Date on the document", "تاريخ المستند"),
+    "att.size": ("Size", "الحجم"),
+    "att.uploaded": ("Added", "تاريخ الإضافة"),
+    "att.view": ("View", "عرض"),
+    "att.download": ("Download", "تحميل"),
+
+    # -- Importing customers -----------------------------------------------
+    "imp.title": ("Import customers", "استيراد العملاء"),
+    "imp.hint": (
+        "Upload an Excel or CSV file of your existing customers. "
+        "Nothing is saved until you have seen what it will do.",
+        "ارفع ملف Excel أو CSV يحتوي على عملائك الحاليين. "
+        "لن يُحفظ شيء قبل أن ترى ما سيتم تنفيذه.",
+    ),
+    "imp.choose": ("Choose a file", "اختر ملفاً"),
+    "imp.upload": ("Upload and preview", "رفع ومعاينة"),
+    "imp.template": ("Download the template", "تحميل النموذج"),
+    "imp.template_hint": (
+        "Not sure of the column headings? Start from the template.",
+        "غير متأكد من عناوين الأعمدة؟ ابدأ من النموذج.",
+    ),
+    "imp.preview": ("Preview", "معاينة"),
+    "imp.will_import": ("Will be added", "سيتم إضافتهم"),
+    "imp.will_skip": ("Will be skipped", "سيتم تجاهلهم"),
+    "imp.total_rows": ("Rows in the file", "عدد الصفوف في الملف"),
+    "imp.line": ("Row", "الصف"),
+    "imp.note": ("Reason", "السبب"),
+    "imp.unmapped": (
+        "Columns that were not recognised and will be ignored",
+        "أعمدة غير معروفة وسيتم تجاهلها",
+    ),
+    "imp.confirm": ("Import these customers", "استيراد هؤلاء العملاء"),
+    "imp.cancel": ("Cancel", "إلغاء"),
+    "imp.nothing": (
+        "Nothing in this file would be added. Every row is already on file or has no name.",
+        "لا يوجد في هذا الملف ما يمكن إضافته. كل الصفوف موجودة مسبقاً أو بدون اسم.",
+    ),
+
+    # -- Estimates ---------------------------------------------------------
+    "est.title": ("Estimates", "عروض الأسعار"),
+    "est.one": ("Estimate", "عرض سعر"),
+    "est.doc_title": ("ESTIMATE", "عرض سعر"),
+    "est.new": ("New estimate", "عرض سعر جديد"),
+    "est.edit": ("Edit estimate", "تعديل عرض السعر"),
+    "est.details": ("Estimate details", "بيانات عرض السعر"),
+    "est.number": ("Estimate no.", "رقم عرض السعر"),
+    "est.date": ("Date", "التاريخ"),
+    "est.valid_until": ("Valid until", "صالح حتى"),
+    "est.validity_note": (
+        "After this date the prices are no longer guaranteed.",
+        "بعد هذا التاريخ لم تعد الأسعار مضمونة.",
+    ),
+    "est.expired": ("Expired", "منتهي الصلاحية"),
+    "est.none": ("No estimates yet.", "لا توجد عروض أسعار بعد."),
+    "est.search_hint": (
+        "Search by number, customer or plate",
+        "ابحث بالرقم أو العميل أو اللوحة",
+    ),
+    "est.mark_sent": ("Mark as sent", "تسجيل الإرسال"),
+    "est.approve": ("Mark approved", "اعتماد العرض"),
+    "est.decline": ("Mark declined", "تسجيل الرفض"),
+    "est.reopen": ("Back to draft", "إرجاع إلى مسودة"),
+    "est.approved_by": ("Approved by", "تمت الموافقة من"),
+    "est.approved_by_hint": (
+        "Who at the customer agreed to it. Optional, but useful later.",
+        "من وافق عليه لدى العميل. اختياري، لكنه مفيد لاحقاً.",
+    ),
+    "est.approved_on": ("Approved on", "تاريخ الموافقة"),
+    "est.sent_on": ("Sent on", "تاريخ الإرسال"),
+    "est.to_invoice": ("Create invoice", "إنشاء فاتورة"),
+    "est.invoiced_as": ("Invoiced as", "صدرت الفاتورة برقم"),
+    "est.from_estimate": ("From estimate", "من عرض السعر"),
+    "est.not_approved_yet": (
+        "Mark the estimate approved once the customer agrees, then it can be invoiced.",
+        "قم باعتماد العرض بعد موافقة العميل، عندها يمكن إصدار الفاتورة.",
+    ),
+    "est.send": ("Send to customer", "إرسال للعميل"),
+    "est.whatsapp": ("Send on WhatsApp", "إرسال عبر واتساب"),
+    "est.sms": ("Send by SMS", "إرسال رسالة نصية"),
+    "est.copy_message": ("Copy message", "نسخ الرسالة"),
+    "est.copied": ("Copied", "تم النسخ"),
+    "est.message": ("Message", "الرسالة"),
+    "est.no_phone": (
+        "This customer has no phone number on file.",
+        "لا يوجد رقم هاتف مسجل لهذا العميل.",
+    ),
 
     # -- Repair contracts --------------------------------------------------
     "con.title": ("Repair contracts", "عقود الإصلاح"),
@@ -271,6 +391,10 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "status.partially_paid": ("Part paid", "مدفوعة جزئياً"),
     "status.paid": ("Paid", "مدفوعة"),
     "status.all": ("All", "الكل"),
+    # Estimate statuses
+    "status.sent": ("Sent", "مُرسل"),
+    "status.approved": ("Approved", "معتمد"),
+    "status.declined": ("Declined", "مرفوض"),
     # Repair contract statuses
     "status.open": ("In workshop", "في الورشة"),
     "status.completed": ("Work complete", "اكتمل العمل"),
@@ -316,6 +440,43 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
         "الأسعار التي أدخلها تشمل الضريبة",
     ),
     "set.currency": ("Currency code", "رمز العملة"),
+    "set.logo": ("Logo", "الشعار"),
+    "set.logo_hint": (
+        "Printed on contracts and invoices. PNG, JPEG, GIF or WebP, under 1 MB. "
+        "A square image with a transparent or white background works best.",
+        "يُطبع على العقود والفواتير. صيغة PNG أو JPEG أو GIF أو WebP وبحجم أقل من ١ ميجابايت. "
+        "يُفضل صورة مربعة بخلفية شفافة أو بيضاء.",
+    ),
+    "set.logo_choose": ("Choose an image", "اختر صورة"),
+    "set.logo_upload": ("Upload logo", "رفع الشعار"),
+    "set.logo_replace": ("Replace logo", "استبدال الشعار"),
+    "set.logo_remove": ("Remove logo", "إزالة الشعار"),
+    "set.logo_none": ("No logo set.", "لم يتم تعيين شعار."),
+    "set.logo_saved": ("Logo saved.", "تم حفظ الشعار."),
+    "set.estimates": ("Estimates", "عروض الأسعار"),
+    "set.estimate_prefix": ("Estimate number prefix", "بادئة رقم عرض السعر"),
+    "set.next_estimate_seq": ("Next estimate number", "رقم عرض السعر القادم"),
+    "set.validity_days": ("Estimates valid for (days)", "مدة صلاحية العرض (أيام)"),
+    "set.validity_hint": (
+        "Used to fill in the valid-until date on a new estimate. Set 0 for no expiry.",
+        "تُستخدم لتعبئة تاريخ انتهاء الصلاحية في العرض الجديد. اضبطها على 0 لعدم انتهاء الصلاحية.",
+    ),
+    "set.messaging": ("WhatsApp & SMS", "واتساب والرسائل النصية"),
+    "set.country_code": ("Country dialling code", "رمز الدولة"),
+    "set.country_code_hint": (
+        "Used to turn a local number such as 0551234567 into the international "
+        "form WhatsApp needs. 966 is Saudi Arabia.",
+        "يُستخدم لتحويل رقم محلي مثل 0551234567 إلى الصيغة الدولية التي يحتاجها واتساب. "
+        "966 هو رمز السعودية.",
+    ),
+    "set.message_en": ("Message template (English)", "نص الرسالة بالإنجليزية"),
+    "set.message_ar": ("Message template (Arabic)", "نص الرسالة بالعربية"),
+    "set.message_hint": (
+        "Filled in when you send an estimate. Available placeholders: "
+        "{customer} {business} {number} {total} {valid_until} {items}",
+        "تُعبأ عند إرسال عرض السعر. العناصر المتاحة: "
+        "{customer} {business} {number} {total} {valid_until} {items}",
+    ),
     "set.contract": ("Repair contract", "عقد الإصلاح"),
     "set.tagline_en": ("Services line (English)", "سطر الخدمات بالإنجليزية"),
     "set.tagline_ar": ("Services line (Arabic)", "سطر الخدمات بالعربية"),
@@ -366,6 +527,21 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "msg.required": ("This field is required.", "هذا الحقل مطلوب."),
     "msg.invoice_issued": ("Invoice issued.", "تم إصدار الفاتورة."),
     "msg.payment_recorded": ("Payment recorded.", "تم تسجيل الدفعة."),
+    "msg.attached": ("Document attached.", "تم إرفاق المستند."),
+    "msg.imported": ("Customers imported.", "تم استيراد العملاء."),
+    "msg.nothing_imported": (
+        "Nothing was imported — every row was already on file.",
+        "لم يتم استيراد أي شيء — جميع الصفوف موجودة مسبقاً.",
+    ),
+    "msg.estimate_sent": ("Marked as sent.", "تم تسجيل الإرسال."),
+    "msg.estimate_approved": (
+        "Approved. You can now raise the invoice.",
+        "تم الاعتماد. يمكنك الآن إصدار الفاتورة.",
+    ),
+    "msg.invoice_from_estimate": (
+        "Draft invoice created from the estimate. Check it, then issue it.",
+        "تم إنشاء مسودة فاتورة من عرض السعر. راجعها ثم قم بإصدارها.",
+    ),
     "msg.invoice_from_contract": (
         "Draft invoice created from the contract. Check it, then issue it.",
         "تم إنشاء مسودة فاتورة من العقد. راجعها ثم قم بإصدارها.",

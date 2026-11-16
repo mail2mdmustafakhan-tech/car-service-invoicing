@@ -1,0 +1,200 @@
+{#
+  The printed estimate — what the customer is shown before agreeing to anything.
+
+  Close to the invoice on purpose: the same masthead, the same table, so a
+  customer who has had an invoice from the shop recognises the paperwork. The
+  differences are the ones that matter — it is titled an estimate, it carries
+  a date the prices hold until, and it ends in a space for the customer to
+  accept rather than in an amount due.
+
+  Laid out left-to-right whatever the interface language, for the same reason
+  as the invoice: the customer's copy should not change shape depending on
+  who printed it.
+#}
+<!doctype html>
+<html lang="{{ lang }}" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ estimate['estimate_no'] }} — {{ settings['business_name_en'] }}</title>
+  {% if not pdf %}<link rel="stylesheet" href="/static/css/print.css">{% endif %}
+</head>
+<body class="print-view">
+
+{% if not pdf %}
+<div class="print-bar">
+  <button type="button" onclick="window.print()">{{ t('action.print') }}</button>
+  {% if PDF_AVAILABLE %}
+    <a href="/estimates/{{ estimate['id'] }}/pdf">{{ t('action.download_pdf') }}</a>
+  {% endif %}
+  <a href="/estimates/{{ estimate['id'] }}">{{ t('action.back') }}</a>
+  <span class="note">
+    {{ 'Choose "Save as PDF" in the print dialogue to keep a copy.' if lang == 'en'
+       else 'اختر "حفظ كملف PDF" في نافذة الطباعة للاحتفاظ بنسخة.' }}
+  </span>
+</div>
+{% endif %}
+
+<div class="sheet">
+
+  <div class="doc-head">
+    <div class="issuer">
+      <div class="name">{{ settings['business_name_en'] }}</div>
+      {% if settings['business_name_ar'] %}
+        <div class="name-alt" dir="rtl">{{ settings['business_name_ar'] }}</div>
+      {% endif %}
+      <div class="meta">
+        {% if settings['address_en'] %}<div>{{ settings['address_en'] }}</div>{% endif %}
+        {% if settings['phone'] %}<div><bdi>Tel / هاتف</bdi>: <bdi>{{ settings['phone'] }}</bdi></div>{% endif %}
+        {% if settings['email'] %}<div><bdi>{{ settings['email'] }}</bdi></div>{% endif %}
+        {% if settings['vat_number'] %}<div><bdi>VAT No. / الرقم الضريبي</bdi>: <bdi>{{ settings['vat_number'] }}</bdi></div>{% endif %}
+      </div>
+    </div>
+
+    {% if logo_uri %}
+      <div class="doc-logo"><img src="{{ logo_uri }}" alt=""></div>
+    {% endif %}
+
+    <div class="doc-title">
+      <div class="kind">ESTIMATE</div>
+      <div class="kind-alt" dir="rtl">عرض سعر</div>
+      <div class="no">{{ estimate['estimate_no'] }}</div>
+      <div class="dates">
+        <div><bdi>Date / التاريخ</bdi>: <bdi>{{ estimate['issue_date'] }}</bdi></div>
+        {% if estimate['valid_until'] %}
+          <div><bdi>Valid until / صالح حتى</bdi>: <bdi>{{ estimate['valid_until'] }}</bdi></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if estimate['status'] == 'declined' %}
+    <div class="void-stamp">DECLINED — مرفوض</div>
+  {% elif estimate['status'] == 'approved' or estimate['status'] == 'invoiced' %}
+    <div class="draft-stamp">APPROVED{% if estimate['decided_on'] %} {{ estimate['decided_on'] }}{% endif %} — معتمد</div>
+  {% endif %}
+
+  <div class="parties">
+    <div class="party">
+      <h4>FOR / إلى</h4>
+      <div class="primary">{{ estimate['customer_name'] }}</div>
+      {% if estimate['customer_name_ar'] %}
+        <div class="primary" dir="rtl">{{ estimate['customer_name_ar'] }}</div>
+      {% endif %}
+      <dl>
+        {% if estimate['customer_phone'] %}<dt><bdi>Tel / هاتف</bdi></dt><dd><bdi>{{ estimate['customer_phone'] }}</bdi></dd>{% endif %}
+        {% if estimate['customer_email'] %}<dt>Email</dt><dd><bdi>{{ estimate['customer_email'] }}</bdi></dd>{% endif %}
+        {% if estimate['customer_vat_number'] %}<dt><bdi>VAT No. / الرقم الضريبي</bdi></dt><dd><bdi>{{ estimate['customer_vat_number'] }}</bdi></dd>{% endif %}
+      </dl>
+    </div>
+
+    <div class="party">
+      <h4>VEHICLE / المركبة</h4>
+      {% if estimate['vehicle_plate'] %}
+        <div class="primary"><bdi>{{ estimate['vehicle_plate'] }}</bdi></div>
+        <dl>
+          {% if estimate['vehicle_make'] or estimate['vehicle_model'] %}
+            <dt><bdi>Vehicle / السيارة</bdi></dt>
+            <dd><bdi>{{ (estimate['vehicle_make'] ~ ' ' ~ estimate['vehicle_model']) | trim }}{% if estimate['vehicle_year'] %} ({{ estimate['vehicle_year'] }}){% endif %}</bdi></dd>
+          {% endif %}
+        </dl>
+      {% else %}
+        <div class="primary">—</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="line-no">#</th>
+        <th>Description / الوصف</th>
+        <th class="col-qty num">Qty<br>الكمية</th>
+        <th class="col-unit">Unit<br>الوحدة</th>
+        <th class="col-price num">Unit price<br>سعر الوحدة</th>
+        <th class="col-amount num">Amount<br>المبلغ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="line-no">{{ item['line_no'] }}</td>
+        <td>
+          <bdi>{{ item['description'] }}</bdi>
+          {% if item['description_ar'] and item['description_ar'] != item['description'] %}
+            <div class="desc-alt">{{ item['description_ar'] }}</div>
+          {% endif %}
+        </td>
+        <td class="col-qty num">{{ fmt_qty(item['qty_milli']) }}</td>
+        <td class="col-unit">{{ item['unit'] }}</td>
+        <td class="col-price num">{{ m_plain(item['unit_price_minor']) }}</td>
+        <td class="col-amount num">{{ m_plain(item['line_total_minor']) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="doc-totals">
+    <table>
+      <tr>
+        <td>Subtotal / المجموع</td>
+        <td>{{ m(estimate['subtotal_minor']) }}</td>
+      </tr>
+      {% if estimate['discount_minor'] %}
+      <tr><td>Discount / الخصم</td><td>-{{ m(estimate['discount_minor']) }}</td></tr>
+      {% endif %}
+      {% if estimate['vat_rate_bp'] %}
+      <tr class="rule">
+        <td>Taxable amount / المبلغ الخاضع للضريبة</td>
+        <td>{{ m(estimate['taxable_minor']) }}</td>
+      </tr>
+      <tr>
+        <td>VAT {{ fmt_rate(estimate['vat_rate_bp']) }}% / ضريبة القيمة المضافة</td>
+        <td>{{ m(estimate['vat_minor']) }}</td>
+      </tr>
+      {% endif %}
+      <tr class="grand">
+        <td>Estimated total / الإجمالي التقديري</td>
+        <td>{{ m(estimate['total_minor']) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  {% if estimate['notes'] %}
+  <div class="doc-section">
+    <h4>NOTES / ملاحظات</h4>
+    <div class="doc-notes">{{ estimate['notes'] }}</div>
+  </div>
+  {% endif %}
+
+  <div class="doc-section">
+    <p style="font-size:9pt;margin:0;color:var(--doc-soft)">
+      <bdi>This is an estimate, not a tax invoice. Prices are subject to the
+      parts available at the time of work.{% if estimate['valid_until'] %}
+      It is valid until {{ estimate['valid_until'] }}.{% endif %}</bdi><br>
+      <span dir="rtl">هذا عرض سعر وليس فاتورة ضريبية. الأسعار تخضع لتوفر القطع وقت التنفيذ.{% if estimate['valid_until'] %}
+      العرض صالح حتى {{ estimate['valid_until'] }}.{% endif %}</span>
+    </p>
+  </div>
+
+  {# The customer accepts here, which is what turns an estimate into work. #}
+  <div class="signatures">
+    <div class="signature"><bdi>Accepted by / الموافقة من</bdi>: {{ estimate['approved_by'] }}</div>
+    <div class="signature"><bdi>Signature &amp; date / التوقيع والتاريخ</bdi></div>
+  </div>
+
+  <div class="doc-foot">
+    <div>
+      {% if settings['invoice_footer_en'] %}<div>{{ settings['invoice_footer_en'] }}</div>{% endif %}
+    </div>
+    <div style="white-space:nowrap">{{ estimate['estimate_no'] }}</div>
+  </div>
+</div>
+
+{% if autoprint %}
+<script>
+  window.addEventListener("load", function () { window.setTimeout(window.print, 250); });
+</script>
+{% endif %}
+</body>
+</html>

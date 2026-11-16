@@ -13,6 +13,7 @@ column name in a template matches a column name in ``001_initial.sql``.
 from __future__ import annotations
 
 import sqlite3
+from base64 import b64encode
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date
 from typing import Any
@@ -78,6 +79,9 @@ SETTINGS_FIELDS = (
     "contract_terms_en", "contract_terms_ar",
     "contract_authorization_en", "contract_authorization_ar",
     "contract_prefix", "next_contract_seq", "parts_markup_bp",
+    # Added in migration 004, for estimates and messaging.
+    "estimate_prefix", "next_estimate_seq", "estimate_validity_days",
+    "default_country_code", "message_template_en", "message_template_ar",
 )
 
 
@@ -113,6 +117,118 @@ def reserve_invoice_no(conn: sqlite3.Connection) -> str:
         """
     ).fetchone()
     return f"{row['invoice_prefix']}{row['seq']:05d}"
+
+
+#: Image formats the logo may be uploaded in, by the bytes each one starts
+#: with. The browser's declared content type is not trusted -- it is supplied
+#: by whoever is uploading, and the file itself is the only honest witness.
+#:
+#: SVG is deliberately absent. It is XML that can carry script, and serving
+#: one back from the application's own address would hand that script the run
+#: of the page. Every drawing tool exports PNG.
+LOGO_SIGNATURES: tuple[tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+)
+
+#: Roughly a page's worth of image. A logo needs far less, and the file is
+#: carried in every backup, so there is no reason to allow more.
+MAX_LOGO_BYTES = 1_000_000
+
+
+def sniff_image(data: bytes) -> str | None:
+    """Return the media type of an image, or ``None`` if it is not one."""
+    for signature, mime in LOGO_SIGNATURES:
+        if data.startswith(signature):
+            return mime
+    # WebP announces itself as RIFF....WEBP, with the size in between.
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def set_logo(
+    conn: sqlite3.Connection, data: bytes, *, filename: str = ""
+) -> str:
+    """Store an uploaded logo. Returns its media type.
+
+    Raises :class:`ValueError` if the upload is empty, too large, or not an
+    image this application will serve.
+    """
+    if not data:
+        raise ValueError("No file was uploaded.")
+    if len(data) > MAX_LOGO_BYTES:
+        raise ValueError(
+            f"That image is {len(data) / 1_000_000:.1f} MB. Please use one "
+            "under 1 MB — a logo needs far less than that."
+        )
+    mime = sniff_image(data)
+    if mime is None:
+        raise ValueError("That file is not a PNG, JPEG, GIF or WebP image.")
+
+    with transaction(conn):
+        conn.execute(
+            """
+            UPDATE branding
+               SET logo_blob = ?, logo_mime = ?, logo_filename = ?,
+                   updated_at = datetime('now')
+             WHERE id = 1
+            """,
+            (data, mime, filename[:120]),
+        )
+    return mime
+
+
+def clear_logo(conn: sqlite3.Connection) -> None:
+    with transaction(conn):
+        conn.execute(
+            """
+            UPDATE branding
+               SET logo_blob = NULL, logo_mime = '', logo_filename = '',
+                   updated_at = datetime('now')
+             WHERE id = 1
+            """
+        )
+
+
+def get_logo(conn: sqlite3.Connection) -> tuple[bytes, str] | None:
+    """The stored logo and its media type, or ``None`` if none is set."""
+    row = _one(conn, "SELECT logo_blob, logo_mime FROM branding WHERE id = 1")
+    if row is None or not row["logo_blob"]:
+        return None
+    return bytes(row["logo_blob"]), row["logo_mime"] or "image/png"
+
+
+def logo_state(conn: sqlite3.Connection) -> Row:
+    """Whether a logo is set, and when it last changed -- without the bytes.
+
+    Read on every page render to decide whether to show the logo in the top
+    bar, so it deliberately does not touch the image itself. The timestamp
+    goes on the end of the image URL so a replaced logo appears immediately
+    instead of the browser showing the cached old one.
+    """
+    return _require(
+        _one(conn, "SELECT logo_mime, logo_filename, updated_at FROM branding WHERE id = 1"),
+        "Branding",
+    )
+
+
+def logo_data_uri(conn: sqlite3.Connection) -> str:
+    """The logo as a ``data:`` URI, or an empty string.
+
+    The printed documents embed the image this way rather than linking to it.
+    A link works in the browser but not when the PDF renderer is handed a
+    string of HTML with no server behind it, and a logo that silently
+    disappears from the PDF is exactly the kind of thing nobody notices until
+    a customer is holding the page.
+    """
+    stored = get_logo(conn)
+    if stored is None:
+        return ""
+    data, mime = stored
+    return f"data:{mime};base64,{b64encode(data).decode('ascii')}"
 
 
 def reserve_contract_no(conn: sqlite3.Connection) -> str:
@@ -414,7 +530,7 @@ def delete_catalog_item(conn: sqlite3.Connection, item_id: int) -> None:
 INVOICE_HEADER_FIELDS = (
     "customer_id", "vehicle_id", "issue_date", "due_date", "odometer",
     "status", "vat_rate_bp", "prices_include_vat", "currency_code",
-    "discount_minor", "notes",
+    "discount_minor", "notes", "doc_type",
 )
 
 ITEM_FIELDS = (
@@ -1030,6 +1146,475 @@ def order_for_invoice(conn: sqlite3.Connection, invoice_id: int) -> Row | None:
 
 
 # ==========================================================================
+# Estimates
+# ==========================================================================
+# What a customer is quoted before anything is agreed. An estimate carries no
+# obligation: it is written, shown, approved or declined, and only then does
+# it become an invoice.
+
+ESTIMATE_HEADER_FIELDS = (
+    "customer_id", "vehicle_id", "issue_date", "valid_until", "status",
+    "vat_rate_bp", "prices_include_vat", "currency_code", "discount_minor",
+    "notes", "approved_by",
+)
+
+ESTIMATE_ITEM_FIELDS = (
+    "catalog_item_id", "description", "description_ar", "kind", "unit",
+    "qty_milli", "unit_price_minor",
+)
+
+
+def reserve_estimate_no(conn: sqlite3.Connection) -> str:
+    """Take the next estimate number. Its own series, like contracts."""
+    row = conn.execute(
+        """
+        UPDATE settings
+           SET next_estimate_seq = next_estimate_seq + 1
+         WHERE id = 1
+        RETURNING estimate_prefix, next_estimate_seq - 1 AS seq
+        """
+    ).fetchone()
+    return f"{row['estimate_prefix']}{row['seq']:05d}"
+
+
+def list_estimates(
+    conn: sqlite3.Connection,
+    *,
+    search: str = "",
+    status: str = "",
+    customer_id: int | None = None,
+    limit: int = 500,
+) -> list[Row]:
+    where, params = ["1 = 1"], []
+    if search:
+        where.append(
+            "(ve.estimate_no LIKE ? OR ve.customer_name LIKE ? OR ve.vehicle_plate LIKE ?)"
+        )
+        like = f"%{search}%"
+        params += [like, like, like]
+    if status:
+        where.append("ve.status = ?")
+        params.append(status)
+    if customer_id is not None:
+        where.append("e.customer_id = ?")
+        params.append(customer_id)
+
+    params.append(limit)
+    return _all(
+        conn,
+        f"""
+        SELECT ve.*, e.customer_id, e.vehicle_id, e.invoice_id, e.total_minor
+          FROM v_estimates ve
+          JOIN estimates   e ON e.id = ve.id
+         WHERE {' AND '.join(where)}
+         ORDER BY ve.issue_date DESC, ve.id DESC
+         LIMIT ?
+        """,
+        params,
+    )
+
+
+def get_estimate(conn: sqlite3.Connection, estimate_id: int) -> Row:
+    return _require(
+        _one(
+            conn,
+            """
+            SELECT e.*,
+                   c.name       AS customer_name,
+                   c.name_ar    AS customer_name_ar,
+                   c.phone      AS customer_phone,
+                   c.email      AS customer_email,
+                   c.address    AS customer_address,
+                   c.vat_number AS customer_vat_number,
+                   v.plate_no   AS vehicle_plate,
+                   v.make       AS vehicle_make,
+                   v.model      AS vehicle_model,
+                   v.model_year AS vehicle_year,
+                   i.invoice_no AS invoice_no
+              FROM estimates e
+              JOIN customers c ON c.id = e.customer_id
+         LEFT JOIN vehicles  v ON v.id = e.vehicle_id
+         LEFT JOIN invoices  i ON i.id = e.invoice_id
+             WHERE e.id = ?
+            """,
+            (estimate_id,),
+        ),
+        "Estimate",
+    )
+
+
+def get_estimate_items(conn: sqlite3.Connection, estimate_id: int) -> list[Row]:
+    return _all(
+        conn,
+        "SELECT * FROM estimate_items WHERE estimate_id = ? ORDER BY line_no",
+        (estimate_id,),
+    )
+
+
+def _write_estimate_items(
+    conn: sqlite3.Connection, estimate_id: int, items: Sequence[Mapping[str, Any]]
+) -> None:
+    conn.execute("DELETE FROM estimate_items WHERE estimate_id = ?", (estimate_id,))
+    for line_no, raw in enumerate(items, start=1):
+        values = _pick(raw, ESTIMATE_ITEM_FIELDS)
+        values["estimate_id"] = estimate_id
+        values["line_no"] = line_no
+        values["line_total_minor"] = line_total(
+            int(raw["qty_milli"]), int(raw["unit_price_minor"])
+        )
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        conn.execute(
+            f"INSERT INTO estimate_items ({cols}) VALUES ({marks})",
+            list(values.values()),
+        )
+
+
+def _write_estimate_totals(conn: sqlite3.Connection, estimate_id: int) -> None:
+    header = _require(
+        _one(
+            conn,
+            "SELECT vat_rate_bp, prices_include_vat, discount_minor FROM estimates WHERE id = ?",
+            (estimate_id,),
+        ),
+        "Estimate",
+    )
+    lines = _all(
+        conn,
+        "SELECT qty_milli, unit_price_minor FROM estimate_items WHERE estimate_id = ?",
+        (estimate_id,),
+    )
+    totals = compute_totals(
+        [(int(r["qty_milli"]), int(r["unit_price_minor"])) for r in lines],
+        vat_rate_bp=int(header["vat_rate_bp"]),
+        discount_minor=int(header["discount_minor"]),
+        prices_include_vat=bool(header["prices_include_vat"]),
+    )
+    conn.execute(
+        """
+        UPDATE estimates
+           SET subtotal_minor = ?, taxable_minor = ?, vat_minor = ?,
+               total_minor = ?, updated_at = datetime('now')
+         WHERE id = ?
+        """,
+        (
+            totals.subtotal_minor,
+            totals.taxable_minor,
+            totals.vat_minor,
+            totals.total_minor,
+            estimate_id,
+        ),
+    )
+
+
+def create_estimate(
+    conn: sqlite3.Connection,
+    header: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]],
+) -> int:
+    values = _pick(header, ESTIMATE_HEADER_FIELDS)
+    values.setdefault("issue_date", date.today().isoformat())
+    with transaction(conn):
+        values["estimate_no"] = reserve_estimate_no(conn)
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        cur = conn.execute(
+            f"INSERT INTO estimates ({cols}) VALUES ({marks})", list(values.values())
+        )
+        estimate_id = int(cur.lastrowid)
+        _write_estimate_items(conn, estimate_id, items)
+        _write_estimate_totals(conn, estimate_id)
+    return estimate_id
+
+
+def update_estimate(
+    conn: sqlite3.Connection,
+    estimate_id: int,
+    header: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]],
+) -> None:
+    estimate = get_estimate(conn, estimate_id)
+    if estimate["invoice_id"] is not None:
+        raise InUse(
+            f"This estimate has been invoiced as {estimate['invoice_no']}. "
+            "Edit that invoice instead."
+        )
+    with transaction(conn):
+        _update(conn, "estimates", estimate_id, _pick(header, ESTIMATE_HEADER_FIELDS))
+        _write_estimate_items(conn, estimate_id, items)
+        _write_estimate_totals(conn, estimate_id)
+
+
+def set_estimate_status(
+    conn: sqlite3.Connection,
+    estimate_id: int,
+    status: str,
+    *,
+    approved_by: str = "",
+) -> None:
+    """Move an estimate along: sent, approved, declined, or back to draft.
+
+    The date is stamped by the system rather than typed, so "when did they
+    agree to this" always has an answer and it is never a guess.
+    """
+    if status not in {"draft", "sent", "approved", "declined"}:
+        raise ValueError(f"Unknown estimate status: {status}")
+    estimate = get_estimate(conn, estimate_id)
+    if estimate["status"] == "invoiced":
+        raise InUse("This estimate has already been invoiced.")
+
+    today = date.today().isoformat()
+    sent_on = today if status == "sent" else estimate["sent_on"]
+    decided_on = today if status in {"approved", "declined"} else None
+
+    with transaction(conn):
+        conn.execute(
+            """
+            UPDATE estimates
+               SET status = ?, sent_on = ?, decided_on = ?, approved_by = ?,
+                   updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (
+                status,
+                sent_on,
+                decided_on,
+                approved_by if status == "approved" else "",
+                estimate_id,
+            ),
+        )
+
+
+def delete_estimate(conn: sqlite3.Connection, estimate_id: int) -> None:
+    estimate = get_estimate(conn, estimate_id)
+    if estimate["invoice_id"] is not None:
+        raise InUse(
+            f"This estimate was invoiced as {estimate['invoice_no']} and cannot be deleted."
+        )
+    with transaction(conn):
+        conn.execute("DELETE FROM estimates WHERE id = ?", (estimate_id,))
+
+
+def convert_estimate_to_invoice(
+    conn: sqlite3.Connection, estimate_id: int, *, doc_type: str = "tax"
+) -> int:
+    """Raise an invoice from an approved estimate.
+
+    Only an approved estimate converts. Invoicing something the customer has
+    not agreed to is how disputes start, and the system should not make that
+    the easy path.
+    """
+    estimate = get_estimate(conn, estimate_id)
+    if estimate["invoice_id"] is not None:
+        raise InUse(f"Already invoiced as {estimate['invoice_no']}.")
+    if estimate["status"] != "approved":
+        raise InUse(
+            "Only an approved estimate can be invoiced. "
+            "Mark it approved once the customer has agreed to it."
+        )
+
+    items = get_estimate_items(conn, estimate_id)
+    if not items:
+        raise InUse("This estimate has no items.")
+
+    lines = [
+        {
+            "catalog_item_id": item["catalog_item_id"],
+            "description": item["description"],
+            "description_ar": item["description_ar"],
+            "kind": item["kind"],
+            "unit": item["unit"],
+            "qty_milli": item["qty_milli"],
+            "unit_price_minor": item["unit_price_minor"],
+        }
+        for item in items
+    ]
+
+    invoice_id = create_invoice(
+        conn,
+        {
+            "customer_id": estimate["customer_id"],
+            "vehicle_id": estimate["vehicle_id"],
+            "issue_date": date.today().isoformat(),
+            "status": "draft",
+            "doc_type": doc_type,
+            # A plain invoice carries no VAT, whatever the estimate quoted.
+            "vat_rate_bp": estimate["vat_rate_bp"] if doc_type == "tax" else 0,
+            "prices_include_vat": estimate["prices_include_vat"],
+            "currency_code": estimate["currency_code"],
+            "discount_minor": estimate["discount_minor"],
+            "notes": estimate["notes"],
+        },
+        lines,
+    )
+
+    with transaction(conn):
+        conn.execute(
+            """
+            UPDATE estimates
+               SET invoice_id = ?, status = 'invoiced', updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (invoice_id, estimate_id),
+        )
+    return invoice_id
+
+
+def estimate_for_invoice(conn: sqlite3.Connection, invoice_id: int) -> Row | None:
+    """The estimate an invoice came from, if it came from one."""
+    return _one(
+        conn,
+        "SELECT id, estimate_no FROM estimates WHERE invoice_id = ?",
+        (invoice_id,),
+    )
+
+
+# ==========================================================================
+# Customer attachments
+# ==========================================================================
+# Scans of invoices written before this system existed, so a customer's
+# history is in one place.
+
+#: What may be uploaded, by the bytes the file starts with. As with the logo,
+#: the browser's declared type is not trusted -- the file is the only honest
+#: witness to what it is.
+ATTACHMENT_SIGNATURES: tuple[tuple[bytes, str, str], ...] = (
+    (b"%PDF-", "application/pdf", ".pdf"),
+    (b"\xff\xd8\xff", "image/jpeg", ".jpg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png", ".png"),
+)
+
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024    # 10 MB
+
+
+def sniff_attachment(data: bytes) -> tuple[str, str] | None:
+    """Return ``(media type, file extension)``, or ``None`` if unacceptable."""
+    for signature, mime, extension in ATTACHMENT_SIGNATURES:
+        if data.startswith(signature):
+            return mime, extension
+    return None
+
+
+def add_attachment(
+    conn: sqlite3.Connection,
+    customer_id: int,
+    data: bytes,
+    *,
+    original_name: str = "",
+    kind: str = "invoice",
+    description: str = "",
+    document_date: str | None = None,
+) -> int:
+    """Store an uploaded document against a customer.
+
+    The file is written under the data folder with a generated name. The name
+    it arrived with is kept only as a label: a filename from a browser is
+    text someone else chose, and letting it decide where a file lands on disk
+    is how a upload ends up somewhere it should never reach.
+    """
+    from uuid import uuid4
+
+    from .db import attachments_dir
+
+    get_customer(conn, customer_id)
+
+    if not data:
+        raise ValueError("No file was uploaded.")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValueError(
+            f"That file is {len(data) / 1024 / 1024:.1f} MB. The limit is 10 MB."
+        )
+    sniffed = sniff_attachment(data)
+    if sniffed is None:
+        raise ValueError("Only PDF, JPEG and PNG files can be attached.")
+    mime, extension = sniffed
+
+    stored_name = f"{uuid4().hex}{extension}"
+    folder = attachments_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / stored_name).write_bytes(data)
+
+    try:
+        with transaction(conn):
+            cur = conn.execute(
+                """
+                INSERT INTO customer_attachments
+                    (customer_id, stored_name, original_name, mime, size_bytes,
+                     kind, description, document_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    customer_id,
+                    stored_name,
+                    (original_name or stored_name)[:200],
+                    mime,
+                    len(data),
+                    kind if kind in {"invoice", "document", "photo", "other"} else "other",
+                    description[:500],
+                    document_date,
+                ),
+            )
+    except Exception:
+        # Do not leave a file on disk that nothing points at.
+        (folder / stored_name).unlink(missing_ok=True)
+        raise
+    return int(cur.lastrowid)
+
+
+def list_attachments(conn: sqlite3.Connection, customer_id: int) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT * FROM customer_attachments
+         WHERE customer_id = ?
+         ORDER BY COALESCE(document_date, uploaded_at) DESC, id DESC
+        """,
+        (customer_id,),
+    )
+
+
+def get_attachment(conn: sqlite3.Connection, attachment_id: int) -> Row:
+    return _require(
+        _one(
+            conn, "SELECT * FROM customer_attachments WHERE id = ?", (attachment_id,)
+        ),
+        "Attachment",
+    )
+
+
+def attachment_file(conn: sqlite3.Connection, attachment_id: int):
+    """The path on disk for an attachment, and its row."""
+    from .db import attachments_dir
+
+    row = get_attachment(conn, attachment_id)
+    # stored_name is generated by this application, never user input, but it
+    # is resolved and checked against the folder anyway: a single bad row
+    # should not be able to reach outside it.
+    folder = attachments_dir().resolve()
+    path = (folder / row["stored_name"]).resolve()
+    if folder not in path.parents:
+        raise NotFound("Attachment not found")
+    return path, row
+
+
+def delete_attachment(conn: sqlite3.Connection, attachment_id: int) -> int:
+    """Remove an attachment and its file. Returns the customer it belonged to."""
+    path, row = attachment_file(conn, attachment_id)
+    with transaction(conn):
+        conn.execute("DELETE FROM customer_attachments WHERE id = ?", (attachment_id,))
+    path.unlink(missing_ok=True)
+    return int(row["customer_id"])
+
+
+def attachment_totals(conn: sqlite3.Connection) -> dict[str, int]:
+    row = _one(
+        conn,
+        "SELECT COUNT(*) AS n, COALESCE(SUM(size_bytes), 0) AS bytes FROM customer_attachments",
+    )
+    return {"count": row["n"], "bytes": row["bytes"]}
+
+
+# ==========================================================================
 # Dashboard
 # ==========================================================================
 
@@ -1043,7 +1628,9 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         """
         SELECT COUNT(*) AS invoice_count,
                COALESCE(SUM(total_minor), 0) AS total_minor,
-               COALESCE(SUM(vat_minor), 0)   AS vat_minor
+               COALESCE(SUM(vat_minor), 0)   AS vat_minor,
+               COALESCE(SUM(CASE WHEN doc_type = 'tax'   THEN total_minor END), 0) AS tax_total,
+               COALESCE(SUM(CASE WHEN doc_type = 'plain' THEN total_minor END), 0) AS plain_total
           FROM invoices
          WHERE status = 'issued' AND issue_date >= ?
         """,
@@ -1071,7 +1658,10 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict[str, Any]:
                (SELECT COUNT(*) FROM invoices  WHERE status = 'draft') AS drafts,
                (SELECT COUNT(*) FROM repair_orders WHERE status = 'open') AS open_contracts,
                (SELECT COUNT(*) FROM repair_orders
-                 WHERE status = 'completed') AS contracts_to_invoice
+                 WHERE status = 'completed') AS contracts_to_invoice,
+               (SELECT COUNT(*) FROM estimates
+                 WHERE status IN ('draft', 'sent')) AS open_estimates,
+               (SELECT COUNT(*) FROM estimates WHERE status = 'approved') AS approved_estimates
         """,
     )
 
@@ -1087,6 +1677,13 @@ def dashboard_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "draft_count": counts["drafts"],
         "open_contract_count": counts["open_contracts"],
         "contracts_to_invoice": counts["contracts_to_invoice"],
+        "open_estimate_count": counts["open_estimates"],
+        "approved_estimate_count": counts["approved_estimates"],
+        # Tax and plain invoices are reported apart. Both are real sales and
+        # both count towards the month's takings, but only tax invoices carry
+        # VAT, so mixing them would make the VAT figure meaningless.
+        "month_tax_minor": month["tax_total"],
+        "month_plain_minor": month["plain_total"],
     }
 
 
@@ -1110,6 +1707,118 @@ def monthly_revenue(conn: sqlite3.Connection, months: int = 12) -> list[Row]:
 
 def unpaid_invoices(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:
     return list_invoices(conn, status="issued", payment_state="unpaid", limit=limit)
+
+
+def open_estimates(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:
+    """Estimates still waiting on the customer, oldest first."""
+    return _all(
+        conn,
+        """
+        SELECT ve.*, e.customer_id, e.total_minor
+          FROM v_estimates ve
+          JOIN estimates   e ON e.id = ve.id
+         WHERE ve.status IN ('draft', 'sent')
+         ORDER BY ve.issue_date ASC
+         LIMIT ?
+        """,
+        (limit,),
+    )
+
+
+# ==========================================================================
+# Spreadsheet imports
+# ==========================================================================
+# An uploaded file is parsed and checked into a batch first. Nothing reaches
+# the customers table until the preview has been looked at and confirmed.
+
+def create_import_batch(
+    conn: sqlite3.Connection, filename: str, rows: Sequence[Mapping[str, Any]]
+) -> int:
+    import json
+
+    with transaction(conn):
+        cur = conn.execute(
+            """
+            INSERT INTO import_batches (filename, rows_json, row_count)
+            VALUES (?, ?, ?)
+            """,
+            (filename[:200], json.dumps(list(rows), ensure_ascii=False), len(rows)),
+        )
+    return int(cur.lastrowid)
+
+
+def get_import_batch(conn: sqlite3.Connection, batch_id: int) -> tuple[Row, list[dict]]:
+    import json
+
+    row = _require(
+        _one(conn, "SELECT * FROM import_batches WHERE id = ?", (batch_id,)),
+        "Import",
+    )
+    return row, json.loads(row["rows_json"])
+
+
+def commit_import_batch(conn: sqlite3.Connection, batch_id: int) -> dict[str, int]:
+    """Create the customers in a batch. Rows flagged as skipped are left alone."""
+    batch, rows = get_import_batch(conn, batch_id)
+    if batch["status"] != "pending":
+        raise InUse("This import has already been dealt with.")
+
+    imported = skipped = 0
+    with transaction(conn):
+        for row in rows:
+            if row.get("skip"):
+                skipped += 1
+                continue
+            values = {
+                field: row.get(field, "")
+                for field in ("name", "name_ar", "phone", "email", "address",
+                              "vat_number", "notes")
+                if row.get(field)
+            }
+            if not values.get("name"):
+                skipped += 1
+                continue
+            cols = ", ".join(values)
+            marks = ", ".join("?" for _ in values)
+            conn.execute(
+                f"INSERT INTO customers ({cols}) VALUES ({marks})",
+                list(values.values()),
+            )
+            imported += 1
+
+        conn.execute(
+            """
+            UPDATE import_batches
+               SET status = 'imported', imported = ?, skipped = ?
+             WHERE id = ?
+            """,
+            (imported, skipped, batch_id),
+        )
+    return {"imported": imported, "skipped": skipped}
+
+
+def cancel_import_batch(conn: sqlite3.Connection, batch_id: int) -> None:
+    with transaction(conn):
+        conn.execute(
+            "UPDATE import_batches SET status = 'cancelled' WHERE id = ? AND status = 'pending'",
+            (batch_id,),
+        )
+
+
+def existing_customer_keys(conn: sqlite3.Connection) -> tuple[set[str], set[str]]:
+    """Names and phone numbers already on file, for spotting duplicates.
+
+    Names are compared case-insensitively and phones with their punctuation
+    stripped, because "0551234567" and "055-123 4567" are the same customer
+    and importing both would be worse than importing neither.
+    """
+    names, phones = set(), set()
+    for row in _all(conn, "SELECT name, phone FROM customers"):
+        if row["name"]:
+            names.add(row["name"].strip().casefold())
+        if row["phone"]:
+            phones.add("".join(ch for ch in row["phone"] if ch.isdigit()))
+    return names, phones
 
 
 def cars_in_workshop(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:

@@ -70,9 +70,16 @@
       </div>
     </div>
 
+    {% if logo_uri %}
+      <div class="doc-logo"><img src="{{ logo_uri }}" alt=""></div>
+    {% endif %}
+
     <div class="doc-title">
-      <div class="kind">{{ 'TAX INVOICE' if invoice['vat_rate_bp'] else 'INVOICE' }}</div>
-      <div class="kind-alt" dir="rtl">{{ 'فاتورة ضريبية' if invoice['vat_rate_bp'] else 'فاتورة' }}</div>
+      {# A plain invoice must not carry tax-invoice wording, whatever the
+         VAT rate happens to be set to. #}
+      {% set is_tax = invoice['doc_type'] == 'tax' and invoice['vat_rate_bp'] %}
+      <div class="kind">{{ 'TAX INVOICE' if is_tax else 'INVOICE' }}</div>
+      <div class="kind-alt" dir="rtl">{{ 'فاتورة ضريبية' if is_tax else 'فاتورة' }}</div>
       <div class="no">{{ invoice['invoice_no'] }}</div>
       <div class="dates">
         <div><bdi>Date / التاريخ</bdi>: <bdi>{{ invoice['issue_date'] }}</bdi></div>
@@ -166,6 +173,7 @@
         <td>-{{ m(invoice['discount_minor']) }}</td>
       </tr>
       {% endif %}
+      {% if is_tax %}
       <tr class="rule">
         <td>Taxable amount / المبلغ الخاضع للضريبة</td>
         <td>{{ m(invoice['taxable_minor']) }}</td>
@@ -174,6 +182,7 @@
         <td>VAT {{ fmt_rate(invoice['vat_rate_bp']) }}% / ضريبة القيمة المضافة</td>
         <td>{{ m(invoice['vat_minor']) }}</td>
       </tr>
+      {% endif %}
       <tr class="grand">
         <td>Total / الإجمالي</td>
         <td>{{ m(invoice['total_minor']) }}</td>

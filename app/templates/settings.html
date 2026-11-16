@@ -60,6 +60,42 @@
   </section>
 
   <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.estimates') }}</h2></div>
+    <div class="panel-body">
+      <div class="grid-3">
+        {{ field('estimate_prefix', t('set.estimate_prefix'), settings['estimate_prefix'],
+                 hint=settings['estimate_prefix'] ~ '00001') }}
+        {{ field('next_estimate_seq', t('set.next_estimate_seq'), settings['next_estimate_seq'],
+                 type='number', attrs='min="1" step="1" class="num"') }}
+        {{ field('estimate_validity_days', t('set.validity_days'),
+                 settings['estimate_validity_days'],
+                 type='number', attrs='min="0" step="1" class="num"',
+                 hint=t('set.validity_hint')) }}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.messaging') }}</h2></div>
+    <div class="panel-body">
+      {{ field('default_country_code', t('set.country_code'), settings['default_country_code'],
+               attrs='inputmode="numeric" class="num" style="max-width:120px"',
+               hint=t('set.country_code_hint')) }}
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_message_template_en">{{ t('set.message_en') }}</label>
+          <textarea id="f_message_template_en" name="message_template_en" rows="9">{{ settings['message_template_en'] }}</textarea>
+          <p class="hint">{{ t('set.message_hint') }}</p>
+        </div>
+        <div class="field">
+          <label for="f_message_template_ar">{{ t('set.message_ar') }}</label>
+          <textarea id="f_message_template_ar" name="message_template_ar" rows="9" dir="rtl">{{ settings['message_template_ar'] }}</textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
     <div class="panel-head"><h2>{{ t('set.numbering') }}</h2></div>
     <div class="panel-body">
       <div class="grid-2">
@@ -73,6 +109,7 @@
       </div>
     </div>
   </section>
+
 
   <section class="panel">
     <div class="panel-head"><h2>{{ t('set.contract') }}</h2></div>
@@ -151,6 +188,46 @@
     <button class="btn accent" type="submit">{{ t('action.save') }}</button>
   </div>
 </form>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('set.logo') }}</h2></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-block-start:0">{{ t('set.logo_hint') }}</p>
+      {# Its own form: a file upload needs multipart encoding, and keeping it
+         separate means uploading a logo never touches the other settings. #}
+      <form method="post" action="/settings/logo" enctype="multipart/form-data">
+        <div style="display:flex;gap:var(--space-5);align-items:flex-start;flex-wrap:wrap">
+          {% if has_logo %}
+            <img src="{{ logo_url }}" alt="{{ t('set.logo') }}"
+                 style="height:72px;width:auto;max-width:140px;object-fit:contain;
+                        border:1px solid var(--rule);border-radius:var(--radius);
+                        padding:6px;background:#fff">
+          {% endif %}
+          <div style="flex:1 1 260px">
+            <div class="field">
+              <label for="f_logo">{{ t('set.logo_choose') }}</label>
+              <input type="file" id="f_logo" name="logo"
+                     accept="image/png,image/jpeg,image/gif,image/webp" required>
+              {% if not has_logo %}<p class="hint">{{ t('set.logo_none') }}</p>{% endif %}
+            </div>
+            <div style="display:flex;gap:var(--space-3);align-items:center">
+              <button class="btn accent" type="submit">
+                {{ t('set.logo_replace') if has_logo else t('set.logo_upload') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {% if has_logo %}
+      <form method="post" action="/settings/logo/remove"
+            onsubmit="return confirm('{{ t('action.confirm_delete') }}')"
+            style="margin-block-start:var(--space-4)">
+        <button class="btn danger small" type="submit">{{ t('set.logo_remove') }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
 
 <section class="panel" style="margin-block-start:var(--space-6)">
   <div class="panel-head"><h2>{{ t('set.backup') }}</h2></div>

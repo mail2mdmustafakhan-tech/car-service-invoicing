@@ -35,6 +35,18 @@ def db_path() -> Path:
     return Path(os.environ.get("CARSERVICE_DB", DEFAULT_DB_PATH))
 
 
+def attachments_dir() -> Path:
+    """Where uploaded customer documents are kept, beside the database.
+
+    These are scans of old paper invoices, up to 10 MB each and potentially
+    years of them, so unlike the logo they are not stored inside the database
+    -- that would turn one copyable file into something too large to handle.
+    :func:`backup_archive` zips the two together so a backup is still one
+    thing to keep.
+    """
+    return db_path().parent / "attachments"
+
+
 def connect(path: Path | str | None = None) -> sqlite3.Connection:
     """Open a configured connection.
 
@@ -186,4 +198,31 @@ def backup_to(destination: Path | str, source: Path | str | None = None) -> Path
             out.close()
     finally:
         src.close()
+    return dest
+
+
+def backup_archive(destination: Path | str, source: Path | str | None = None) -> Path:
+    """Write a zip holding the database and every uploaded attachment.
+
+    The promise from the start has been that a backup is one thing you copy.
+    Attachments live on disk rather than in the database, so a copy of the
+    database alone would quietly leave out every scanned invoice -- and you
+    would only discover that while restoring, which is the worst possible
+    moment. Zipping the two together keeps the promise intact.
+    """
+    import tempfile
+    import zipfile
+
+    dest = Path(destination)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    files = attachments_dir()
+
+    with tempfile.TemporaryDirectory() as work:
+        snapshot = backup_to(Path(work) / "carservice.db", source)
+        with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.write(snapshot, "carservice.db")
+            if files.is_dir():
+                for item in sorted(files.rglob("*")):
+                    if item.is_file():
+                        archive.write(item, f"attachments/{item.relative_to(files)}")
     return dest

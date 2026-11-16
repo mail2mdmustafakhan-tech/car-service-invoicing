@@ -61,6 +61,11 @@ html, body {
     border-block-end: 2px solid var(--doc-rule);
 }
 
+/* The logo sits between the two language blocks of the masthead, as it does
+   on the workshop's printed stationery. */
+.doc-logo { flex: 0 0 auto; align-self: flex-start; padding-block-start: 1mm; }
+.doc-logo img { height: 19mm; width: auto; max-width: 34mm; object-fit: contain; }
+
 .issuer .name { font-size: 15pt; font-weight: 700; line-height: 1.2; }
 .issuer .name-alt { font-size: 12pt; font-weight: 600; }
 .issuer .meta { font-size: 9pt; color: var(--doc-soft); margin-block-start: 2mm; }

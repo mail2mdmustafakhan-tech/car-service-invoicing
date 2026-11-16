@@ -1,0 +1,68 @@
+﻿ADVANCE REPAIR CENTER (ARC) -- INVOICING SOFTWARE
+=================================================
+
+THIS folder is now the live one.
+
+    D:\Mini Project\car-service-invoicing
+
+The four older folders beside it -- carservice-source, Updated, Updated2
+and Update3 -- are previous versions. Nothing has been taken from them.
+Leave them alone until you have seen this folder run, then delete them
+yourself whenever you like. From now on every update goes here, and here
+only.
+
+
+WHAT TO DO, IN ORDER
+--------------------
+
+1.  Double-click  setup-git-once.bat
+    Takes a few seconds. You only ever do this once.
+
+2.  In that same window, type:   git push -u origin main
+    This sends everything up to GitHub, which has been three updates behind.
+
+3.  Double-click  run.bat
+    The first run takes a minute or two while it installs what it needs.
+    After that it is quick. The browser opens by itself.
+
+
+WHAT IS ALREADY SET UP FOR YOU
+------------------------------
+
+  * Your records have been carried across -- the customer and the two
+    vehicles you entered while testing are still there, and the database
+    has been upgraded to hold estimates, attachments and the new invoice
+    types.
+
+  * The business name is set to
+        Advance Repair Center (ARC) BMW Specialized
+        مركز الاصلاح المتقدم
+
+  * The logo is loaded. You will see it on invoices, estimates and
+    repair contracts. To change it: Settings -> Logo.
+
+
+STILL FOR YOU TO FILL IN
+------------------------
+
+Open Settings once and add the things only you know:
+
+  * VAT registration number and CR number -- these are printed on every
+    tax invoice and it is worth getting them right before you issue one.
+  * Workshop phone number, email and address.
+  * The Arabic in the repair contract: six numbered conditions and the
+    authorisation paragraph were typed up from the photograph of your
+    paper form. Read them through and correct anything that came out
+    wrong. Settings -> Repair contract.
+
+
+ONE THING WORTH A CONVERSATION
+------------------------------
+
+The software can now issue two kinds of bill: a tax invoice with VAT, and
+a plain invoice without. Both are recorded and both show in your figures,
+kept apart so your VAT return stays correct.
+
+Which of your sales are *required* to carry a tax invoice under ZATCA is
+a question for your accountant, not for software. Worth five minutes with
+them before you start using the plain type as a matter of routine.

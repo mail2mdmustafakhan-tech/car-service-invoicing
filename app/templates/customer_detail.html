@@ -12,7 +12,8 @@
     </h1>
   </div>
   <div class="actions">
-    <a class="btn accent" href="/invoices/new?customer_id={{ customer['id'] }}">{{ t('inv.new') }}</a>
+    <a class="btn accent" href="/estimates/new?customer_id={{ customer['id'] }}">{{ t('est.new') }}</a>
+    <a class="btn" href="/invoices/new?customer_id={{ customer['id'] }}">{{ t('inv.new') }}</a>
     <a class="btn" href="/vehicles/new?customer_id={{ customer['id'] }}">{{ t('veh.new') }}</a>
     <a class="btn" href="/customers/{{ customer['id'] }}/edit">{{ t('action.edit') }}</a>
   </div>
@@ -65,6 +66,115 @@
     {% endif %}
   </section>
 </div>
+
+{# ---- Scanned paperwork from before this system existed ----------------- #}
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ t('att.title') }}</h2>
+    {% if attachments %}<span class="secondary">{{ attachments | length }}</span>{% endif %}
+  </div>
+
+  {% if attachments %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('att.file') }}</th>
+          <th>{{ t('att.kind') }}</th>
+          <th>{{ t('att.date') }}</th>
+          <th class="num">{{ t('att.size') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in attachments %}
+        <tr>
+          <td>
+            <a href="/attachments/{{ a['id'] }}" target="_blank" rel="noopener">{{ a['original_name'] }}</a>
+            {% if a['description'] %}<div class="secondary">{{ a['description'] }}</div>{% endif %}
+          </td>
+          <td class="tight secondary">{{ t('att.kind_' ~ a['kind']) }}</td>
+          <td class="tight secondary">{{ a['document_date'] or a['uploaded_at'][:10] }}</td>
+          <td class="num secondary">{{ filesize(a['size_bytes']) }}</td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/attachments/{{ a['id'] }}/download">{{ t('att.download') }}</a>
+              <form method="post" action="/attachments/{{ a['id'] }}/delete"
+                    onsubmit="return confirm('{{ t('action.confirm_delete') }}')">
+                <button type="submit" class="btn danger small">{{ t('action.delete') }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="panel-body">
+    {% if not attachments %}<p class="hint" style="margin-block-start:0">{{ t('att.none') }}</p>{% endif %}
+    <p class="hint">{{ t('att.hint') }}</p>
+
+    <form method="post" action="/customers/{{ customer['id'] }}/attachments"
+          enctype="multipart/form-data">
+      <div class="grid-3">
+        <div class="field">
+          <label for="f_document">{{ t('att.add') }}</label>
+          <input type="file" id="f_document" name="document"
+                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required>
+        </div>
+        <div class="field">
+          <label for="f_kind">{{ t('att.kind') }}</label>
+          <select id="f_kind" name="kind">
+            {% for k in ['invoice', 'document', 'photo', 'other'] %}
+            <option value="{{ k }}">{{ t('att.kind_' ~ k) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="f_document_date">{{ t('att.date') }}</label>
+          <input type="date" id="f_document_date" name="document_date">
+        </div>
+      </div>
+      <div class="field">
+        <label for="f_att_description">{{ t('att.description') }}</label>
+        <input type="text" id="f_att_description" name="description">
+      </div>
+      <div class="formactions">
+        <button class="btn accent" type="submit">{{ t('att.add') }}</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+{% if estimates %}
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('est.title') }}</h2></div>
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('est.number') }}</th>
+          <th>{{ t('est.date') }}</th>
+          <th class="num">{{ t('inv.total') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in estimates %}
+        <tr>
+          <td class="tight"><a href="/estimates/{{ e['id'] }}">{{ e['estimate_no'] }}</a></td>
+          <td class="tight">{{ e['issue_date'] }}</td>
+          <td class="num">{{ m(e['total_minor']) }}</td>
+          <td class="tight">{{ pill(e['status']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 <section class="panel">
   <div class="panel-head"><h2>{{ t('cust.history') }}</h2></div>

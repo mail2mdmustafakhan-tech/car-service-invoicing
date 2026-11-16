@@ -15,7 +15,8 @@
     <h1>{{ t('dash.title') }}</h1>
   </div>
   <div class="actions">
-    <a class="btn accent" href="/contracts/new">{{ t('dash.new_contract') }}</a>
+    <a class="btn accent" href="/estimates/new">{{ t('dash.new_estimate') }}</a>
+    <a class="btn" href="/contracts/new">{{ t('dash.new_contract') }}</a>
     <a class="btn" href="/invoices/new">{{ t('dash.quick_new_invoice') }}</a>
   </div>
 </div>
@@ -38,7 +39,9 @@
   <div class="figure">
     <div class="value">{{ m(stats.month_vat_minor) }}</div>
     <div class="label">{{ t('dash.vat_collected') }}</div>
-    <div class="sub">{{ stats.month_label }}</div>
+    <div class="sub">
+      {{ t('dash.tax_vs_plain') }}: {{ m_plain(stats.month_tax_minor) }} / {{ m_plain(stats.month_plain_minor) }}
+    </div>
   </div>
 
   <div class="figure">
@@ -49,6 +52,42 @@
     </div>
   </div>
 </div>
+
+{% if waiting_estimates %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ t('dash.estimates_waiting') }}</h2>
+    <a class="btn small" href="/estimates">{{ t('action.view') }}</a>
+  </div>
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('est.number') }}</th>
+          <th>{{ t('inv.customer') }}</th>
+          <th>{{ t('est.valid_until') }}</th>
+          <th class="num">{{ t('inv.total') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in waiting_estimates %}
+        <tr>
+          <td class="tight"><a href="/estimates/{{ e['id'] }}">{{ e['estimate_no'] }}</a></td>
+          <td>{{ e['customer_name'] }}</td>
+          <td class="tight">
+            {{ e['valid_until'] or '—' }}
+            {% if e['is_expired'] %}<div class="secondary">{{ t('est.expired') }}</div>{% endif %}
+          </td>
+          <td class="num">{{ m(e['total_minor']) }}</td>
+          <td class="tight"><span class="pill {{ e['status'] }}">{{ t('status.' ~ e['status']) }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 {% if in_workshop %}
 <section class="panel">

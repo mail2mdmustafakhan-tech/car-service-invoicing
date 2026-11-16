@@ -23,7 +23,12 @@
     var M = window.CSMoney;
     var BP_PER_UNIT = 10000;   // 15% is 1500 basis points
 
-    var form = document.getElementById("invoice-form");
+    /* The estimate editor is the same form with a different name on it, and
+       uses the same element ids, so one script drives both. That is the
+       point: two copies of this arithmetic would eventually disagree, and
+       the one place that must never happen is a price shown to a customer. */
+    var form = document.getElementById("invoice-form")
+            || document.getElementById("estimate-form");
     if (!form || !M) { return; }
 
     var body = document.getElementById("lines-body");

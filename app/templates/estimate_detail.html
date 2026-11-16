@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill, delete_form with context %}
+{% block title %}{{ estimate['estimate_no'] }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/estimates">{{ t('est.title') }}</a></div>
+
+<div class="pagehead">
+  <div>
+    <h1>{{ estimate['estimate_no'] }} {{ pill(estimate['status']) }}</h1>
+    <div class="breadcrumb">
+      {{ estimate['issue_date'] }} —
+      <a href="/customers/{{ estimate['customer_id'] }}">{{ loc(estimate, 'customer_name') }}</a>
+      {% if estimate['vehicle_plate'] %}
+        — <a href="/vehicles/{{ estimate['vehicle_id'] }}">{{ estimate['vehicle_plate'] }}</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/estimates/{{ estimate['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+    {% if PDF_AVAILABLE %}
+      <a class="btn" href="/estimates/{{ estimate['id'] }}/pdf" target="_blank">{{ t('action.download_pdf') }}</a>
+    {% endif %}
+    {% if not estimate['invoice_id'] %}
+      <a class="btn" href="/estimates/{{ estimate['id'] }}/edit">{{ t('action.edit') }}</a>
+    {% endif %}
+    {% if estimate['status'] == 'approved' %}
+      <form method="post" action="/estimates/{{ estimate['id'] }}/invoice">
+        <input type="hidden" name="doc_type" value="tax">
+        <button class="btn accent" type="submit">{{ t('est.to_invoice') }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if estimate['invoice_id'] %}
+  <div class="flash">
+    {{ t('est.invoiced_as') }}
+    <a href="/invoices/{{ estimate['invoice_id'] }}">{{ estimate['invoice_no'] }}</a>
+  </div>
+{% elif estimate['status'] == 'declined' %}
+  <div class="flash error">{{ t('status.declined') }}{% if estimate['decided_on'] %} — {{ estimate['decided_on'] }}{% endif %}</div>
+{% elif estimate['status'] == 'approved' %}
+  <div class="flash">
+    {{ t('status.approved') }}
+    {% if estimate['decided_on'] %} — {{ estimate['decided_on'] }}{% endif %}
+    {% if estimate['approved_by'] %} ({{ estimate['approved_by'] }}){% endif %}
+  </div>
+{% endif %}
+
+<div class="figures">
+  <div class="figure">
+    <div class="value">{{ m(estimate['total_minor']) }}</div>
+    <div class="label">{{ t('inv.total') }}</div>
+    <div class="sub">
+      {% if estimate['vat_rate_bp'] %}{{ t('inv.vat') }} {{ fmt_rate(estimate['vat_rate_bp']) }}% — {{ m(estimate['vat_minor']) }}{% else %}{{ t('inv.doc_plain') }}{% endif %}
+    </div>
+  </div>
+  <div class="figure">
+    <div class="value">{{ items | length }}</div>
+    <div class="label">{{ t('inv.lines') }}</div>
+  </div>
+  {% if estimate['valid_until'] %}
+  <div class="figure">
+    <div class="value" style="font-size:1.35rem">{{ estimate['valid_until'] }}</div>
+    <div class="label">{{ t('est.valid_until') }}</div>
+    <div class="sub">{{ t('est.validity_note') }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('inv.lines') }}</h2></div>
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th>{{ t('inv.description') }}</th>
+          <th>{{ t('cat.unit') }}</th>
+          <th class="num">{{ t('inv.qty') }}</th>
+          <th class="num">{{ t('inv.unit_price') }}</th>
+          <th class="num">{{ t('inv.line_total') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="secondary">{{ item['line_no'] }}</td>
+          <td>{{ loc(item, 'description') }}</td>
+          <td class="tight secondary">{{ t('cat.unit_' ~ item['unit']) }}</td>
+          <td class="num">{{ fmt_qty(item['qty_milli']) }}</td>
+          <td class="num">{{ m(item['unit_price_minor']) }}</td>
+          <td class="num">{{ m(item['line_total_minor']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-body">
+    <div class="totals">
+      <div class="line"><span>{{ t('inv.subtotal') }}</span><span>{{ m(estimate['subtotal_minor']) }}</span></div>
+      {% if estimate['discount_minor'] %}
+        <div class="line"><span>{{ t('inv.discount') }}</span><span>-{{ m(estimate['discount_minor']) }}</span></div>
+      {% endif %}
+      {% if estimate['vat_rate_bp'] %}
+        <div class="line"><span>{{ t('inv.taxable') }}</span><span>{{ m(estimate['taxable_minor']) }}</span></div>
+        <div class="line"><span>{{ t('inv.vat') }} ({{ fmt_rate(estimate['vat_rate_bp']) }}%)</span><span>{{ m(estimate['vat_minor']) }}</span></div>
+      {% endif %}
+      <div class="line grand"><span>{{ t('inv.total') }}</span><span>{{ m(estimate['total_minor']) }}</span></div>
+    </div>
+    {% if estimate['notes'] %}
+      <h3 style="margin-block-start:var(--space-5)">{{ t('inv.notes') }}</h3>
+      <p style="white-space:pre-wrap;margin-block:var(--space-2) 0">{{ estimate['notes'] }}</p>
+    {% endif %}
+  </div>
+</section>
+
+<div class="cols">
+  {# ---- Getting it to the customer ------------------------------------- #}
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('est.send') }}</h2></div>
+    <div class="panel-body">
+      {% if whatsapp_url or sms_url %}
+        <div class="row-actions" style="justify-content:flex-start;gap:var(--space-3);flex-wrap:wrap">
+          {% if whatsapp_url %}
+            <a class="btn accent" href="{{ whatsapp_url }}" target="_blank" rel="noopener">{{ t('est.whatsapp') }}</a>
+          {% endif %}
+          {% if sms_url %}
+            <a class="btn" href="{{ sms_url }}">{{ t('est.sms') }}</a>
+          {% endif %}
+          <button class="btn" type="button" id="copy-message"
+                  data-copied="{{ t('est.copied') }}">{{ t('est.copy_message') }}</button>
+        </div>
+        <p class="hint">{{ provider_note }}</p>
+        <div class="field" style="margin-block-start:var(--space-4)">
+          <label for="message-text">{{ t('est.message') }}</label>
+          <textarea id="message-text" rows="9" readonly>{{ message }}</textarea>
+        </div>
+      {% else %}
+        <p class="hint" style="margin-block-start:0">{{ t('est.no_phone') }}</p>
+        <a class="btn" href="/customers/{{ estimate['customer_id'] }}/edit">{{ t('action.edit') }}</a>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ---- Where it stands -------------------------------------------------- #}
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('inv.status') }}</h2></div>
+    <div class="panel-body">
+      <dl class="facts">
+        <dt>{{ t('inv.status') }}</dt><dd>{{ t('status.' ~ estimate['status']) }}</dd>
+        {% if estimate['sent_on'] %}<dt>{{ t('est.sent_on') }}</dt><dd>{{ estimate['sent_on'] }}</dd>{% endif %}
+        {% if estimate['decided_on'] %}<dt>{{ t('est.approved_on') }}</dt><dd>{{ estimate['decided_on'] }}</dd>{% endif %}
+        {% if estimate['approved_by'] %}<dt>{{ t('est.approved_by') }}</dt><dd>{{ estimate['approved_by'] }}</dd>{% endif %}
+      </dl>
+
+      {% if estimate['status'] in ('draft', 'sent', 'declined') %}
+        <form method="post" action="/estimates/{{ estimate['id'] }}/status"
+              style="margin-block-start:var(--space-4)">
+          <input type="hidden" name="status" value="approved">
+          <div class="field">
+            <label for="f_approved_by">{{ t('est.approved_by') }}</label>
+            <input type="text" id="f_approved_by" name="approved_by">
+            <p class="hint">{{ t('est.approved_by_hint') }}</p>
+          </div>
+          <button class="btn accent" type="submit">{{ t('est.approve') }}</button>
+        </form>
+      {% endif %}
+
+      <div class="formactions" style="flex-wrap:wrap">
+        {% if estimate['status'] == 'draft' %}
+          <form method="post" action="/estimates/{{ estimate['id'] }}/status">
+            <input type="hidden" name="status" value="sent">
+            <button class="btn small" type="submit">{{ t('est.mark_sent') }}</button>
+          </form>
+        {% endif %}
+        {% if estimate['status'] in ('draft', 'sent') %}
+          <form method="post" action="/estimates/{{ estimate['id'] }}/status">
+            <input type="hidden" name="status" value="declined">
+            <button class="btn danger small" type="submit">{{ t('est.decline') }}</button>
+          </form>
+        {% endif %}
+        {% if estimate['status'] in ('sent', 'approved', 'declined') and not estimate['invoice_id'] %}
+          <form method="post" action="/estimates/{{ estimate['id'] }}/status">
+            <input type="hidden" name="status" value="draft">
+            <button class="btn small" type="submit">{{ t('est.reopen') }}</button>
+          </form>
+        {% endif %}
+        {% if not estimate['invoice_id'] %}
+          {{ delete_form('/estimates/' ~ estimate['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+        {% endif %}
+      </div>
+
+      {% if estimate['status'] not in ('approved', 'invoiced') %}
+        <p class="hint">{{ t('est.not_approved_yet') }}</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  /* Copy the message, for pasting into whatever the customer actually uses. */
+  (function () {
+      var button = document.getElementById("copy-message");
+      var text = document.getElementById("message-text");
+      if (!button || !text) { return; }
+      button.addEventListener("click", function () {
+          text.select();
+          var done = function () {
+              var original = button.textContent;
+              button.textContent = button.getAttribute("data-copied");
+              window.setTimeout(function () { button.textContent = original; }, 1500);
+          };
+          if (navigator.clipboard) {
+              navigator.clipboard.writeText(text.value).then(done, function () {
+                  document.execCommand("copy");
+                  done();
+              });
+          } else {
+              document.execCommand("copy");
+              done();
+          }
+      });
+  })();
+</script>
+{% endblock %}

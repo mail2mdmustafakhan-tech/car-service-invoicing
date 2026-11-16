@@ -57,6 +57,15 @@
         </div>
       </div>
 
+      <div class="field">
+        <label for="f_doc_type">{{ t('inv.doc_type') }}</label>
+        <select id="f_doc_type" name="doc_type" style="max-width:340px">
+          <option value="tax"   {% if not editing or invoice['doc_type'] == 'tax' %}selected{% endif %}>{{ t('inv.doc_tax') }}</option>
+          <option value="plain" {% if editing and invoice['doc_type'] == 'plain' %}selected{% endif %}>{{ t('inv.doc_plain') }}</option>
+        </select>
+        <p class="hint">{{ t('inv.doc_type_hint') }}</p>
+      </div>
+
       <div class="grid-3">
         {{ field('issue_date', t('inv.date'),
                  invoice['issue_date'] if editing else today(), type='date', required=True) }}

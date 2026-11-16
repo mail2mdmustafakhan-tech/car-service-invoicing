@@ -10,10 +10,17 @@ Built to be small enough that one person can understand the whole thing.
 ## How a job flows through
 
 ```
-car arrives ──► repair contract written ──► customer signs ──► work done
-                                                                  │
-            invoice paid ◄── invoice issued ◄── contract converted ┘
+  estimate ──► customer approves ──┐
+                                   ├──► invoice issued ──► invoice paid
+car arrives ──► contract signed ───┘
+                 ──► work done
 ```
+
+Two ways in. For a job that needs quoting first, write an **estimate**, send
+it on WhatsApp, and turn it into an invoice once the customer approves. For a
+car that is simply booked in, write a **repair contract**, get it signed, do
+the work, then invoice it. Both end in the same place, and you can also raise
+an invoice on its own for a walk-in buying a part.
 
 The repair contract is the document the workshop actually runs on. It records
 what the owner asked for, what the technician found, which parts went on, and
@@ -28,6 +35,11 @@ You can still raise an invoice on its own, for a walk-in who just needs a part.
 
 ## What it does
 
+- **Estimates** — quote a job before any work is agreed, with lines typed in
+  or picked from the catalogue, VAT included or excluded. Draft → sent →
+  approved, and one click turns an approved estimate into a draft invoice
+- **Send by WhatsApp or SMS** — a button opens WhatsApp with the estimate
+  written out and ready to send, free and with no account setup
 - **Repair contracts** — the signed job card: owner and vehicle details, repairs
   requested, technician's remarks, spare parts, a car diagram to mark existing
   damage on, and the bilingual notice and authorization text, all printable on A4
@@ -35,13 +47,21 @@ You can still raise an invoice on its own, for a walk-in who just needs a part.
   (plate, make, model, year, VIN, colour, odometer)
 - **Service and parts catalogue** — your common jobs and parts with prices, so
   invoice lines are picked from a list instead of typed every time
-- **Invoices** — raised from a contract or on their own: line items, configurable
-  VAT, discounts, draft → issued → void, and an A4 printable copy that saves as
-  PDF from any browser
+- **Invoices, tax or plain** — a *tax invoice* charges VAT and prints the full
+  tax-invoice wording; a *plain invoice* is a simple bill with no VAT line.
+  Both are recorded and both appear in your reports, separated so the VAT
+  figure stays usable. Raised from an estimate, from a contract, or on their own
+- **Customer documents** — attach scans of older paper invoices, up to 10 MB
+  each, so one customer's whole history is in one place
+- **Import your existing customers** — upload an Excel or CSV file, see exactly
+  what will be created and what will be skipped, then confirm
 - **Payments** — record full or partial payments, see who still owes you money
 - **Arabic and English** — switch at any time; the whole interface mirrors to
   right-to-left, and the printed invoice is labelled in both languages
-- **Backup** — one button downloads a copy of the entire database
+- **Your logo** — uploaded once in Settings and printed on every contract and
+  invoice. It is stored inside the database, so it travels with your backups
+- **Backup** — one button downloads a zip holding the database and every
+  attached document
 
 ### What it deliberately does not do, yet
 
@@ -127,16 +147,18 @@ login, so anyone who can reach the address can edit invoices.
    registration, address, phone. These print at the top of every invoice.
 2. **Settings → Tax** — set your VAT rate, or `0` if you are not registered.
    Tick *"Prices I enter already include VAT"* if you quote all-in prices.
-3. **Settings → Invoice numbering** — set the prefix and the next number. If
+3. **Settings → Logo** — upload `branding/arc-logo-512.png`, or your own
+   image. PNG, JPEG, GIF or WebP, under 1 MB.
+4. **Settings → Invoice numbering** — set the prefix and the next number. If
    you are moving from another system or a paper book, continue that series
    here so your numbering never restarts.
-4. **Settings → Repair contract** — the notice and authorization text that print
+5. **Settings → Repair contract** — the notice and authorization text that print
    on the contract come pre-filled. Read them, correct the wording to match your
    own form, and set the contract number series. Write `{business}` in the
    authorization text wherever your business name should appear.
-5. **Services & Parts** — add your ten or fifteen most common jobs with prices.
+6. **Services & Parts** — add your ten or fifteen most common jobs with prices.
    This is what makes writing up a car fast later.
-6. **Customers** → add one → add their vehicle → **Book a car in**.
+7. **Customers** → add one → add their vehicle → **Book a car in**.
 
 Want to see it populated before entering anything real?
 
@@ -189,8 +211,11 @@ one file. If that file is lost, the invoices are gone.
 - **Settings → Download backup** makes a safe copy, even while the system is in
   use. Do this weekly and keep copies somewhere other than that computer — a
   USB stick, a network drive, a cloud folder.
-- To restore, stop the application, put the backup file at
-  `data/carservice.db`, and start it again.
+- The download is a **zip**: `carservice.db` plus an `attachments` folder.
+  Attachments are stored beside the database rather than inside it, so a copy
+  of the database alone would silently leave out every scanned invoice.
+- To restore, stop the application, unzip it over the `data` folder so you
+  have `data/carservice.db` and `data/attachments/`, and start it again.
 - Copying `data/carservice.db` by hand while the application is running can
   catch it mid-write. Use the backup button, or stop the application first.
 
@@ -217,6 +242,19 @@ arithmetic yourself:
 | `v_invoices` | one row per invoice, with totals, amount paid, balance and payment state |
 | `v_invoice_lines` | one row per line item, with quantity, unit price and line total |
 | `v_payments` | every payment, with its invoice and customer |
+| `v_estimates` | every estimate, its status, total and whether it has expired |
+| `v_repair_orders` | every contract, its estimate and days in the workshop |
+
+`v_invoices` carries a `doc_type` of `tax` or `plain`, so a VAT return can be
+built from the tax invoices alone:
+
+```sql
+SELECT doc_type, COUNT(*) AS invoices,
+       ROUND(SUM(total), 2) AS total, ROUND(SUM(vat_amount), 2) AS vat
+FROM v_invoices
+WHERE status = 'issued' AND issue_date >= '2026-01-01'
+GROUP BY doc_type;
+```
 
 ```sql
 -- Revenue by month
@@ -264,6 +302,8 @@ app/
 ├── db.py            opening the database and applying schema changes
 ├── forms.py         turning submitted forms into clean, typed values
 ├── i18n.py          every piece of visible text, English and Arabic side by side
+├── messaging.py     phone numbers, message templates, WhatsApp and SMS links
+├── importing.py     reading a customer list out of a CSV or Excel file
 ├── pdf.py           the optional PDF download
 ├── migrations/      numbered .sql files; new ones run automatically on restart
 ├── templates/       the HTML pages, including the two printable documents
@@ -290,6 +330,7 @@ The rules that keep it understandable:
 | Change the printed invoice | `app/templates/invoice_print.html`, `static/css/print.css` |
 | Change the printed contract | `app/templates/contract_print.html`, `static/css/print.css` |
 | Change the notice or authorization wording | Settings → Repair contract, in the app |
+| Change the logo | Settings → Logo, in the app. The artwork lives in `branding/` |
 | Change how a total is worked out | `app/invoicing.py` (and its tests) |
 | Add a field to a table | a new file in `app/migrations/`, then `repository.py` |
 
@@ -312,7 +353,7 @@ changing it will not re-run it. Always add a new numbered file.
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                # 175 tests, about five seconds
+pytest                # 281 tests, about ten seconds
 ruff check .          # style and common mistakes
 ```
 
@@ -326,6 +367,12 @@ The tests are in three groups, and the split is intentional:
 - `tests/test_repository.py` — what the database stores and what it refuses:
   invoice numbers never repeating, an issued invoice never being deletable, a
   catalogue price change never altering an invoice already issued.
+- `tests/test_estimates.py` — estimates and invoice types: an estimate cannot
+  be invoiced before it is approved, a quoted price survives a later change of
+  settings, and a plain invoice never prints as a tax invoice.
+- `tests/test_attachments_import.py` — everything that arrives from outside:
+  an executable renamed to .pdf, a photo renamed to .csv, a filename crafted to
+  break an HTTP header, duplicate rows in a spreadsheet.
 - `tests/test_contracts.py` — the contract and its conversion: contracts
   numbered in their own series, a contract invoiced exactly once and frozen
   afterwards, and the printed copy looking the same in either language.

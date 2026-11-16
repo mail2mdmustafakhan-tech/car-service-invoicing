@@ -60,6 +60,10 @@
       </div>
     </div>
 
+    {% if logo_uri %}
+      <div class="doc-logo"><img src="{{ logo_uri }}" alt=""></div>
+    {% endif %}
+
     <div class="doc-title">
       {% if settings['business_name_ar'] %}
         <div class="kind" dir="rtl">{{ settings['business_name_ar'] }}</div>

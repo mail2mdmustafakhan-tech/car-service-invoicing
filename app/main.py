@@ -21,20 +21,20 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from sqlite3 import Connection, IntegrityError
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from fastapi import Depends, FastAPI, Form, Query, Request
+from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import forms
+from . import forms, importing, messaging
 from . import repository as repo
-from .db import backup_to, connect, db_path, migrate, session
+from .db import backup_archive, connect, db_path, migrate, session
 from .forms import FormError
 from .i18n import LANGUAGES, direction, localised, normalise, t
 from .invoicing import balance_due, compute_totals, payment_state
@@ -82,6 +82,12 @@ templates.env.globals.update(
     # "Cash / نقداً" -- for the printed invoice, which labels everything in
     # both languages regardless of the interface language.
     t2=lambda key: f"{t(key, 'en')} / {t(key, 'ar')}",
+    # "2.4 MB" rather than "2516582 bytes".
+    filesize=lambda n: (
+        f"{n} B" if n < 1024
+        else f"{n / 1024:.0f} KB" if n < 1024 * 1024
+        else f"{n / 1024 / 1024:.1f} MB"
+    ),
     from_minor=from_minor,
     from_milli=from_milli,
     payment_state=payment_state,
@@ -116,9 +122,15 @@ def ctx(
     lang = current_lang(request, settings)
     currency = settings["currency_code"]
 
+    logo = repo.logo_state(conn)
+
     base: dict[str, Any] = {
         "request": request,
         "settings": settings,
+        "has_logo": bool(logo["logo_mime"]),
+        # The timestamp makes the URL change when the logo does, so a
+        # replaced logo is not served from the browser's cache.
+        "logo_url": f"/logo?v={logo['updated_at'].replace(' ', '')}",
         "lang": lang,
         "dir": direction(lang),
         "rtl": lang == "ar",
@@ -160,6 +172,25 @@ def go(url: str, *, msg: str = "", err: str = "") -> RedirectResponse:
     return RedirectResponse(url, status_code=303)
 
 
+@app.exception_handler(repo.NotFound)
+async def record_not_found(request: Request, exc: Any) -> Response:
+    """A record that does not exist is a 404, not a crash.
+
+    Without this, asking for an invoice, customer or attachment that has
+    been deleted -- or following a stale link, or mistyping a number in the
+    address bar -- produced a 500 and a stack trace in the log. Every lookup
+    in the repository raises this one exception, so handling it here covers
+    all of them rather than needing a try/except on every route.
+    """
+    with session() as conn:
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            ctx(request, conn, code=404, detail="msg.not_found"),
+            status_code=404,
+        )
+
+
 @app.exception_handler(404)
 async def not_found(request: Request, exc: Any) -> Response:
     with session() as conn:
@@ -199,6 +230,7 @@ def dashboard(request: Request, conn: Connection = Depends(get_conn)) -> HTMLRes
         unpaid=repo.unpaid_invoices(conn, limit=6),
         revenue=repo.monthly_revenue(conn, months=6),
         in_workshop=repo.cars_in_workshop(conn, limit=8),
+        waiting_estimates=repo.open_estimates(conn, limit=6),
     )
 
 
@@ -257,6 +289,178 @@ def customer_create(
     return go(f"/customers/{customer_id}", msg="msg.created")
 
 
+# --------------------------------------------------------------------------
+# Bringing an existing customer list in from a spreadsheet
+# --------------------------------------------------------------------------
+# These are declared before /customers/{customer_id}: routes are matched in
+# the order they appear, and "import" is not a number, so the other way round
+# every one of these would be rejected before it was reached.
+
+@app.get("/customers/import", response_class=HTMLResponse)
+def import_start(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+    return render(request, conn, "customer_import.html", batch=None, rows=[],
+                  summary=None, error="")
+
+
+@app.get("/customers/import/template")
+def import_template() -> Response:
+    """A CSV with the expected headings and two example rows."""
+    return Response(
+        content=importing.template_csv(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="customer-import-template.csv"'
+        },
+    )
+
+
+@app.post("/customers/import")
+async def import_upload(
+    request: Request,
+    spreadsheet: UploadFile = File(...),
+    conn: Connection = Depends(get_conn),
+):
+    """Parse an upload into a batch and show what it would do.
+
+    Nothing is written to the customers table here. The batch is a staging
+    area so the preview can be looked at first: importing several hundred
+    records is not something anyone wants to undo by hand.
+    """
+    data = await spreadsheet.read()
+    try:
+        rows = importing.read_table(data, spreadsheet.filename or "")
+        names, phones = repo.existing_customer_keys(conn)
+        prepared, summary = importing.prepare(
+            rows, existing_names=names, existing_phones=phones
+        )
+    except importing.ImportError_ as exc:
+        return render(request, conn, "customer_import.html", batch=None, rows=[],
+                      summary=None, error=str(exc))
+
+    batch_id = repo.create_import_batch(conn, spreadsheet.filename or "upload", prepared)
+    return go(f"/customers/import/{batch_id}")
+
+
+@app.get("/customers/import/{batch_id}", response_class=HTMLResponse)
+def import_preview(
+    batch_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    batch, rows = repo.get_import_batch(conn, batch_id)
+    ready = sum(1 for r in rows if not r.get("skip"))
+    summary = {
+        "total": len(rows),
+        "ready": ready,
+        "skipped": len(rows) - ready,
+        "unmapped": [],
+        "fields": sorted({k for r in rows for k in r if k not in {"line", "skip", "note"}}),
+    }
+    return render(request, conn, "customer_import.html", batch=batch, rows=rows,
+                  summary=summary, error="")
+
+
+@app.post("/customers/import/{batch_id}/confirm")
+def import_confirm(batch_id: int, conn: Connection = Depends(get_conn)):
+    try:
+        result = repo.commit_import_batch(conn, batch_id)
+    except repo.InUse as exc:
+        return go("/customers", err=str(exc))
+    return go(
+        "/customers",
+        msg="msg.imported" if result["imported"] else "msg.nothing_imported",
+    )
+
+
+@app.post("/customers/import/{batch_id}/cancel")
+def import_cancel(batch_id: int, conn: Connection = Depends(get_conn)):
+    repo.cancel_import_batch(conn, batch_id)
+    return go("/customers")
+
+
+# --------------------------------------------------------------------------
+# Customer attachments
+# --------------------------------------------------------------------------
+# Scans of invoices written before this system existed, so a customer's whole
+# history is in one place.
+
+@app.post("/customers/{customer_id}/attachments")
+async def attachment_upload(
+    customer_id: int,
+    document: UploadFile = File(...),
+    kind: str = Form("invoice"),
+    description: str = Form(""),
+    document_date: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    data = await document.read(repo.MAX_ATTACHMENT_BYTES + 1)
+    try:
+        repo.add_attachment(
+            conn,
+            customer_id,
+            data,
+            original_name=document.filename or "",
+            kind=forms.one_of(
+                kind, ("invoice", "document", "photo", "other"), default="invoice"
+            ),
+            description=forms.text(description),
+            document_date=forms.iso_date(document_date),
+        )
+    except (ValueError, FormError) as exc:
+        return go(f"/customers/{customer_id}", err=str(exc))
+    return go(f"/customers/{customer_id}", msg="msg.attached")
+
+
+@app.get("/attachments/{attachment_id}")
+def attachment_view(attachment_id: int, conn: Connection = Depends(get_conn)):
+    """Serve an attachment for viewing in the browser.
+
+    The headers matter here. These are files someone uploaded, served back
+    from the application's own address: `nosniff` stops a browser deciding
+    the file is really HTML, and the content policy stops anything embedded
+    in a PDF reaching out or running.
+    """
+    path, row = repo.attachment_file(conn, attachment_id)
+    if not path.is_file():
+        return Response(status_code=404)
+    return FileResponse(
+        path,
+        media_type=row["mime"],
+        headers={
+            "Content-Disposition": f'inline; filename="{_ascii_filename(row["original_name"])}"',
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        },
+    )
+
+
+@app.get("/attachments/{attachment_id}/download")
+def attachment_download(attachment_id: int, conn: Connection = Depends(get_conn)):
+    path, row = repo.attachment_file(conn, attachment_id)
+    if not path.is_file():
+        return Response(status_code=404)
+    return FileResponse(
+        path,
+        media_type="application/octet-stream",
+        filename=_ascii_filename(row["original_name"]),
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
+
+
+@app.post("/attachments/{attachment_id}/delete")
+def attachment_delete(attachment_id: int, conn: Connection = Depends(get_conn)):
+    customer_id = repo.delete_attachment(conn, attachment_id)
+    return go(f"/customers/{customer_id}", msg="msg.deleted")
+
+
+def _ascii_filename(name: str) -> str:
+    """A filename safe to put in a header.
+
+    A Content-Disposition header is a header: a newline or a quote in the
+    name an upload arrived with could end it early and start another one.
+    """
+    cleaned = "".join(ch for ch in name if ch.isprintable() and ch not in '"\\\r\n')
+    return cleaned.encode("ascii", "replace").decode("ascii")[:120] or "attachment"
+
+
 @app.get("/customers/{customer_id}", response_class=HTMLResponse)
 def customer_detail(
     customer_id: int, request: Request, conn: Connection = Depends(get_conn)
@@ -268,6 +472,8 @@ def customer_detail(
         customer=repo.get_customer(conn, customer_id),
         vehicles=repo.list_vehicles(conn, customer_id=customer_id),
         invoices=repo.list_invoices(conn, customer_id=customer_id, limit=50),
+        estimates=repo.list_estimates(conn, customer_id=customer_id, limit=20),
+        attachments=repo.list_attachments(conn, customer_id),
     )
 
 
@@ -726,8 +932,10 @@ def _invoice_payload(
     discount: str,
     vat_rate: str,
     prices_include_vat: str | None,
+    doc_type: str = "tax",
     status: str | None = None,
 ) -> dict[str, Any]:
+    kind = forms.one_of(doc_type, ("tax", "plain"), default="tax")
     data: dict[str, Any] = {
         "customer_id": forms.opt_int(customer_id),
         "vehicle_id": forms.opt_int(vehicle_id),
@@ -736,8 +944,15 @@ def _invoice_payload(
         "odometer": forms.opt_int(odometer),
         "notes": forms.text(notes),
         "discount_minor": forms.money(discount, field="Discount"),
-        "vat_rate_bp": forms.vat_rate(vat_rate, default=settings["vat_rate_bp"]),
-        "prices_include_vat": forms.checkbox(prices_include_vat),
+        "doc_type": kind,
+        # A plain invoice charges no VAT. Enforced here rather than trusted
+        # to the form, so the document and the arithmetic can never disagree
+        # about whether tax was charged.
+        "vat_rate_bp": (
+            forms.vat_rate(vat_rate, default=settings["vat_rate_bp"])
+            if kind == "tax" else 0
+        ),
+        "prices_include_vat": forms.checkbox(prices_include_vat) if kind == "tax" else 0,
         "currency_code": settings["currency_code"],
     }
     if data["customer_id"] is None:
@@ -761,6 +976,7 @@ def invoice_create(
     discount: str = Form(""),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
+    doc_type: str = Form("tax"),
     status: str = Form("draft"),
     item_catalog_id: list[str] = Form([]),
     item_description: list[str] = Form([]),
@@ -784,6 +1000,7 @@ def invoice_create(
             discount=discount,
             vat_rate=vat_rate,
             prices_include_vat=prices_include_vat,
+            doc_type=doc_type,
             status=status,
         )
         lines = forms.parse_invoice_lines(
@@ -828,6 +1045,7 @@ def invoice_detail(
         # Shown as a link back to the signed paperwork, when this invoice
         # came from a repair contract.
         contract=repo.order_for_invoice(conn, invoice_id),
+        estimate=repo.estimate_for_invoice(conn, invoice_id),
     )
 
 
@@ -862,6 +1080,7 @@ def invoice_update(
     discount: str = Form(""),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
+    doc_type: str = Form("tax"),
     status: str = Form("draft"),
     item_catalog_id: list[str] = Form([]),
     item_description: list[str] = Form([]),
@@ -885,6 +1104,7 @@ def invoice_update(
             discount=discount,
             vat_rate=vat_rate,
             prices_include_vat=prices_include_vat,
+            doc_type=doc_type,
             status=status,
         )
         lines = forms.parse_invoice_lines(
@@ -958,6 +1178,7 @@ def invoice_print(
         payments=repo.list_payments(conn, invoice_id),
         balance=balance_due(invoice["total_minor"], invoice["paid_minor"]),
         autoprint=bool(autoprint),
+        logo_uri=repo.logo_data_uri(conn),
     )
 
 
@@ -985,6 +1206,7 @@ def invoice_pdf(
         balance=balance_due(invoice["total_minor"], invoice["paid_minor"]),
         autoprint=False,
         pdf=True,
+        logo_uri=repo.logo_data_uri(conn),
     ).body.decode("utf-8")
 
     pdf_bytes = html_to_pdf(
@@ -1046,6 +1268,384 @@ def payment_create(
 def payment_delete(payment_id: int, conn: Connection = Depends(get_conn)):
     invoice_id = repo.delete_payment(conn, payment_id)
     return go(f"/invoices/{invoice_id}", msg="msg.deleted")
+
+
+# --------------------------------------------------------------------------
+# Estimates
+# --------------------------------------------------------------------------
+# What a customer is quoted before anything is agreed. Written, sent,
+# approved or declined, and only then turned into an invoice.
+
+@app.get("/estimates", response_class=HTMLResponse)
+def estimates_list(
+    request: Request,
+    q: str = "",
+    status: str = "",
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "estimates_list.html",
+        estimates=repo.list_estimates(conn, search=q, status=status),
+        q=q,
+        status=status,
+    )
+
+
+def _estimate_form_context(
+    conn: Connection, *, estimate: Any = None, items: Any = None, error: str = ""
+) -> dict[str, Any]:
+    settings = repo.get_settings(conn)
+    catalog = repo.list_catalog(conn)
+    return {
+        "estimate": estimate,
+        "items": items or [],
+        "customers": repo.list_customers(conn),
+        "vehicles": repo.list_vehicles(conn),
+        "catalog": catalog,
+        "catalog_json": [
+            {
+                "id": i["id"],
+                "name_en": i["name_en"],
+                "name_ar": i["name_ar"],
+                "kind": i["kind"],
+                "unit": i["unit"],
+                "price": str(from_minor(i["unit_price_minor"])),
+            }
+            for i in catalog
+        ],
+        "default_vat_bp": settings["vat_rate_bp"],
+        "default_include_vat": settings["prices_include_vat"],
+        "validity_days": settings["estimate_validity_days"],
+        "error": error,
+    }
+
+
+@app.get("/estimates/new", response_class=HTMLResponse)
+def estimate_new(
+    request: Request,
+    customer_id: int | None = None,
+    vehicle_id: int | None = None,
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "estimate_form.html",
+        preset_customer_id=customer_id,
+        preset_vehicle_id=vehicle_id,
+        **_estimate_form_context(conn),
+    )
+
+
+def _estimate_payload(
+    *,
+    settings: Any,
+    customer_id: str,
+    vehicle_id: str,
+    issue_date: str,
+    valid_until: str,
+    notes: str,
+    discount: str,
+    vat_rate: str,
+    prices_include_vat: str | None,
+) -> dict[str, Any]:
+    issued = forms.iso_date(issue_date, default_today=True)
+    expires = forms.iso_date(valid_until)
+    if expires is None and settings["estimate_validity_days"]:
+        expires = (
+            date.fromisoformat(issued)
+            + timedelta(days=int(settings["estimate_validity_days"]))
+        ).isoformat()
+
+    data: dict[str, Any] = {
+        "customer_id": forms.opt_int(customer_id),
+        "vehicle_id": forms.opt_int(vehicle_id),
+        "issue_date": issued,
+        "valid_until": expires,
+        "notes": forms.text(notes),
+        "discount_minor": forms.money(discount, field="Discount"),
+        "vat_rate_bp": forms.vat_rate(vat_rate, default=settings["vat_rate_bp"]),
+        "prices_include_vat": forms.checkbox(prices_include_vat),
+        "currency_code": settings["currency_code"],
+    }
+    if data["customer_id"] is None:
+        raise FormError("Choose a customer for this estimate.")
+    return data
+
+
+@app.post("/estimates/new")
+def estimate_create(
+    request: Request,
+    customer_id: str = Form(""),
+    vehicle_id: str = Form(""),
+    issue_date: str = Form(""),
+    valid_until: str = Form(""),
+    notes: str = Form(""),
+    discount: str = Form(""),
+    vat_rate: str = Form(""),
+    prices_include_vat: str = Form(None),
+    item_catalog_id: list[str] = Form([]),
+    item_description: list[str] = Form([]),
+    item_description_ar: list[str] = Form([]),
+    item_kind: list[str] = Form([]),
+    item_unit: list[str] = Form([]),
+    item_qty: list[str] = Form([]),
+    item_price: list[str] = Form([]),
+    conn: Connection = Depends(get_conn),
+):
+    settings = repo.get_settings(conn)
+    try:
+        header = _estimate_payload(
+            settings=settings, customer_id=customer_id, vehicle_id=vehicle_id,
+            issue_date=issue_date, valid_until=valid_until, notes=notes,
+            discount=discount, vat_rate=vat_rate,
+            prices_include_vat=prices_include_vat,
+        )
+        lines = forms.parse_invoice_lines(
+            descriptions=item_description,
+            descriptions_ar=item_description_ar,
+            kinds=item_kind,
+            units=item_unit,
+            quantities=item_qty,
+            prices=item_price,
+            catalog_ids=item_catalog_id,
+        )
+    except FormError as exc:
+        return render(
+            request,
+            conn,
+            "estimate_form.html",
+            preset_customer_id=forms.opt_int(customer_id),
+            preset_vehicle_id=forms.opt_int(vehicle_id),
+            **_estimate_form_context(conn, error=str(exc)),
+        )
+
+    estimate_id = repo.create_estimate(conn, header, lines)
+    return go(f"/estimates/{estimate_id}", msg="msg.created")
+
+
+def _estimate_message(conn: Connection, estimate: Any, items: Any, lang: str) -> str:
+    """The message body sent with an estimate, from the Settings template."""
+    settings = repo.get_settings(conn)
+    template = settings["message_template_ar"] if lang == "ar" else settings["message_template_en"]
+    currency = settings["currency_code"]
+    return messaging.render_template(
+        template,
+        {
+            "customer": localised(estimate, "customer_name", lang),
+            "business": localised(settings, "business_name_en", lang),
+            "number": estimate["estimate_no"],
+            "total": format_money(estimate["total_minor"], currency),
+            "valid_until": estimate["valid_until"] or "",
+            "items": messaging.summarise_items(
+                [localised(i, "description", lang) for i in items]
+            ),
+        },
+    )
+
+
+@app.get("/estimates/{estimate_id}", response_class=HTMLResponse)
+def estimate_detail(
+    estimate_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    estimate = repo.get_estimate(conn, estimate_id)
+    items = repo.get_estimate_items(conn, estimate_id)
+    settings = repo.get_settings(conn)
+    lang = current_lang(request, settings)
+    message = _estimate_message(conn, estimate, items, lang)
+    country = settings["default_country_code"]
+
+    return render(
+        request,
+        conn,
+        "estimate_detail.html",
+        estimate=estimate,
+        items=items,
+        message=message,
+        whatsapp_url=messaging.whatsapp_link(
+            estimate["customer_phone"], message, country
+        ),
+        sms_url=messaging.sms_link(estimate["customer_phone"], message, country),
+        provider_note=messaging.provider_note(lang),
+    )
+
+
+@app.get("/estimates/{estimate_id}/edit", response_class=HTMLResponse)
+def estimate_edit(
+    estimate_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "estimate_form.html",
+        preset_customer_id=None,
+        preset_vehicle_id=None,
+        **_estimate_form_context(
+            conn,
+            estimate=repo.get_estimate(conn, estimate_id),
+            items=repo.get_estimate_items(conn, estimate_id),
+        ),
+    )
+
+
+@app.post("/estimates/{estimate_id}/edit")
+def estimate_update(
+    estimate_id: int,
+    request: Request,
+    customer_id: str = Form(""),
+    vehicle_id: str = Form(""),
+    issue_date: str = Form(""),
+    valid_until: str = Form(""),
+    notes: str = Form(""),
+    discount: str = Form(""),
+    vat_rate: str = Form(""),
+    prices_include_vat: str = Form(None),
+    item_catalog_id: list[str] = Form([]),
+    item_description: list[str] = Form([]),
+    item_description_ar: list[str] = Form([]),
+    item_kind: list[str] = Form([]),
+    item_unit: list[str] = Form([]),
+    item_qty: list[str] = Form([]),
+    item_price: list[str] = Form([]),
+    conn: Connection = Depends(get_conn),
+):
+    settings = repo.get_settings(conn)
+    try:
+        header = _estimate_payload(
+            settings=settings, customer_id=customer_id, vehicle_id=vehicle_id,
+            issue_date=issue_date, valid_until=valid_until, notes=notes,
+            discount=discount, vat_rate=vat_rate,
+            prices_include_vat=prices_include_vat,
+        )
+        lines = forms.parse_invoice_lines(
+            descriptions=item_description,
+            descriptions_ar=item_description_ar,
+            kinds=item_kind,
+            units=item_unit,
+            quantities=item_qty,
+            prices=item_price,
+            catalog_ids=item_catalog_id,
+        )
+        repo.update_estimate(conn, estimate_id, header, lines)
+    except FormError as exc:
+        return render(
+            request,
+            conn,
+            "estimate_form.html",
+            preset_customer_id=None,
+            preset_vehicle_id=None,
+            **_estimate_form_context(
+                conn,
+                estimate=repo.get_estimate(conn, estimate_id),
+                items=repo.get_estimate_items(conn, estimate_id),
+                error=str(exc),
+            ),
+        )
+    except repo.InUse as exc:
+        return go(f"/estimates/{estimate_id}", err=str(exc))
+
+    return go(f"/estimates/{estimate_id}", msg="msg.saved")
+
+
+@app.post("/estimates/{estimate_id}/status")
+def estimate_status(
+    estimate_id: int,
+    status: str = Form(...),
+    approved_by: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        repo.set_estimate_status(
+            conn, estimate_id, status, approved_by=forms.text(approved_by)
+        )
+    except (ValueError, repo.InUse) as exc:
+        return go(f"/estimates/{estimate_id}", err=str(exc))
+    messages = {
+        "sent": "msg.estimate_sent",
+        "approved": "msg.estimate_approved",
+        "declined": "msg.saved",
+    }
+    return go(f"/estimates/{estimate_id}", msg=messages.get(status, "msg.saved"))
+
+
+@app.post("/estimates/{estimate_id}/delete")
+def estimate_delete(estimate_id: int, conn: Connection = Depends(get_conn)):
+    try:
+        repo.delete_estimate(conn, estimate_id)
+    except repo.InUse as exc:
+        return go(f"/estimates/{estimate_id}", err=str(exc))
+    return go("/estimates", msg="msg.deleted")
+
+
+@app.post("/estimates/{estimate_id}/invoice")
+def estimate_to_invoice(
+    estimate_id: int,
+    doc_type: str = Form("tax"),
+    conn: Connection = Depends(get_conn),
+):
+    """Turn an approved estimate into a draft invoice."""
+    try:
+        invoice_id = repo.convert_estimate_to_invoice(
+            conn,
+            estimate_id,
+            doc_type=forms.one_of(doc_type, ("tax", "plain"), default="tax"),
+        )
+    except repo.InUse as exc:
+        return go(f"/estimates/{estimate_id}", err=str(exc))
+    return go(f"/invoices/{invoice_id}", msg="msg.invoice_from_estimate")
+
+
+@app.get("/estimates/{estimate_id}/print", response_class=HTMLResponse)
+def estimate_print(
+    estimate_id: int,
+    request: Request,
+    conn: Connection = Depends(get_conn),
+    autoprint: int = 1,
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "estimate_print.html",
+        estimate=repo.get_estimate(conn, estimate_id),
+        items=repo.get_estimate_items(conn, estimate_id),
+        autoprint=bool(autoprint),
+        logo_uri=repo.logo_data_uri(conn),
+    )
+
+
+@app.get("/estimates/{estimate_id}/pdf")
+def estimate_pdf(
+    estimate_id: int, request: Request, conn: Connection = Depends(get_conn)
+):
+    estimate = repo.get_estimate(conn, estimate_id)
+    if not PDF_AVAILABLE:
+        return go(f"/estimates/{estimate_id}/print")
+
+    html = render(
+        request,
+        conn,
+        "estimate_print.html",
+        estimate=estimate,
+        items=repo.get_estimate_items(conn, estimate_id),
+        autoprint=False,
+        pdf=True,
+        logo_uri=repo.logo_data_uri(conn),
+    ).body.decode("utf-8")
+
+    pdf_bytes = html_to_pdf(
+        html,
+        base_url=str(BASE_DIR),
+        stylesheets=[BASE_DIR / "static" / "css" / "print.css"],
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{estimate["estimate_no"]}.pdf"'
+        },
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1389,6 +1989,7 @@ def contract_print(
         parts=repo.get_order_parts(conn, order_id),
         totals=repo.order_totals(conn, order_id),
         autoprint=bool(autoprint),
+        logo_uri=repo.logo_data_uri(conn),
     )
 
 
@@ -1410,6 +2011,7 @@ def contract_pdf(
         totals=repo.order_totals(conn, order_id),
         autoprint=False,
         pdf=True,
+        logo_uri=repo.logo_data_uri(conn),
     ).body.decode("utf-8")
 
     pdf_bytes = html_to_pdf(
@@ -1467,6 +2069,12 @@ def settings_save(
     contract_prefix: str = Form(None),
     next_contract_seq: str = Form(None),
     parts_markup: str = Form(None),
+    estimate_prefix: str = Form(None),
+    next_estimate_seq: str = Form(None),
+    estimate_validity_days: str = Form(None),
+    default_country_code: str = Form(None),
+    message_template_en: str = Form(None),
+    message_template_ar: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
     current = repo.get_settings(conn)
@@ -1513,6 +2121,18 @@ def settings_save(
             "parts_markup_bp", parts_markup,
             lambda v: forms.vat_rate(v, default=current["parts_markup_bp"]),
         )
+        submitted("estimate_prefix", estimate_prefix, forms.text)
+        submitted("message_template_en", message_template_en, forms.text)
+        submitted("message_template_ar", message_template_ar, forms.text)
+        submitted(
+            "default_country_code", default_country_code,
+            # Digits only: it is pasted straight into a wa.me link.
+            lambda v: "".join(ch for ch in forms.text(v) if ch.isdigit())[:4] or "966",
+        )
+        submitted(
+            "estimate_validity_days", estimate_validity_days,
+            lambda v: max(0, forms.opt_int(v) or 0),
+        )
 
         # The checkbox is the exception: unticked means absent, so it can only
         # be read when the form it belongs to was the one submitted.
@@ -1532,6 +2152,14 @@ def settings_save(
             if contract_seq < 1:
                 raise FormError("The next contract number must be 1 or higher.")
             data["next_contract_seq"] = contract_seq
+
+        if next_estimate_seq is not None:
+            estimate_seq = (
+                forms.opt_int(next_estimate_seq) or current["next_estimate_seq"]
+            )
+            if estimate_seq < 1:
+                raise FormError("The next estimate number must be 1 or higher.")
+            data["next_estimate_seq"] = estimate_seq
     except FormError as exc:
         return render(request, conn, "settings.html", error=str(exc))
 
@@ -1539,13 +2167,64 @@ def settings_save(
     return go("/settings", msg="set.saved")
 
 
+@app.get("/logo")
+def logo_image(conn: Connection = Depends(get_conn)) -> Response:
+    """Serve the business logo for the screen.
+
+    The printed documents embed the image instead (see `logo_data_uri`);
+    this is for the top bar, where a cacheable URL is the better fit.
+    """
+    stored = repo.get_logo(conn)
+    if stored is None:
+        return Response(status_code=404)
+    data, mime = stored
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={
+            # The URL carries the logo's timestamp, so a replaced logo gets a
+            # new URL and appears at once rather than being served from cache.
+            "Cache-Control": "public, max-age=86400",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.post("/settings/logo")
+async def logo_upload(
+    logo: UploadFile = File(...), conn: Connection = Depends(get_conn)
+):
+    """Store an uploaded logo.
+
+    One byte past the limit is read deliberately: it is enough to know the
+    file is too big, without pulling a huge upload into memory to find out.
+    """
+    data = await logo.read(repo.MAX_LOGO_BYTES + 1)
+    try:
+        repo.set_logo(conn, data, filename=logo.filename or "")
+    except ValueError as exc:
+        return go("/settings", err=str(exc))
+    return go("/settings", msg="set.logo_saved")
+
+
+@app.post("/settings/logo/remove")
+def logo_remove(conn: Connection = Depends(get_conn)):
+    repo.clear_logo(conn)
+    return go("/settings", msg="msg.deleted")
+
+
 @app.get("/settings/backup")
 def settings_backup() -> FileResponse:
-    """Download a consistent snapshot of the database file."""
+    """Download a snapshot of everything: the database and the attachments.
+
+    This used to be the bare database file. Attachments are stored beside it
+    rather than inside it, so that download would have quietly left out every
+    scanned invoice -- and the gap would only have shown up during a restore.
+    """
     stamp = date.today().isoformat()
     tmp = TemporaryDirectory()
-    target = Path(tmp.name) / f"carservice-backup-{stamp}.db"
-    backup_to(target)
+    target = Path(tmp.name) / f"carservice-backup-{stamp}.zip"
+    backup_archive(target)
     # The temporary directory is kept alive by the response's background task
     # so the file still exists while it is being streamed to the browser.
     response = FileResponse(

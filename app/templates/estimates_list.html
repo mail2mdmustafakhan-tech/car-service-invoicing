@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill with context %}
+{% block title %}{{ t('est.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('est.title') }}</h1>
+  <div class="actions"><a class="btn accent" href="/estimates/new">{{ t('est.new') }}</a></div>
+</div>
+
+<form class="toolbar" method="get" action="/estimates">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('est.search_hint') }}" aria-label="{{ t('action.search') }}">
+  <select name="status" aria-label="{{ t('inv.status') }}">
+    <option value="">{{ t('inv.status') }}: {{ t('status.all') }}</option>
+    {% for s in ['draft', 'sent', 'approved', 'declined', 'invoiced'] %}
+    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ t('status.' ~ s) }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">{{ t('action.apply') }}</button>
+  {% if q or status %}<a class="btn link" href="/estimates">{{ t('action.clear') }}</a>{% endif %}
+</form>
+
+<div class="panel">
+  {% if estimates %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('est.number') }}</th>
+          <th>{{ t('est.date') }}</th>
+          <th>{{ t('inv.customer') }}</th>
+          <th>{{ t('inv.vehicle') }}</th>
+          <th class="num">{{ t('inv.total') }}</th>
+          <th>{{ t('inv.status') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in estimates %}
+        <tr>
+          <td class="tight">
+            <a href="/estimates/{{ e['id'] }}">{{ e['estimate_no'] }}</a>
+            {% if e['invoice_no'] %}<div class="secondary">{{ e['invoice_no'] }}</div>{% endif %}
+          </td>
+          <td class="tight">
+            {{ e['issue_date'] }}
+            {% if e['valid_until'] %}<div class="secondary">→ {{ e['valid_until'] }}</div>{% endif %}
+          </td>
+          <td>
+            <a href="/customers/{{ e['customer_id'] }}">{{ e['customer_name'] }}</a>
+            {% if e['customer_phone'] %}<div class="secondary">{{ e['customer_phone'] }}</div>{% endif %}
+          </td>
+          <td class="tight">
+            {% if e['vehicle_plate'] %}{{ e['vehicle_plate'] }}{% else %}—{% endif %}
+            {% if e['vehicle_description'] %}<div class="secondary">{{ e['vehicle_description'] }}</div>{% endif %}
+          </td>
+          <td class="num">{{ m(e['total_minor']) }}</td>
+          <td class="tight">
+            {{ pill(e['status']) }}
+            {% if e['is_expired'] %}<div class="secondary">{{ t('est.expired') }}</div>{% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+              <a class="btn small" href="/estimates/{{ e['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>{{ t('est.none') if not (q or status) else t('msg.no_results') }}</p>
+    <a class="btn primary" href="/estimates/new">{{ t('est.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

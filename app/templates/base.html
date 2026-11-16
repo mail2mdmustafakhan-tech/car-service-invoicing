@@ -18,13 +18,21 @@
 {% set path = request.url.path %}
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="wordmark" href="/">
-      {{ loc(settings, 'business_name_en') or t('app.name') }}
-      <span>{{ t('app.name') }}</span>
+    <a class="brandmark" href="/">
+      {% if has_logo %}
+        {# Sits on a white chip: most logos are dark ink, which would vanish
+           against the dark bar. #}
+        <img src="{{ logo_url }}" alt="">
+      {% endif %}
+      <span class="wordmark">
+        {{ loc(settings, 'business_name_en') or t('app.name') }}
+        <span>{{ t('app.name') }}</span>
+      </span>
     </a>
 
     <nav class="topnav">
       <a href="/"          {% if path == '/' %}aria-current="page"{% endif %}>{{ t('nav.dashboard') }}</a>
+      <a href="/estimates" {% if path.startswith('/estimates') %}aria-current="page"{% endif %}>{{ t('nav.estimates') }}</a>
       <a href="/contracts" {% if path.startswith('/contracts') %}aria-current="page"{% endif %}>{{ t('nav.contracts') }}</a>
       <a href="/invoices"  {% if path.startswith('/invoices') %}aria-current="page"{% endif %}>{{ t('nav.invoices') }}</a>
       <a href="/customers" {% if path.startswith('/customers') %}aria-current="page"{% endif %}>{{ t('nav.customers') }}</a>

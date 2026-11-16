@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ t('imp.title') }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/customers">{{ t('cust.title') }}</a></div>
+<div class="pagehead"><h1>{{ t('imp.title') }}</h1></div>
+
+{% if not batch %}
+  {# ---- Step one: choose a file ---------------------------------------- #}
+  <section class="panel">
+    <div class="panel-body">
+      <p class="hint" style="margin-block-start:0">{{ t('imp.hint') }}</p>
+
+      <form method="post" action="/customers/import" enctype="multipart/form-data">
+        <div class="field" style="max-width:460px">
+          <label for="f_spreadsheet">{{ t('imp.choose') }}</label>
+          <input type="file" id="f_spreadsheet" name="spreadsheet"
+                 accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                 required>
+        </div>
+        <div class="formactions">
+          <button class="btn accent" type="submit">{{ t('imp.upload') }}</button>
+          <a class="btn link spacer" href="/customers">{{ t('action.cancel') }}</a>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('imp.template') }}</h2></div>
+    <div class="panel-body">
+      <p class="hint" style="margin-block-start:0">{{ t('imp.template_hint') }}</p>
+      <a class="btn" href="/customers/import/template">{{ t('imp.template') }}</a>
+      <p class="hint">
+        {{ 'Recognised column headings, in English or Arabic: name, phone, email, address, VAT number, notes. Anything else is ignored.'
+           if lang == 'en' else
+           'عناوين الأعمدة المعروفة بالعربية أو الإنجليزية: الاسم، الهاتف، البريد، العنوان، الرقم الضريبي، ملاحظات. وأي عمود آخر سيتم تجاهله.' }}
+      </p>
+    </div>
+  </section>
+
+{% else %}
+  {# ---- Step two: what it would actually do ----------------------------- #}
+  <div class="figures">
+    <div class="figure">
+      <div class="value">{{ summary.ready }}</div>
+      <div class="label">{{ t('imp.will_import') }}</div>
+    </div>
+    <div class="figure owed">
+      <div class="value">{{ summary.skipped }}</div>
+      <div class="label">{{ t('imp.will_skip') }}</div>
+    </div>
+    <div class="figure">
+      <div class="value">{{ summary.total }}</div>
+      <div class="label">{{ t('imp.total_rows') }}</div>
+      <div class="sub">{{ batch['filename'] }}</div>
+    </div>
+  </div>
+
+  {% if batch['status'] != 'pending' %}
+    <div class="flash">{{ t('msg.imported') if batch['status'] == 'imported' else t('imp.cancel') }}</div>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ t('imp.preview') }}</h2>
+      <span class="secondary">{{ summary.fields | join(', ') }}</span>
+    </div>
+    <div class="panel-body tight scrollx">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th style="width:56px">{{ t('imp.line') }}</th>
+            <th>{{ t('cust.name') }}</th>
+            <th>{{ t('cust.phone') }}</th>
+            <th>{{ t('cust.email') }}</th>
+            <th>{{ t('imp.note') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr{% if row.skip %} style="opacity:.55"{% endif %}>
+            <td class="secondary">{{ row.line }}</td>
+            <td>
+              {{ row.get('name') or '—' }}
+              {% if row.get('name_ar') %}<div class="secondary" dir="rtl">{{ row.name_ar }}</div>{% endif %}
+            </td>
+            <td class="tight">{{ row.get('phone') or '—' }}</td>
+            <td class="tight secondary">{{ row.get('email') or '—' }}</td>
+            <td class="tight">
+              {% if row.skip %}
+                <span class="pill void">{{ row.note }}</span>
+              {% else %}
+                <span class="pill paid">{{ t('imp.will_import') }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if batch['status'] == 'pending' %}
+    {% if summary.ready %}
+      <form method="post" action="/customers/import/{{ batch['id'] }}/confirm">
+        <div class="formactions">
+          <button class="btn accent" type="submit">
+            {{ t('imp.confirm') }} ({{ summary.ready }})
+          </button>
+          <span class="spacer"></span>
+        </div>
+      </form>
+    {% else %}
+      <div class="flash error">{{ t('imp.nothing') }}</div>
+    {% endif %}
+
+    <form method="post" action="/customers/import/{{ batch['id'] }}/cancel">
+      <button class="btn link" type="submit">{{ t('imp.cancel') }}</button>
+    </form>
+  {% else %}
+    <a class="btn primary" href="/customers">{{ t('cust.title') }}</a>
+  {% endif %}
+{% endif %}
+{% endblock %}
