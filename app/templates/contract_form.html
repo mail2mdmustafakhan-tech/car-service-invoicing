@@ -90,17 +90,9 @@
             {% for item in items %}
             <tr class="line-row">
               <td class="col-desc">
-                <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
-                  <option value="">{{ t('inv.pick_catalog') }}…</option>
-                  {% for ci in services %}
-                  <option value="{{ ci['id'] }}" {% if item['catalog_item_id'] == ci['id'] %}selected{% endif %}>
-                    {{ loc(ci, 'name_en') }}
-                  </option>
-                  {% endfor %}
-                </select>
-                <input type="text" name="item_description" class="line-desc"
+                <input type="text" name="item_description" class="line-desc" list="catalog-names"
                        value="{{ item['description'] }}"
-                       placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
+                       placeholder="{{ t('inv.pick_custom') }}">
                 <input type="hidden" name="item_catalog_id" class="line-catalog"
                        value="{{ item['catalog_item_id'] or '' }}">
                 <input type="hidden" name="item_description_ar" class="line-desc-ar"
@@ -122,14 +114,8 @@
       <template id="repair-template">
         <tr class="line-row">
           <td class="col-desc">
-            <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
-              <option value="">{{ t('inv.pick_catalog') }}…</option>
-              {% for ci in services %}
-              <option value="{{ ci['id'] }}">{{ loc(ci, 'name_en') }}</option>
-              {% endfor %}
-            </select>
-            <input type="text" name="item_description" class="line-desc" value=""
-                   placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
+            <input type="text" name="item_description" class="line-desc" list="catalog-names" value=""
+                   placeholder="{{ t('inv.pick_custom') }}">
             <input type="hidden" name="item_catalog_id" class="line-catalog" value="">
             <input type="hidden" name="item_description_ar" class="line-desc-ar" value="">
           </td>
@@ -156,7 +142,7 @@
             <tr>
               <th style="width:130px">{{ t('con.part_number') }}</th>
               <th class="col-desc">{{ t('con.part_name') }}</th>
-              <th style="width:130px">{{ t('con.sourced') }}</th>
+              <th style="width:165px">{{ t('con.sourced') }}</th>
               <th class="col-qty num">{{ t('inv.qty') }}</th>
               <th class="col-price num">{{ t('inv.unit_price') }}</th>
               <th class="col-total num">{{ t('inv.line_total') }}</th>
@@ -168,29 +154,21 @@
             <tr class="line-row">
               <td><input type="text" name="part_number" value="{{ p['part_number'] }}"></td>
               <td class="col-desc">
-                <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
-                  <option value="">{{ t('inv.pick_catalog') }}…</option>
-                  {% for ci in catalog %}
-                  <option value="{{ ci['id'] }}" {% if p['catalog_item_id'] == ci['id'] %}selected{% endif %}>
-                    {{ loc(ci, 'name_en') }}
-                  </option>
-                  {% endfor %}
-                </select>
-                <input type="text" name="part_description" class="line-desc"
+                <input type="text" name="part_description" class="line-desc" list="catalog-names"
                        value="{{ p['description'] }}"
-                       placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
+                       placeholder="{{ t('inv.pick_custom') }}">
                 <input type="hidden" name="part_catalog_id" class="line-catalog"
                        value="{{ p['catalog_item_id'] or '' }}">
                 <input type="hidden" name="part_description_ar" class="line-desc-ar"
                        value="{{ p['description_ar'] }}">
               </td>
-              {# A select, not a checkbox: an unticked checkbox is not submitted
-                 at all, which would shift every later row's value up by one. #}
+              {# Always submits, never a checkbox: an unticked checkbox is not
+                 submitted at all, which would shift every later row's value
+                 up by one and attach the wrong origin to the wrong part.
+                 A list to pick from, and anything else you type is kept. #}
               <td>
-                <select name="part_sourced" class="line-sourced">
-                  <option value="0" {% if not p['sourced_externally'] %}selected{% endif %}>{{ t('con.sourced_own') }}</option>
-                  <option value="1" {% if p['sourced_externally'] %}selected{% endif %}>{{ t('con.sourced_agency') }}</option>
-                </select>
+                <input type="text" name="part_sourced" class="line-sourced"
+                       list="part-sources" value="{{ p['source'] or 'own_stock' }}">
               </td>
               <td><input type="text" name="part_qty" class="line-qty num"
                          value="{{ fmt_qty(p['qty_milli']) }}" inputmode="decimal"></td>
@@ -210,22 +188,14 @@
         <tr class="line-row">
           <td><input type="text" name="part_number" value=""></td>
           <td class="col-desc">
-            <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
-              <option value="">{{ t('inv.pick_catalog') }}…</option>
-              {% for ci in catalog %}
-              <option value="{{ ci['id'] }}">{{ loc(ci, 'name_en') }}</option>
-              {% endfor %}
-            </select>
-            <input type="text" name="part_description" class="line-desc" value=""
-                   placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
+            <input type="text" name="part_description" class="line-desc" list="catalog-names" value=""
+                   placeholder="{{ t('inv.pick_custom') }}">
             <input type="hidden" name="part_catalog_id" class="line-catalog" value="">
             <input type="hidden" name="part_description_ar" class="line-desc-ar" value="">
           </td>
           <td>
-            <select name="part_sourced" class="line-sourced">
-              <option value="0">{{ t('con.sourced_own') }}</option>
-              <option value="1">{{ t('con.sourced_agency') }}</option>
-            </select>
+            <input type="text" name="part_sourced" class="line-sourced"
+                   list="part-sources" value="own_stock">
           </td>
           <td><input type="text" name="part_qty" class="line-qty num" value="1" inputmode="decimal"></td>
           <td><input type="text" name="part_price" class="line-price num" value="" inputmode="decimal"></td>
@@ -279,7 +249,22 @@
 {% endblock %}
 
 {% block scripts %}
+{# The one list behind every description box on this page. A <datalist> is
+   the browser's own combo box: the field still accepts anything typed, so a
+   custom description needs no second field to live in. #}
+{# Where a part came from. Suggestions, not a fixed set -- a workshop finds
+   a new supplier more often than anyone edits a list in the code. #}
+<datalist id="part-sources">
+  {% for value, en, ar in SOURCES %}<option value="{{ value }}" label="{{ ar if lang == 'ar' else en }}"></option>
+  {% endfor %}
+</datalist>
+
+<datalist id="catalog-names">
+  {% for ci in catalog %}<option value="{{ loc(ci, 'name_en') }}"></option>
+  {% endfor %}
+</datalist>
+
 <script id="catalog-data" type="application/json">{{ catalog_json | tojson }}</script>
-<script src="/static/js/money.js"></script>
-<script src="/static/js/contract-form.js"></script>
+<script src="{{ static('js/money.js') }}"></script>
+<script src="{{ static('js/contract-form.js') }}"></script>
 {% endblock %}

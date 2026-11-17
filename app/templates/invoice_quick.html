@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ t('quick.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('quick.title') }}</h1>
+  <div class="actions">
+    <a class="btn link" href="/invoices/new">{{ t('quick.full_invoice') }}</a>
+  </div>
+</div>
+
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<p class="hint" style="margin-block-end:var(--space-5);max-width:62ch">{{ t('quick.intro') }}</p>
+
+<form method="post" action="/invoices/quick" id="quick-form">
+  <section class="panel">
+    <div class="panel-body">
+
+      {# Who. Either somebody already on the books, or a name typed in --
+         stopping to fill in a customer form is exactly what makes people
+         reach for a paper pad instead. #}
+      <div class="field">
+        <label for="f_customer">{{ t('inv.customer') }}</label>
+        <select id="f_customer" name="customer_id">
+          <option value="">{{ t('quick.new_customer') }}</option>
+          {% for c in customers %}
+          <option value="{{ c['id'] }}">{{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="grid-2" id="new-customer">
+        <div class="field">
+          <label for="f_name">{{ t('quick.customer_name') }}</label>
+          <input type="text" id="f_name" name="customer_name" autofocus>
+        </div>
+        <div class="field">
+          <label for="f_phone">{{ t('cust.phone') }}</label>
+          <input type="tel" id="f_phone" name="customer_phone" inputmode="tel">
+          <p class="hint">{{ t('quick.phone_hint') }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('quick.what') }}</h2></div>
+    <div class="panel-body tight scrollx">
+      <table class="ledger linetable">
+        <thead>
+          <tr>
+            <th>{{ t('inv.description') }}</th>
+            <th style="width:90px" class="num">{{ t('inv.qty') }}</th>
+            <th style="width:130px" class="num">{{ t('inv.unit_price') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# Three rows, fixed. A counter sale that needs a fourth line is not
+             a counter sale any more, and the full invoice screen is one click
+             away in the header. #}
+          {% for n in range(3) %}
+          <tr class="line-row">
+            <td>
+              <input type="text" name="item_description" class="line-desc" list="catalog-names"
+                     placeholder="{{ t('inv.pick_custom') if n == 0 else '' }}">
+              <input type="hidden" name="item_catalog_id" class="line-catalog" value="">
+            </td>
+            <td><input type="text" name="item_qty" class="num line-qty" inputmode="decimal" value="1"></td>
+            <td><input type="text" name="item_price" class="num line-price" inputmode="decimal"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-body">
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_doc_type">{{ t('inv.doc_type') }}</label>
+          <select id="f_doc_type" name="doc_type">
+            <option value="tax">{{ t('inv.doc_tax') }}</option>
+            <option value="plain">{{ t('inv.doc_plain') }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f_method">{{ t('pay.method') }}</label>
+          <select id="f_method" name="payment_method">
+            {% for m in ['cash', 'card', 'transfer'] %}
+            <option value="{{ m }}">{{ t('pay.method_' ~ m) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      {# Counter sales are paid on the spot, so the money is recorded in the
+         same breath rather than needing a second visit to the screen. #}
+      <div class="field">
+        <div class="check">
+          <input type="checkbox" id="f_paid" name="paid_now" value="1" checked>
+          <label for="f_paid">{{ t('quick.paid_now') }}</label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="row-actions">
+    <button class="btn accent" type="submit">{{ t('quick.issue') }}</button>
+    <a class="btn link" href="/invoices">{{ t('action.cancel') }}</a>
+  </div>
+  <p class="hint">{{ t('quick.issue_hint') }}</p>
+</form>
+
+<datalist id="catalog-names">
+  {% for ci in catalog %}<option value="{{ loc(ci, 'name_en') }}"></option>
+  {% endfor %}
+</datalist>
+
+<script id="catalog-data" type="application/json">{{ catalog_json | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/money.js') }}"></script>
+<script>
+  /* Two small things: hide the name fields when an existing customer is
+     chosen, and fill a price in when a description names a catalogue item. */
+  (function () {
+      var picker = document.getElementById("f_customer");
+      var fresh = document.getElementById("new-customer");
+      var name = document.getElementById("f_name");
+
+      function sync() {
+          var isNew = !picker.value;
+          fresh.style.display = isNew ? "" : "none";
+          name.required = isNew;
+      }
+      picker.addEventListener("change", sync);
+      sync();
+
+      var M = window.CSMoney;
+      if (!M) { return; }          // the form still works, it just stops helping
+      var byName = M.readCatalogByName();
+      document.querySelectorAll(".line-row").forEach(function (row) {
+          var desc = row.querySelector(".line-desc");
+          function fill() {
+              M.applyCatalogByName(byName, {
+                  description: desc,
+                  catalogId: row.querySelector(".line-catalog"),
+                  price: row.querySelector(".line-price")
+              });
+          }
+          desc.addEventListener("input", fill);
+          desc.addEventListener("change", fill);
+      });
+  })();
+</script>
+{% endblock %}

@@ -32,12 +32,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import forms, importing, messaging
+from . import charts, exporting, forms, importing, messaging, sources
 from . import repository as repo
 from .db import backup_archive, connect, db_path, migrate, session
 from .forms import FormError
 from .i18n import LANGUAGES, direction, localised, normalise, t
-from .invoicing import balance_due, compute_totals, payment_state
+from .invoicing import balance_due, compute_totals, line_total, payment_state
 from .money import format_money, format_qty, format_rate, from_milli, from_minor
 from .pdf import PDF_AVAILABLE, html_to_pdf
 
@@ -73,9 +73,41 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
+
+def static_url(path: str) -> str:
+    """A stylesheet or script URL that changes whenever the file does.
+
+    Browsers cache by URL. With a fixed ``/static/css/app.css`` they keep an
+    old copy for as long as they feel like it, so an update arrives as a
+    half-new interface: new buttons from the templates, old styling for them.
+    That happened, and from the outside it looks exactly like the update
+    having failed -- the worst sort of bug, because it makes working code
+    look broken and sends everyone hunting in the wrong place.
+
+    Stamping the file's modification time into the URL makes the address of a
+    changed file a different address, which no cache can confuse with the old
+    one. A stat call per tag is nothing next to the page it is on.
+
+    A missing file falls back to the plain path rather than raising: a broken
+    stylesheet link is a bad page, but a stack trace is no page at all.
+    """
+    target = BASE_DIR / "static" / path.lstrip("/")
+    try:
+        return f"/static/{path}?v={int(target.stat().st_mtime)}"
+    except OSError:
+        return f"/static/{path}"
+
+
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.globals.update(
+    static=static_url,
+    meter_list=charts.meter_list,
+    trend_chart=charts.trend,
     LANGUAGES=LANGUAGES,
+    SOURCES=sources.SOURCES,
+    MANUFACTURERS=sources.MANUFACTURERS,
+    source_label=sources.label,
+    manufacturer_label=sources.manufacturer_label,
     PDF_AVAILABLE=PDF_AVAILABLE,
     fmt_qty=format_qty,
     fmt_rate=format_rate,
@@ -231,7 +263,45 @@ def dashboard(request: Request, conn: Connection = Depends(get_conn)) -> HTMLRes
         revenue=repo.monthly_revenue(conn, months=6),
         in_workshop=repo.cars_in_workshop(conn, limit=8),
         waiting_estimates=repo.open_estimates(conn, limit=6),
+        # The deeper figures. Gathered on every load rather than behind their
+        # own request: these are a few thousand rows on one PC, and a second
+        # round trip to open a panel would cost more than the queries do.
+        analytics=_analytics(conn, current_lang(request, repo.get_settings(conn))),
     )
+
+
+def _analytics(conn: Connection, lang: str) -> dict[str, Any]:
+    """Everything the advanced panel draws, worked out from the records.
+
+    The rows arrive as plain ``(label, value)`` pairs. Shaping them here
+    rather than in the template keeps the charts testable without rendering a
+    page, and keeps the template to laying things out.
+    """
+    money = repo.monthly_money(conn, months=12)
+
+    def pairs(rows, label_key, value_key):
+        return [(row[label_key], row[value_key]) for row in rows]
+
+    return {
+        "activity": repo.customer_activity(conn),
+        "by_make": pairs(repo.cars_by_make(conn), "label", "cars"),
+        "by_model": pairs(repo.cars_by_model(conn), "label", "cars"),
+        "by_category": [
+            (t(f"cust.cat_{row['label']}", lang), row["customers"])
+            for row in repo.customer_categories(conn)
+        ],
+        "faults": [
+            (
+                f"{row['make']} — "
+                f"{row['title_ar'] if lang == 'ar' and row['title_ar'] else row['title_en']}",
+                row["cases"],
+            )
+            for row in repo.issue_case_counts(conn)
+        ],
+        "top_customers": repo.top_customers(conn),
+        "owed_trend": [(row["ym"], round(row["outstanding_minor"] / 100)) for row in money],
+        "invoiced_trend": [(row["ym"], round(row["invoiced_minor"] / 100)) for row in money],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -270,6 +340,7 @@ def customer_create(
     address: str = Form(""),
     vat_number: str = Form(""),
     notes: str = Form(""),
+    category: str = Form("regular"),
     conn: Connection = Depends(get_conn),
 ):
     try:
@@ -409,6 +480,61 @@ async def attachment_upload(
     return go(f"/customers/{customer_id}", msg="msg.attached")
 
 
+
+# --------------------------------------------------------------------------
+# Photographs of catalogue parts
+# --------------------------------------------------------------------------
+
+
+@app.post("/catalog/{item_id}/images")
+async def item_image_upload(
+    item_id: int,
+    image: UploadFile = File(...),
+    caption: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    data = await image.read(repo.MAX_ITEM_IMAGE_BYTES + 1)
+    try:
+        repo.add_item_image(
+            conn, item_id, data,
+            original_name=image.filename or "",
+            caption=forms.text(caption),
+        )
+    except (ValueError, FormError) as exc:
+        return go(f"/catalog/{item_id}/edit", err=str(exc))
+    return go(f"/catalog/{item_id}/edit", msg="msg.attached")
+
+
+@app.get("/item-images/{image_id}")
+def item_image_view(image_id: int, conn: Connection = Depends(get_conn)):
+    """Serve a part photograph.
+
+    Same headers as a customer attachment, for the same reason: this is a
+    file somebody uploaded, served back from the application's own address.
+    `nosniff` stops a browser deciding it is really HTML, and the content
+    policy stops anything inside it reaching out.
+    """
+    row, path = repo.item_image_file(conn, image_id)
+    if not path.is_file():
+        return Response(status_code=404)
+    return FileResponse(
+        path,
+        media_type=row["mime"],
+        headers={
+            "Content-Disposition": f'inline; filename="{_ascii_filename(row["original_name"])}"',
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; img-src 'self'",
+        },
+    )
+
+
+@app.post("/item-images/{image_id}/delete")
+def item_image_delete(image_id: int, conn: Connection = Depends(get_conn)):
+    item_id = repo.get_item_image(conn, image_id)["catalog_item_id"]
+    repo.delete_item_image(conn, image_id)
+    return go(f"/catalog/{item_id}/edit", msg="msg.deleted")
+
+
 @app.get("/attachments/{attachment_id}")
 def attachment_view(attachment_id: int, conn: Connection = Depends(get_conn)):
     """Serve an attachment for viewing in the browser.
@@ -501,6 +627,7 @@ def customer_update(
     address: str = Form(""),
     vat_number: str = Form(""),
     notes: str = Form(""),
+    category: str = Form("regular"),
     is_active: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
@@ -513,6 +640,11 @@ def customer_update(
             "address": forms.text(address),
             "vat_number": forms.text(vat_number),
             "notes": forms.text(notes),
+            # Not "active": that is a question about when they last came in,
+            # and a stored flag would be wrong the moment nobody updates it.
+            "category": forms.one_of(
+                category, ("regular", "vip", "family", "fleet"), default="regular"
+            ),
             "is_active": forms.checkbox(is_active),
         }
     except FormError as exc:
@@ -748,6 +880,7 @@ def _catalog_payload(
     unit: str,
     unit_price: str,
     is_active: str | None = None,
+    manufacturer: str = "",
 ) -> dict[str, Any]:
     data: dict[str, Any] = {
         "code": forms.text(code),
@@ -756,6 +889,9 @@ def _catalog_payload(
         "kind": forms.one_of(kind, ("service", "part"), default="service"),
         "unit": forms.text(unit, default="pcs"),
         "unit_price_minor": forms.money(unit_price, field="Unit price"),
+        # Free text, from a suggested list. Not validated against it: the
+        # part in the box may be made by somebody the list has never heard of.
+        "manufacturer": forms.text(manufacturer),
     }
     if is_active is not None:
         data["is_active"] = forms.checkbox(is_active)
@@ -771,10 +907,12 @@ def catalog_create(
     kind: str = Form("service"),
     unit: str = Form("pcs"),
     unit_price: str = Form(""),
+    manufacturer: str = Form(""),
     conn: Connection = Depends(get_conn),
 ):
     try:
-        data = _catalog_payload(code, name_en, name_ar, kind, unit, unit_price)
+        data = _catalog_payload(code, name_en, name_ar, kind, unit, unit_price,
+                                 manufacturer=manufacturer)
         repo.create_catalog_item(conn, data)
     except FormError as exc:
         return render(request, conn, "catalog_form.html", item=None, error=str(exc))
@@ -794,7 +932,10 @@ def catalog_edit(
     item_id: int, request: Request, conn: Connection = Depends(get_conn)
 ) -> HTMLResponse:
     return render(
-        request, conn, "catalog_form.html", item=repo.get_catalog_item(conn, item_id), error=""
+        request, conn, "catalog_form.html",
+        item=repo.get_catalog_item(conn, item_id),
+        images=repo.list_item_images(conn, item_id),
+        error="",
     )
 
 
@@ -808,11 +949,13 @@ def catalog_update(
     kind: str = Form("service"),
     unit: str = Form("pcs"),
     unit_price: str = Form(""),
+    manufacturer: str = Form(""),
     is_active: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
     try:
-        data = _catalog_payload(code, name_en, name_ar, kind, unit, unit_price, is_active)
+        data = _catalog_payload(code, name_en, name_ar, kind, unit, unit_price,
+                                 is_active, manufacturer=manufacturer)
         repo.update_catalog_item(conn, item_id, data)
     except FormError as exc:
         return render(
@@ -934,8 +1077,19 @@ def _invoice_payload(
     prices_include_vat: str | None,
     doc_type: str = "tax",
     status: str | None = None,
+    lines: list[dict[str, Any]] | None = None,
+    discount_mode: str = "amount",
 ) -> dict[str, Any]:
     kind = forms.one_of(doc_type, ("tax", "plain"), default="tax")
+    # A percentage only becomes money once the lines are known, so the
+    # discount is settled here rather than alongside the simpler fields.
+    subtotal = sum(
+        line_total(line["qty_milli"], line["unit_price_minor"])
+        for line in (lines or [])
+    )
+    discount_minor, mode, rate_bp = forms.discount(
+        discount, discount_mode, subtotal_minor=subtotal
+    )
     data: dict[str, Any] = {
         "customer_id": forms.opt_int(customer_id),
         "vehicle_id": forms.opt_int(vehicle_id),
@@ -943,7 +1097,9 @@ def _invoice_payload(
         "due_date": forms.iso_date(due_date),
         "odometer": forms.opt_int(odometer),
         "notes": forms.text(notes),
-        "discount_minor": forms.money(discount, field="Discount"),
+        "discount_minor": discount_minor,
+        "discount_mode": mode,
+        "discount_rate_bp": rate_bp,
         "doc_type": kind,
         # A plain invoice charges no VAT. Enforced here rather than trusted
         # to the form, so the document and the arithmetic can never disagree
@@ -974,6 +1130,7 @@ def invoice_create(
     odometer: str = Form(""),
     notes: str = Form(""),
     discount: str = Form(""),
+    discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
     doc_type: str = Form("tax"),
@@ -989,6 +1146,15 @@ def invoice_create(
 ):
     settings = repo.get_settings(conn)
     try:
+        lines = forms.parse_invoice_lines(
+            descriptions=item_description,
+            descriptions_ar=item_description_ar,
+            kinds=item_kind,
+            units=item_unit,
+            quantities=item_qty,
+            prices=item_price,
+            catalog_ids=item_catalog_id,
+        )
         header = _invoice_payload(
             settings=settings,
             customer_id=customer_id,
@@ -1002,16 +1168,10 @@ def invoice_create(
             prices_include_vat=prices_include_vat,
             doc_type=doc_type,
             status=status,
+            lines=lines,
+            discount_mode=discount_mode,
         )
-        lines = forms.parse_invoice_lines(
-            descriptions=item_description,
-            descriptions_ar=item_description_ar,
-            kinds=item_kind,
-            units=item_unit,
-            quantities=item_qty,
-            prices=item_price,
-            catalog_ids=item_catalog_id,
-        )
+
     except FormError as exc:
         return render(
             request,
@@ -1026,6 +1186,148 @@ def invoice_create(
     return go(f"/invoices/{invoice_id}", msg="msg.created")
 
 
+# ---------------------------------------------------------------------------
+# The quick invoice — a wiper blade, a bulb, a litre of oil
+# ---------------------------------------------------------------------------
+# The full invoice screen asks for a vehicle, a due date, an odometer reading
+# and a VAT rate before it will take a 25-riyal sale, which is why that sale
+# ends up written on a pad instead. This is the same invoice with everything
+# optional left out: who, what, how much, done.
+#
+# It still creates a customer rather than booking the sale to nobody. The man
+# who bought the bulb is someone the workshop may need to find again, and an
+# invoice with no customer behind it is a hole in the records that shows up
+# later as "who was this?".
+
+
+@app.get("/invoices/quick", response_class=HTMLResponse)
+def quick_invoice_new(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+    settings = repo.get_settings(conn)
+    catalog = repo.list_catalog(conn)
+    return render(
+        request, conn, "invoice_quick.html",
+        customers=repo.list_customers(conn),
+        catalog=catalog,
+        catalog_json=_catalog_json(catalog),
+        default_vat_bp=settings["vat_rate_bp"],
+        error="",
+    )
+
+
+@app.post("/invoices/quick")
+def quick_invoice_create(
+    request: Request,
+    customer_id: str = Form(""),
+    customer_name: str = Form(""),
+    customer_phone: str = Form(""),
+    doc_type: str = Form("tax"),
+    item_description: list[str] = Form([]),
+    item_qty: list[str] = Form([]),
+    item_price: list[str] = Form([]),
+    item_catalog_id: list[str] = Form([]),
+    paid_now: str = Form(""),
+    payment_method: str = Form("cash"),
+    conn: Connection = Depends(get_conn),
+):
+    settings = repo.get_settings(conn)
+
+    def back(message: str):
+        catalog = repo.list_catalog(conn)
+        return render(
+            request, conn, "invoice_quick.html",
+            customers=repo.list_customers(conn),
+            catalog=catalog,
+            catalog_json=_catalog_json(catalog),
+            default_vat_bp=settings["vat_rate_bp"],
+            error=message,
+        )
+
+    try:
+        # The three rows arrive with a quantity already in them, which is
+        # what makes the screen quick to use and also what makes an untouched
+        # row look half-filled to the line parser. Rows with neither a
+        # description nor a price were never typed in; they are dropped here
+        # rather than reported as mistakes.
+        def at(values: list[str], index: int) -> str:
+            return values[index] if index < len(values) else ""
+
+        used = [
+            i
+            for i in range(len(item_description))
+            if forms.text(item_description[i]) or forms.text(at(item_price, i))
+        ]
+        if not used:
+            raise FormError("Add at least one line.")
+
+        lines = forms.parse_invoice_lines(
+            descriptions=[item_description[i] for i in used],
+            descriptions_ar=[""] * len(used),
+            kinds=["service"] * len(used),
+            units=["pcs"] * len(used),
+            quantities=[at(item_qty, i) for i in used],
+            prices=[at(item_price, i) for i in used],
+            catalog_ids=[at(item_catalog_id, i) for i in used],
+        )
+
+        # An existing customer if one was chosen, otherwise a new one from the
+        # name typed in. Creating it here is the whole point: stopping to fill
+        # in a customer form is what makes people reach for a paper pad.
+        chosen = forms.opt_int(customer_id)
+        if chosen is None:
+            name = forms.required_text(customer_name, field="Customer")
+            chosen = repo.create_customer(conn, {
+                "name": name,
+                "phone": forms.text(customer_phone),
+                "notes": "Added from a quick invoice.",
+            })
+
+        kind = forms.one_of(doc_type, ("tax", "plain"), default="tax")
+        invoice_id = repo.create_invoice(
+            conn,
+            {
+                "customer_id": chosen,
+                "vehicle_id": None,
+                "issue_date": date.today().isoformat(),
+                "due_date": None,
+                "odometer": None,
+                "status": "issued",
+                "vat_rate_bp": settings["vat_rate_bp"] if kind == "tax" else 0,
+                "prices_include_vat": settings["prices_include_vat"],
+                "currency_code": settings["currency_code"],
+                "discount_minor": 0,
+                "discount_mode": "amount",
+                "discount_rate_bp": 0,
+                "notes": "",
+                "doc_type": kind,
+            },
+            lines,
+        )
+    except FormError as exc:
+        return back(str(exc))
+
+    # Counter sales are usually paid on the spot, so the money can be recorded
+    # in the same breath rather than needing a second visit to the screen.
+    if forms.checkbox(paid_now):
+        invoice = repo.get_invoice(conn, invoice_id)
+        repo.add_payment(conn, {
+            "invoice_id": invoice_id,
+            "paid_on": date.today().isoformat(),
+            "amount_minor": invoice["total_minor"],
+            "method": forms.one_of(
+                payment_method, ("cash", "card", "transfer", "cheque", "other"),
+                default="cash",
+            ),
+            "reference": "",
+            "notes": "",
+        })
+
+    return go(f"/invoices/{invoice_id}/print")
+
+
+# NOTE ON ORDER: this has to be declared before /invoices/{invoice_id}.
+# FastAPI matches routes in the order they are defined, so a later
+# "/invoices/quick" would be read as an invoice whose id is "quick"
+# and rejected before it ever reached this function.
 @app.get("/invoices/{invoice_id}", response_class=HTMLResponse)
 def invoice_detail(
     invoice_id: int, request: Request, conn: Connection = Depends(get_conn)
@@ -1078,6 +1380,7 @@ def invoice_update(
     odometer: str = Form(""),
     notes: str = Form(""),
     discount: str = Form(""),
+    discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
     doc_type: str = Form("tax"),
@@ -1093,6 +1396,15 @@ def invoice_update(
 ):
     settings = repo.get_settings(conn)
     try:
+        lines = forms.parse_invoice_lines(
+            descriptions=item_description,
+            descriptions_ar=item_description_ar,
+            kinds=item_kind,
+            units=item_unit,
+            quantities=item_qty,
+            prices=item_price,
+            catalog_ids=item_catalog_id,
+        )
         header = _invoice_payload(
             settings=settings,
             customer_id=customer_id,
@@ -1106,16 +1418,10 @@ def invoice_update(
             prices_include_vat=prices_include_vat,
             doc_type=doc_type,
             status=status,
+            lines=lines,
+            discount_mode=discount_mode,
         )
-        lines = forms.parse_invoice_lines(
-            descriptions=item_description,
-            descriptions_ar=item_description_ar,
-            kinds=item_kind,
-            units=item_unit,
-            quantities=item_qty,
-            prices=item_price,
-            catalog_ids=item_catalog_id,
-        )
+
     except FormError as exc:
         return render(
             request,
@@ -1350,6 +1656,8 @@ def _estimate_payload(
     discount: str,
     vat_rate: str,
     prices_include_vat: str | None,
+    lines: list[dict[str, Any]] | None = None,
+    discount_mode: str = "amount",
 ) -> dict[str, Any]:
     issued = forms.iso_date(issue_date, default_today=True)
     expires = forms.iso_date(valid_until)
@@ -1365,7 +1673,17 @@ def _estimate_payload(
         "issue_date": issued,
         "valid_until": expires,
         "notes": forms.text(notes),
-        "discount_minor": forms.money(discount, field="Discount"),
+        **dict(zip(
+            ("discount_minor", "discount_mode", "discount_rate_bp"),
+            forms.discount(
+                discount, discount_mode,
+                subtotal_minor=sum(
+                    line_total(line["qty_milli"], line["unit_price_minor"])
+                    for line in (lines or [])
+                ),
+            ),
+            strict=True,
+        )),
         "vat_rate_bp": forms.vat_rate(vat_rate, default=settings["vat_rate_bp"]),
         "prices_include_vat": forms.checkbox(prices_include_vat),
         "currency_code": settings["currency_code"],
@@ -1384,6 +1702,7 @@ def estimate_create(
     valid_until: str = Form(""),
     notes: str = Form(""),
     discount: str = Form(""),
+    discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
     item_catalog_id: list[str] = Form([]),
@@ -1397,12 +1716,6 @@ def estimate_create(
 ):
     settings = repo.get_settings(conn)
     try:
-        header = _estimate_payload(
-            settings=settings, customer_id=customer_id, vehicle_id=vehicle_id,
-            issue_date=issue_date, valid_until=valid_until, notes=notes,
-            discount=discount, vat_rate=vat_rate,
-            prices_include_vat=prices_include_vat,
-        )
         lines = forms.parse_invoice_lines(
             descriptions=item_description,
             descriptions_ar=item_description_ar,
@@ -1411,6 +1724,13 @@ def estimate_create(
             quantities=item_qty,
             prices=item_price,
             catalog_ids=item_catalog_id,
+        )
+        header = _estimate_payload(
+            settings=settings, customer_id=customer_id, vehicle_id=vehicle_id,
+            issue_date=issue_date, valid_until=valid_until, notes=notes,
+            discount=discount, vat_rate=vat_rate,
+            prices_include_vat=prices_include_vat,
+            lines=lines, discount_mode=discount_mode,
         )
     except FormError as exc:
         return render(
@@ -1427,21 +1747,40 @@ def estimate_create(
 
 
 def _estimate_message(conn: Connection, estimate: Any, items: Any, lang: str) -> str:
-    """The message body sent with an estimate, from the Settings template."""
+    """The message body sent with an estimate, from the Settings template.
+
+    ``lang`` is the language of the *message*, which is not necessarily the
+    language of the interface: the person sending it reads Arabic, the
+    customer may not, and the customer is the one who has to understand it.
+    """
     settings = repo.get_settings(conn)
     template = settings["message_template_ar"] if lang == "ar" else settings["message_template_en"]
     currency = settings["currency_code"]
+
+    # Formatted here rather than inside messaging.py, so the message agrees
+    # with the printed estimate down to the decimal place.
+    lines = [
+        {
+            "description": localised(item, "description", lang),
+            "qty": format_qty(item["qty_milli"]),
+            "price": format_money(item["unit_price_minor"], ""),
+            "amount": format_money(item["line_total_minor"], ""),
+        }
+        for item in items
+    ]
+    more = "و{n} أخرى" if lang == "ar" else "and {n} more"
+
     return messaging.render_template(
         template,
         {
             "customer": localised(estimate, "customer_name", lang),
             "business": localised(settings, "business_name_en", lang),
             "number": estimate["estimate_no"],
+            "subtotal": format_money(estimate["subtotal_minor"], currency),
+            "vat": format_money(estimate["vat_minor"], currency),
             "total": format_money(estimate["total_minor"], currency),
             "valid_until": estimate["valid_until"] or "",
-            "items": messaging.summarise_items(
-                [localised(i, "description", lang) for i in items]
-            ),
+            "items": messaging.itemise(lines, more=more),
         },
     )
 
@@ -1454,8 +1793,17 @@ def estimate_detail(
     items = repo.get_estimate_items(conn, estimate_id)
     settings = repo.get_settings(conn)
     lang = current_lang(request, settings)
-    message = _estimate_message(conn, estimate, items, lang)
     country = settings["default_country_code"]
+
+    # Both languages are built here and the page switches between them, rather
+    # than the message following the interface language. Which language the
+    # customer reads has nothing to do with which one the workshop works in,
+    # and changing the whole interface to send one message in Arabic is a
+    # silly thing to make somebody do.
+    messages = {
+        code: _estimate_message(conn, estimate, items, code) for code in ("en", "ar")
+    }
+    phone = estimate["customer_phone"]
 
     return render(
         request,
@@ -1463,11 +1811,17 @@ def estimate_detail(
         "estimate_detail.html",
         estimate=estimate,
         items=items,
-        message=message,
-        whatsapp_url=messaging.whatsapp_link(
-            estimate["customer_phone"], message, country
-        ),
-        sms_url=messaging.sms_link(estimate["customer_phone"], message, country),
+        message_lang=lang,
+        messages=messages,
+        whatsapp_urls={
+            code: messaging.whatsapp_link(phone, body, country)
+            for code, body in messages.items()
+        },
+        sms_urls={
+            code: messaging.sms_link(phone, body, country)
+            for code, body in messages.items()
+        },
+        has_phone=bool(messaging.normalise_phone(phone, country)),
         provider_note=messaging.provider_note(lang),
     )
 
@@ -1500,6 +1854,7 @@ def estimate_update(
     valid_until: str = Form(""),
     notes: str = Form(""),
     discount: str = Form(""),
+    discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
     item_catalog_id: list[str] = Form([]),
@@ -1513,12 +1868,6 @@ def estimate_update(
 ):
     settings = repo.get_settings(conn)
     try:
-        header = _estimate_payload(
-            settings=settings, customer_id=customer_id, vehicle_id=vehicle_id,
-            issue_date=issue_date, valid_until=valid_until, notes=notes,
-            discount=discount, vat_rate=vat_rate,
-            prices_include_vat=prices_include_vat,
-        )
         lines = forms.parse_invoice_lines(
             descriptions=item_description,
             descriptions_ar=item_description_ar,
@@ -1527,6 +1876,13 @@ def estimate_update(
             quantities=item_qty,
             prices=item_price,
             catalog_ids=item_catalog_id,
+        )
+        header = _estimate_payload(
+            settings=settings, customer_id=customer_id, vehicle_id=vehicle_id,
+            issue_date=issue_date, valid_until=valid_until, notes=notes,
+            discount=discount, vat_rate=vat_rate,
+            prices_include_vat=prices_include_vat,
+            lines=lines, discount_mode=discount_mode,
         )
         repo.update_estimate(conn, estimate_id, header, lines)
     except FormError as exc:
@@ -1850,6 +2206,8 @@ def contract_detail(
         items=repo.get_order_items(conn, order_id),
         parts=repo.get_order_parts(conn, order_id),
         totals=repo.order_totals(conn, order_id),
+        order_issues=repo.list_order_issues(conn, order_id),
+        known_issues=repo.list_known_issues(conn),
     )
 
 
@@ -1988,6 +2346,13 @@ def contract_print(
         items=repo.get_order_items(conn, order_id),
         parts=repo.get_order_parts(conn, order_id),
         totals=repo.order_totals(conn, order_id),
+        # Only the ones ticked to be shown. Recording that a fault was ruled
+        # out is useful internally and is not necessarily the customer's
+        # business, which is what that tick decides.
+        order_issues=[
+            link for link in repo.list_order_issues(conn, order_id)
+            if link["show_on_print"]
+        ],
         autoprint=bool(autoprint),
         logo_uri=repo.logo_data_uri(conn),
     )
@@ -2009,6 +2374,10 @@ def contract_pdf(
         items=repo.get_order_items(conn, order_id),
         parts=repo.get_order_parts(conn, order_id),
         totals=repo.order_totals(conn, order_id),
+        order_issues=[
+            link for link in repo.list_order_issues(conn, order_id)
+            if link["show_on_print"]
+        ],
         autoprint=False,
         pdf=True,
         logo_uri=repo.logo_data_uri(conn),
@@ -2031,6 +2400,166 @@ def contract_pdf(
 # --------------------------------------------------------------------------
 # Settings
 # --------------------------------------------------------------------------
+
+
+# ==========================================================================
+# Known faults
+# ==========================================================================
+
+
+def _issue_payload(
+    make: str, model: str, engine: str, year_from: str, year_to: str,
+    title_en: str, title_ar: str, symptoms_en: str, symptoms_ar: str,
+    check_en: str, check_ar: str, severity: str, notes: str,
+    is_active: str | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "make": forms.required_text(make, field="Make"),
+        "model": forms.text(model),
+        "engine": forms.text(engine),
+        "year_from": forms.opt_int(year_from),
+        "year_to": forms.opt_int(year_to),
+        "title_en": forms.required_text(title_en, field="Title"),
+        "title_ar": forms.text(title_ar),
+        "symptoms_en": forms.text(symptoms_en),
+        "symptoms_ar": forms.text(symptoms_ar),
+        "check_en": forms.text(check_en),
+        "check_ar": forms.text(check_ar),
+        "severity": forms.one_of(severity, ("low", "medium", "high"), default="medium"),
+        "notes": forms.text(notes),
+    }
+    if is_active is not None:
+        data["is_active"] = forms.checkbox(is_active)
+    return data
+
+
+@app.get("/issues", response_class=HTMLResponse)
+def issues_list(
+    request: Request,
+    make: str = Query(""),
+    q: str = Query(""),
+    inactive: str = Query(""),
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "issues_list.html",
+        issues=repo.list_known_issues(
+            conn, make=make, search=q, include_inactive=bool(inactive)
+        ),
+        makes=repo.known_issue_makes(conn),
+        make=make,
+        q=q,
+        inactive=bool(inactive),
+    )
+
+
+@app.get("/issues/new", response_class=HTMLResponse)
+def issue_new(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+    return render(request, conn, "issue_form.html", issue=None, error="")
+
+
+@app.post("/issues/new")
+def issue_create(
+    request: Request,
+    make: str = Form(""), model: str = Form(""), engine: str = Form(""),
+    year_from: str = Form(""), year_to: str = Form(""),
+    title_en: str = Form(""), title_ar: str = Form(""),
+    symptoms_en: str = Form(""), symptoms_ar: str = Form(""),
+    check_en: str = Form(""), check_ar: str = Form(""),
+    severity: str = Form("medium"), notes: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        data = _issue_payload(make, model, engine, year_from, year_to,
+                              title_en, title_ar, symptoms_en, symptoms_ar,
+                              check_en, check_ar, severity, notes)
+        repo.create_known_issue(conn, data)
+    except FormError as exc:
+        return render(request, conn, "issue_form.html", issue=None, error=str(exc))
+    return go("/issues", msg="msg.created")
+
+
+@app.get("/issues/{issue_id}/edit", response_class=HTMLResponse)
+def issue_edit(
+    issue_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(
+        request, conn, "issue_form.html",
+        issue=repo.get_known_issue(conn, issue_id), error="",
+    )
+
+
+@app.post("/issues/{issue_id}/edit")
+def issue_update(
+    issue_id: int,
+    request: Request,
+    make: str = Form(""), model: str = Form(""), engine: str = Form(""),
+    year_from: str = Form(""), year_to: str = Form(""),
+    title_en: str = Form(""), title_ar: str = Form(""),
+    symptoms_en: str = Form(""), symptoms_ar: str = Form(""),
+    check_en: str = Form(""), check_ar: str = Form(""),
+    severity: str = Form("medium"), notes: str = Form(""),
+    is_active: str = Form(None),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        data = _issue_payload(make, model, engine, year_from, year_to,
+                              title_en, title_ar, symptoms_en, symptoms_ar,
+                              check_en, check_ar, severity, notes)
+        # The edit form always draws this box, so its absence is the box
+        # being cleared, not a field that was never offered. Written
+        # unconditionally here for that reason -- the shared payload builder
+        # leaves it alone so creating a fault does not have to mention it.
+        data["is_active"] = forms.checkbox(is_active)
+        repo.update_known_issue(conn, issue_id, data)
+    except FormError as exc:
+        return render(
+            request, conn, "issue_form.html",
+            issue=repo.get_known_issue(conn, issue_id), error=str(exc),
+        )
+    return go("/issues", msg="msg.saved")
+
+
+@app.post("/issues/{issue_id}/delete")
+def issue_delete(issue_id: int, conn: Connection = Depends(get_conn)):
+    repo.delete_known_issue(conn, issue_id)
+    return go("/issues", msg="msg.deleted")
+
+
+# -- attaching a fault to a job --------------------------------------------
+
+
+@app.post("/contracts/{order_id}/issues")
+def contract_attach_issue(
+    order_id: int,
+    known_issue_id: str = Form(""),
+    outcome: str = Form("suspected"),
+    show_on_print: str = Form(None),
+    note: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    issue_id = forms.opt_int(known_issue_id)
+    if issue_id is None:
+        return go(f"/contracts/{order_id}", err="Choose a fault to attach.")
+    repo.attach_issue(
+        conn, order_id, issue_id,
+        outcome=forms.one_of(
+            outcome, ("suspected", "confirmed", "ruled_out", "repaired"),
+            default="suspected",
+        ),
+        show_on_print=bool(forms.checkbox(show_on_print)),
+        note=forms.text(note),
+    )
+    return go(f"/contracts/{order_id}", msg="msg.saved")
+
+
+@app.post("/contract-issues/{link_id}/delete")
+def contract_detach_issue(link_id: int, conn: Connection = Depends(get_conn)):
+    order_id = repo.detach_issue(conn, link_id)
+    return go(f"/contracts/{order_id}", msg="msg.deleted")
+
 
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
@@ -2236,6 +2765,37 @@ def settings_backup() -> FileResponse:
     return response
 
 
+@app.get("/settings/backup.xlsx")
+def settings_backup_excel(request: Request, conn: Connection = Depends(get_conn)):
+    """Download every record as an Excel workbook.
+
+    Not a backup, and the file says so on its first sheet. This is the copy
+    that stays readable when the software is not: an accountant, an auditor
+    or a buyer can open it, and so can you in five years when none of this is
+    installed anywhere.
+    """
+    stamp = date.today().isoformat()
+    tmp = TemporaryDirectory()
+    target = Path(tmp.name) / f"carservice-records-{stamp}.xlsx"
+
+    try:
+        exporting.write_workbook(target, conn)
+    except ModuleNotFoundError:
+        # Shipped as a dependency, but an old virtual environment may predate
+        # it. Say what is missing rather than returning a broken download.
+        tmp.cleanup()
+        lang = current_lang(request, repo.get_settings(conn))
+        return go("/settings", err=t("set.excel_unavailable", lang))
+
+    response = FileResponse(
+        target,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=target.name,
+    )
+    response.background = _cleanup(tmp)
+    return response
+
+
 def _cleanup(tmp: TemporaryDirectory):
     from starlette.background import BackgroundTask
 
@@ -2330,3 +2890,246 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
+
+
+# ---------------------------------------------------------------------------
+# Inspections — the check that happens before anyone quotes
+# ---------------------------------------------------------------------------
+
+
+def _catalog_json(catalog: Any) -> list[dict[str, Any]]:
+    """The catalogue as plain dictionaries, for embedding in a page.
+
+    Shared so every line editor sees the same shape; a second copy of this
+    drifting from the first is how one screen starts filling prices in and
+    another stops.
+    """
+    return [
+        {
+            "id": i["id"],
+            "name_en": i["name_en"],
+            "name_ar": i["name_ar"],
+            "kind": i["kind"],
+            "unit": i["unit"],
+            "price": str(from_minor(i["unit_price_minor"])),
+        }
+        for i in catalog
+    ]
+
+
+def _inspection_form_context(
+    conn: Connection, *, inspection: Any = None, items: Any = None, error: str = ""
+) -> dict[str, Any]:
+    return {
+        "inspection": inspection,
+        "items": items or [],
+        "customers": repo.list_customers(conn),
+        "vehicles": repo.list_vehicles(conn),
+        "catalog": repo.list_catalog(conn),
+        "issues": repo.list_known_issues(conn),
+        "checklist": repo.DEFAULT_CHECKLIST,
+        "error": error,
+    }
+
+
+def _inspection_payload(
+    *,
+    customer_id: str,
+    vehicle_id: str,
+    inspected_on: str,
+    odometer: str,
+    technician: str,
+    summary: str,
+    notes: str,
+    status: str | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "customer_id": forms.opt_int(customer_id),
+        "vehicle_id": forms.opt_int(vehicle_id),
+        "inspected_on": forms.iso_date(inspected_on, default_today=True),
+        "odometer": forms.opt_int(odometer),
+        "technician": forms.text(technician),
+        "summary": forms.text(summary),
+        "notes": forms.text(notes),
+    }
+    if status is not None:
+        data["status"] = forms.one_of(
+            status, ("draft", "checked"), default="draft"
+        )
+    if data["customer_id"] is None:
+        raise FormError("Choose a customer for this check.")
+    return data
+
+
+@app.get("/inspections", response_class=HTMLResponse)
+def inspections_list(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+    return render(request, conn, "inspections_list.html",
+                  inspections=repo.list_inspections(conn))
+
+
+@app.get("/inspections/new", response_class=HTMLResponse)
+def inspection_new(
+    request: Request,
+    customer_id: int | None = None,
+    vehicle_id: int | None = None,
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    return render(
+        request, conn, "inspection_form.html",
+        preset_customer_id=customer_id,
+        preset_vehicle_id=vehicle_id,
+        **_inspection_form_context(conn),
+    )
+
+
+@app.post("/inspections/new")
+def inspection_create(
+    request: Request,
+    customer_id: str = Form(""),
+    vehicle_id: str = Form(""),
+    inspected_on: str = Form(""),
+    odometer: str = Form(""),
+    technician: str = Form(""),
+    summary: str = Form(""),
+    notes: str = Form(""),
+    status: str = Form("draft"),
+    item_area: list[str] = Form([]),
+    item_area_ar: list[str] = Form([]),
+    item_condition: list[str] = Form([]),
+    item_finding: list[str] = Form([]),
+    item_finding_ar: list[str] = Form([]),
+    item_issue_id: list[str] = Form([]),
+    item_catalog_id: list[str] = Form([]),
+    item_qty: list[str] = Form([]),
+    item_price: list[str] = Form([]),
+    item_quote: list[str] = Form([]),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        header = _inspection_payload(
+            customer_id=customer_id, vehicle_id=vehicle_id,
+            inspected_on=inspected_on, odometer=odometer, technician=technician,
+            summary=summary, notes=notes, status=status,
+        )
+        items = forms.parse_inspection_items(
+            areas=item_area, areas_ar=item_area_ar, conditions=item_condition,
+            findings=item_finding, findings_ar=item_finding_ar,
+            issue_ids=item_issue_id, catalog_ids=item_catalog_id,
+            quantities=item_qty, prices=item_price, quote_flags=item_quote,
+        )
+    except FormError as exc:
+        return render(
+            request, conn, "inspection_form.html",
+            preset_customer_id=forms.opt_int(customer_id),
+            preset_vehicle_id=forms.opt_int(vehicle_id),
+            **_inspection_form_context(conn, error=str(exc)),
+        )
+
+    inspection_id = repo.create_inspection(conn, header, items)
+    return go(f"/inspections/{inspection_id}")
+
+
+@app.get("/inspections/{inspection_id}", response_class=HTMLResponse)
+def inspection_detail(
+    request: Request, inspection_id: int, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(
+        request, conn, "inspection_detail.html",
+        inspection=repo.get_inspection(conn, inspection_id),
+        items=repo.get_inspection_items(conn, inspection_id),
+    )
+
+
+@app.get("/inspections/{inspection_id}/edit", response_class=HTMLResponse)
+def inspection_edit(
+    request: Request, inspection_id: int, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(
+        request, conn, "inspection_form.html",
+        preset_customer_id=None, preset_vehicle_id=None,
+        **_inspection_form_context(
+            conn,
+            inspection=repo.get_inspection(conn, inspection_id),
+            items=repo.get_inspection_items(conn, inspection_id),
+        ),
+    )
+
+
+@app.post("/inspections/{inspection_id}/edit")
+def inspection_save(
+    request: Request,
+    inspection_id: int,
+    customer_id: str = Form(""),
+    vehicle_id: str = Form(""),
+    inspected_on: str = Form(""),
+    odometer: str = Form(""),
+    technician: str = Form(""),
+    summary: str = Form(""),
+    notes: str = Form(""),
+    status: str = Form("draft"),
+    item_area: list[str] = Form([]),
+    item_area_ar: list[str] = Form([]),
+    item_condition: list[str] = Form([]),
+    item_finding: list[str] = Form([]),
+    item_finding_ar: list[str] = Form([]),
+    item_issue_id: list[str] = Form([]),
+    item_catalog_id: list[str] = Form([]),
+    item_qty: list[str] = Form([]),
+    item_price: list[str] = Form([]),
+    item_quote: list[str] = Form([]),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        header = _inspection_payload(
+            customer_id=customer_id, vehicle_id=vehicle_id,
+            inspected_on=inspected_on, odometer=odometer, technician=technician,
+            summary=summary, notes=notes, status=status,
+        )
+        items = forms.parse_inspection_items(
+            areas=item_area, areas_ar=item_area_ar, conditions=item_condition,
+            findings=item_finding, findings_ar=item_finding_ar,
+            issue_ids=item_issue_id, catalog_ids=item_catalog_id,
+            quantities=item_qty, prices=item_price, quote_flags=item_quote,
+        )
+        repo.update_inspection(conn, inspection_id, header, items)
+    except (FormError, repo.InUse) as exc:
+        return render(
+            request, conn, "inspection_form.html",
+            preset_customer_id=None, preset_vehicle_id=None,
+            **_inspection_form_context(
+                conn,
+                inspection=repo.get_inspection(conn, inspection_id),
+                items=repo.get_inspection_items(conn, inspection_id),
+                error=str(exc),
+            ),
+        )
+    return go(f"/inspections/{inspection_id}")
+
+
+@app.post("/inspections/{inspection_id}/estimate")
+def inspection_to_estimate(
+    request: Request, inspection_id: int, conn: Connection = Depends(get_conn)
+):
+    try:
+        estimate_id = repo.convert_inspection_to_estimate(conn, inspection_id)
+    except repo.InUse as exc:
+        return go(f"/inspections/{inspection_id}", err=str(exc))
+    return go(f"/estimates/{estimate_id}/edit")
+
+
+@app.get("/inspections/{inspection_id}/print", response_class=HTMLResponse)
+def inspection_print(
+    inspection_id: int,
+    request: Request,
+    conn: Connection = Depends(get_conn),
+    autoprint: int = 1,
+) -> HTMLResponse:
+    return render(
+        request,
+        conn,
+        "inspection_print.html",
+        inspection=repo.get_inspection(conn, inspection_id),
+        items=repo.get_inspection_items(conn, inspection_id),
+        autoprint=bool(autoprint),
+        logo_uri=repo.logo_data_uri(conn),
+    )

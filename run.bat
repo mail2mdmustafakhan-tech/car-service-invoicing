@@ -78,6 +78,44 @@ if not exist ".venv\Scripts\python.exe" (
     echo   Setup complete.
 )
 
+REM --- Is something already holding the port? ---------------------------------
+REM
+REM  Worth checking before we start rather than after. If an older copy of this
+REM  software is still running from another folder, uvicorn fails to bind, this
+REM  window scrolls past the error, and the browser keeps showing the OLD app
+REM  at the same address -- which looks exactly like the update not working.
+REM  Catching it here turns a confusing afternoon into one clear sentence.
+
+REM  Deliberately fails OPEN: if PowerShell is missing or the cmdlet is not
+REM  available, PORT_STATE stays empty and we carry on and start normally. A
+REM  false alarm that refused to launch would be worse than the confusion it
+REM  is meant to prevent.
+
+set "PORT_STATE="
+for /f %%R in ('powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %CARSERVICE_PORT% -State Listen -ErrorAction SilentlyContinue) { 'BUSY' } else { 'FREE' }" 2^>nul') do set "PORT_STATE=%%R"
+
+if /i "%PORT_STATE%"=="BUSY" (
+    echo.
+    echo   ================================================
+    echo     Something is ALREADY running on port %CARSERVICE_PORT%.
+    echo.
+    echo     Almost always this is an older copy of this software,
+    echo     started from a different folder and never closed. Your
+    echo     browser would still show that old version, so a new
+    echo     feature would look like it was missing.
+    echo.
+    echo     To fix it: close every other black command window on
+    echo     this computer, then run this file again.
+    echo.
+    echo     If you would rather run both at once, use a free port:
+    echo         set CARSERVICE_PORT=8001
+    echo         run.bat
+    echo   ================================================
+    echo.
+    pause
+    exit /b 1
+)
+
 REM --- Start -----------------------------------------------------------------
 
 echo.

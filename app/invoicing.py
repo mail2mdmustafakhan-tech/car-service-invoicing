@@ -92,6 +92,34 @@ def vat_on_net(net_minor: int, vat_rate_bp: int) -> int:
     return round_half_up(Decimal(net_minor) * vat_rate_bp / BP_PER_UNIT)
 
 
+def discount_amount(subtotal_minor: int, rate_bp: int) -> int:
+    """What a percentage discount comes to, in money.
+
+    The percentage is remembered so the form can show what was typed, but the
+    money is what every total is worked out from. A document that has gone to
+    a customer must not change its mind about the figure on it because
+    somebody later edited a line.
+
+    Rounded half-up like every other amount here, and never more than the
+    subtotal: a discount larger than the bill is a typing mistake, and
+    turning the total negative would be a worse answer than capping it.
+
+    >>> discount_amount(10000, 1000)        # 10% of 100.00
+    1000
+    >>> discount_amount(3333, 1250)         # 12.5% of 33.33 = 4.166 -> 4.17
+    417
+    >>> discount_amount(10000, 0), discount_amount(0, 1500)
+    (0, 0)
+    >>> discount_amount(5000, 2000000)      # 20,000% -- capped at the subtotal
+    5000
+    """
+    if rate_bp < 0:
+        raise ValueError("Discount rate cannot be negative")
+    if subtotal_minor <= 0:
+        return 0
+    return min(round_half_up(Decimal(subtotal_minor) * rate_bp / BP_PER_UNIT), subtotal_minor)
+
+
 def net_from_gross(gross_minor: int, vat_rate_bp: int) -> int:
     """Strip VAT out of a VAT-inclusive amount.
 

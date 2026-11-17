@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field with context %}
+{% set editing = inspection is not none %}
+{% block title %}{{ inspection['inspection_no'] if editing else t('ins.new') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ inspection['inspection_no'] if editing else t('ins.new') }}</h1>
+</div>
+
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<form method="post" id="inspection-form"
+      action="{{ '/inspections/' ~ inspection['id'] ~ '/edit' if editing else '/inspections/new' }}">
+  <section class="panel">
+    <div class="panel-body">
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_customer">{{ t('inv.customer') }}</label>
+          <select id="f_customer" name="customer_id" required>
+            <option value="">—</option>
+            {% for c in customers %}
+            <option value="{{ c['id'] }}"
+              {% if (editing and inspection['customer_id'] == c['id']) or (not editing and preset_customer_id == c['id']) %}selected{% endif %}>
+              {{ loc(c, 'name') }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="f_vehicle">{{ t('inv.vehicle') }}</label>
+          <select id="f_vehicle" name="vehicle_id">
+            <option value="">—</option>
+            {% for v in vehicles %}
+            <option value="{{ v['id'] }}" data-customer="{{ v['customer_id'] }}"
+              {% if (editing and inspection['vehicle_id'] == v['id']) or (not editing and preset_vehicle_id == v['id']) %}selected{% endif %}>
+              {{ v['plate_no'] }} — {{ v['make'] }} {{ v['model'] }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        {{ field('inspected_on', t('ins.date'),
+                 inspection['inspected_on'] if editing else today(), type='date', required=True) }}
+        {{ field('odometer', t('inv.odometer'), inspection['odometer'] if editing else '',
+                 type='number', attrs='min="0" step="1" class="num"', hint='km') }}
+        {{ field('technician', t('con.technician'), inspection['technician'] if editing else '') }}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ t('ins.checklist') }}</h2>
+      <p class="hint">{{ t('ins.checklist_hint') }}</p>
+    </div>
+    <div class="panel-body tight scrollx">
+      <table class="ledger linetable" id="check-table">
+        <thead>
+          <tr>
+            <th style="min-width:200px">{{ t('ins.area') }}</th>
+            <th style="width:130px">{{ t('ins.condition') }}</th>
+            <th style="min-width:220px">{{ t('ins.finding') }}</th>
+            <th style="width:190px">{{ t('ins.known_issue') }}</th>
+            <th style="width:90px" class="num">{{ t('inv.qty') }}</th>
+            <th style="width:120px" class="num">{{ t('ins.est_price') }}</th>
+            <th style="width:110px">{{ t('ins.quote_it') }}</th>
+            <th style="width:44px"></th>
+          </tr>
+        </thead>
+        <tbody id="check-body">
+          {% set rows = items if editing else [] %}
+          {% for it in rows %}
+          <tr class="line-row">
+            <td><input type="text" name="item_area" value="{{ it['area'] }}">
+                <input type="hidden" name="item_area_ar" value="{{ it['area_ar'] }}"></td>
+            <td>
+              <select name="item_condition" class="cond">
+                {% for c in ['ok', 'attention', 'urgent', 'na'] %}
+                <option value="{{ c }}" {% if it['condition'] == c %}selected{% endif %}>{{ t('ins.cond_' ~ c) }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input type="text" name="item_finding" value="{{ it['finding'] }}">
+                <input type="hidden" name="item_finding_ar" value="{{ it['finding_ar'] }}"></td>
+            <td>
+              <select name="item_issue_id">
+                <option value="">—</option>
+                {% for k in issues %}
+                <option value="{{ k['id'] }}" {% if it['known_issue_id'] == k['id'] %}selected{% endif %}>
+                  {{ k['make'] }} — {{ loc(k, 'title') }}
+                </option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input type="text" name="item_qty" class="num line-qty" inputmode="decimal"
+                       value="{{ fmt_qty(it['qty_milli']) }}"></td>
+            <td><input type="text" name="item_price" class="num line-price" inputmode="decimal"
+                       value="{{ from_minor(it['unit_price_minor']) if it['unit_price_minor'] else '' }}">
+                <input type="hidden" name="item_catalog_id" value="{{ it['catalog_item_id'] or '' }}"></td>
+            {# A select, never a checkbox: an unticked checkbox is not
+               submitted, which would shift every later row's answer up one
+               and mark the wrong finding for quoting. #}
+            <td>
+              <select name="item_quote">
+                <option value="0" {% if not it['quote_it'] %}selected{% endif %}>{{ t('ins.quote_no') }}</option>
+                <option value="1" {% if it['quote_it'] %}selected{% endif %}>{{ t('ins.quote_yes') }}</option>
+              </select>
+            </td>
+            <td><button type="button" class="btn small danger line-remove" aria-label="{{ t('inv.remove_line') }}">×</button></td>
+          </tr>
+          {% endfor %}
+
+          {% if not editing %}
+          {# The standard walk-round, pre-filled. A blank checklist gets
+             filled in only where something is wrong, and an empty row is
+             ambiguous forever: not checked, or checked and fine? #}
+          {% for area_en, area_ar in checklist %}
+          <tr class="line-row">
+            <td><input type="text" name="item_area" value="{{ area_ar if lang == 'ar' else area_en }}">
+                <input type="hidden" name="item_area_ar" value="{{ area_ar }}"></td>
+            <td>
+              <select name="item_condition" class="cond">
+                {% for c in ['ok', 'attention', 'urgent', 'na'] %}
+                <option value="{{ c }}">{{ t('ins.cond_' ~ c) }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input type="text" name="item_finding" value="">
+                <input type="hidden" name="item_finding_ar" value=""></td>
+            <td>
+              <select name="item_issue_id">
+                <option value="">—</option>
+                {% for k in issues %}<option value="{{ k['id'] }}">{{ k['make'] }} — {{ loc(k, 'title') }}</option>{% endfor %}
+              </select>
+            </td>
+            <td><input type="text" name="item_qty" class="num line-qty" inputmode="decimal" value="1"></td>
+            <td><input type="text" name="item_price" class="num line-price" inputmode="decimal" value="">
+                <input type="hidden" name="item_catalog_id" value=""></td>
+            <td>
+              <select name="item_quote">
+                <option value="0" selected>{{ t('ins.quote_no') }}</option>
+                <option value="1">{{ t('ins.quote_yes') }}</option>
+              </select>
+            </td>
+            <td><button type="button" class="btn small danger line-remove" aria-label="{{ t('inv.remove_line') }}">×</button></td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+
+      <template id="check-template">
+        <tr class="line-row">
+          <td><input type="text" name="item_area" value="">
+              <input type="hidden" name="item_area_ar" value=""></td>
+          <td>
+            <select name="item_condition" class="cond">
+              {% for c in ['ok', 'attention', 'urgent', 'na'] %}
+              <option value="{{ c }}">{{ t('ins.cond_' ~ c) }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td><input type="text" name="item_finding" value="">
+              <input type="hidden" name="item_finding_ar" value=""></td>
+          <td>
+            <select name="item_issue_id">
+              <option value="">—</option>
+              {% for k in issues %}<option value="{{ k['id'] }}">{{ k['make'] }} — {{ loc(k, 'title') }}</option>{% endfor %}
+            </select>
+          </td>
+          <td><input type="text" name="item_qty" class="num line-qty" inputmode="decimal" value="1"></td>
+          <td><input type="text" name="item_price" class="num line-price" inputmode="decimal" value="">
+              <input type="hidden" name="item_catalog_id" value=""></td>
+          <td>
+            <select name="item_quote">
+              <option value="0" selected>{{ t('ins.quote_no') }}</option>
+              <option value="1">{{ t('ins.quote_yes') }}</option>
+            </select>
+          </td>
+          <td><button type="button" class="btn small danger line-remove" aria-label="{{ t('inv.remove_line') }}">×</button></td>
+        </tr>
+      </template>
+
+      <div class="row-actions">
+        <button class="btn" type="button" id="add-check">{{ t('ins.add_row') }}</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-body">
+      <div class="field">
+        <label for="f_summary">{{ t('ins.summary') }}</label>
+        <textarea id="f_summary" name="summary" rows="3">{{ inspection['summary'] if editing else '' }}</textarea>
+        <p class="hint">{{ t('ins.summary_hint') }}</p>
+      </div>
+      <div class="field">
+        <label for="f_notes">{{ t('inv.notes') }}</label>
+        <textarea id="f_notes" name="notes" rows="2">{{ inspection['notes'] if editing else '' }}</textarea>
+      </div>
+      <div class="field">
+        <label for="f_status">{{ t('inv.status') }}</label>
+        <select id="f_status" name="status" style="max-width:260px">
+          <option value="draft" {% if not editing or inspection['status'] == 'draft' %}selected{% endif %}>{{ t('status.draft') }}</option>
+          <option value="checked" {% if editing and inspection['status'] == 'checked' %}selected{% endif %}>{{ t('status.checked') }}</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <div class="row-actions">
+    <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+    <a class="btn link" href="{{ '/inspections/' ~ inspection['id'] if editing else '/inspections' }}">{{ t('action.cancel') }}</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/money.js') }}"></script>
+<script>
+  /* Rows in and out, and the customer's own cars in the vehicle list. The
+     checklist needs no running total: a check records condition, not money. */
+  (function () {
+      var body = document.getElementById("check-body");
+      var template = document.getElementById("check-template");
+      var add = document.getElementById("add-check");
+
+      if (add) {
+          add.addEventListener("click", function () {
+              var row = template.content.firstElementChild.cloneNode(true);
+              body.appendChild(row);
+              row.querySelector("input[name=item_area]").focus();
+          });
+      }
+
+      body.addEventListener("click", function (event) {
+          if (!event.target.classList.contains("line-remove")) { return; }
+          var row = event.target.closest(".line-row");
+          if (body.querySelectorAll(".line-row").length <= 1) {
+              row.querySelectorAll("input[type=text]").forEach(function (i) { i.value = ""; });
+              return;
+          }
+          row.remove();
+      });
+
+      if (window.CSMoney && window.CSMoney.linkCustomerToVehicle) {
+          window.CSMoney.linkCustomerToVehicle(
+              document.getElementById("f_customer"),
+              document.getElementById("f_vehicle")
+          );
+      }
+  })();
+</script>
+{% endblock %}

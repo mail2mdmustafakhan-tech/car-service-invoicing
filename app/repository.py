@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 from base64 import b64encode
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from .db import transaction
@@ -255,7 +255,7 @@ def reserve_contract_no(conn: sqlite3.Connection) -> str:
 
 CUSTOMER_FIELDS = (
     "name", "name_ar", "phone", "email", "address", "vat_number", "notes",
-    "is_active",
+    "category", "is_active",
 )
 
 
@@ -453,6 +453,7 @@ def vehicle_history(conn: sqlite3.Connection, vehicle_id: int) -> list[Row]:
 
 CATALOG_FIELDS = (
     "code", "name_en", "name_ar", "kind", "unit", "unit_price_minor", "is_active",
+    "manufacturer",
 )
 
 
@@ -530,7 +531,7 @@ def delete_catalog_item(conn: sqlite3.Connection, item_id: int) -> None:
 INVOICE_HEADER_FIELDS = (
     "customer_id", "vehicle_id", "issue_date", "due_date", "odometer",
     "status", "vat_rate_bp", "prices_include_vat", "currency_code",
-    "discount_minor", "notes", "doc_type",
+    "discount_minor", "discount_mode", "discount_rate_bp", "notes", "doc_type",
 )
 
 ITEM_FIELDS = (
@@ -829,7 +830,7 @@ ORDER_ITEM_FIELDS = (
 
 ORDER_PART_FIELDS = (
     "catalog_item_id", "part_number", "description", "description_ar",
-    "qty_milli", "unit_price_minor", "sourced_externally",
+    "qty_milli", "unit_price_minor", "sourced_externally", "source",
 )
 
 
@@ -1155,7 +1156,7 @@ def order_for_invoice(conn: sqlite3.Connection, invoice_id: int) -> Row | None:
 ESTIMATE_HEADER_FIELDS = (
     "customer_id", "vehicle_id", "issue_date", "valid_until", "status",
     "vat_rate_bp", "prices_include_vat", "currency_code", "discount_minor",
-    "notes", "approved_by",
+    "discount_mode", "discount_rate_bp", "notes", "approved_by", "inspection_id",
 )
 
 ESTIMATE_ITEM_FIELDS = (
@@ -1443,6 +1444,8 @@ def convert_estimate_to_invoice(
             "prices_include_vat": estimate["prices_include_vat"],
             "currency_code": estimate["currency_code"],
             "discount_minor": estimate["discount_minor"],
+            "discount_mode": estimate["discount_mode"],
+            "discount_rate_bp": estimate["discount_rate_bp"],
             "notes": estimate["notes"],
         },
         lines,
@@ -1835,3 +1838,682 @@ def cars_in_workshop(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:
         """,
         (limit,),
     )
+
+
+# ==========================================================================
+# Photographs of catalogue parts
+# ==========================================================================
+
+#: Pictures only. A PDF of a part is a catalogue page, not a photograph of
+#: the thing on the shelf, and the gallery is there to answer "is this the
+#: one?" at the counter.
+ITEM_IMAGE_SIGNATURES: tuple[tuple[bytes, str, str], ...] = tuple(
+    row for row in ATTACHMENT_SIGNATURES if row[1].startswith("image/")
+)
+
+MAX_ITEM_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+def sniff_item_image(data: bytes) -> tuple[str, str] | None:
+    """What this file actually is, by its first bytes.
+
+    Never the type the browser declared. That is a claim made by whoever
+    sent the file, and a .jpg that is really something else should not be
+    stored as one.
+    """
+    for signature, mime, extension in ITEM_IMAGE_SIGNATURES:
+        if data.startswith(signature):
+            return mime, extension
+    return None
+
+
+def add_item_image(
+    conn: sqlite3.Connection,
+    item_id: int,
+    data: bytes,
+    *,
+    original_name: str = "",
+    caption: str = "",
+) -> int:
+    """Store a photograph against a catalogue item.
+
+    Same rules as a customer attachment, and for the same reasons: the bytes
+    go beside the database under a generated name, so years of photographs
+    never make the database awkward to copy, and a filename chosen by
+    somebody else never decides where a file lands on disk.
+    """
+    from uuid import uuid4
+
+    from .db import attachments_dir
+
+    get_catalog_item(conn, item_id)
+
+    if not data:
+        raise ValueError("No file was uploaded.")
+    if len(data) > MAX_ITEM_IMAGE_BYTES:
+        raise ValueError(
+            f"That image is {len(data) / 1024 / 1024:.1f} MB. The limit is 10 MB."
+        )
+    sniffed = sniff_item_image(data)
+    if sniffed is None:
+        raise ValueError("Only JPEG and PNG images can be added to a part.")
+    mime, extension = sniffed
+
+    stored_name = f"{uuid4().hex}{extension}"
+    folder = attachments_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / stored_name).write_bytes(data)
+
+    try:
+        with transaction(conn):
+            cur = conn.execute(
+                """
+                INSERT INTO catalog_item_images
+                    (catalog_item_id, stored_name, original_name, mime,
+                     size_bytes, caption)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (item_id, stored_name, (original_name or stored_name)[:200],
+                 mime, len(data), caption[:300]),
+            )
+    except Exception:
+        (folder / stored_name).unlink(missing_ok=True)
+        raise
+    return int(cur.lastrowid)
+
+
+def list_item_images(conn: sqlite3.Connection, item_id: int) -> list[Row]:
+    return _all(
+        conn,
+        "SELECT * FROM catalog_item_images WHERE catalog_item_id = ? ORDER BY id",
+        (item_id,),
+    )
+
+
+def get_item_image(conn: sqlite3.Connection, image_id: int) -> Row:
+    return _require(
+        _one(conn, "SELECT * FROM catalog_item_images WHERE id = ?", (image_id,)),
+        "Image",
+    )
+
+
+def item_image_file(conn: sqlite3.Connection, image_id: int):
+    """The path on disk, checked to be inside the attachments folder.
+
+    The stored name is generated by us, so this should always hold. It is
+    checked anyway: a path that escapes its folder is the kind of bug that
+    is cheap to prevent and expensive to find.
+    """
+    from .db import attachments_dir
+
+    row = get_item_image(conn, image_id)
+    folder = attachments_dir().resolve()
+    path = (folder / row["stored_name"]).resolve()
+    if folder not in path.parents:
+        raise NotFound("Image")
+    return row, path
+
+
+def delete_item_image(conn: sqlite3.Connection, image_id: int) -> None:
+    row, path = item_image_file(conn, image_id)
+    with transaction(conn):
+        conn.execute("DELETE FROM catalog_item_images WHERE id = ?", (image_id,))
+    path.unlink(missing_ok=True)
+
+
+# ==========================================================================
+# Known faults
+# ==========================================================================
+
+ISSUE_FIELDS = (
+    "make", "model", "engine", "year_from", "year_to",
+    "title_en", "title_ar", "symptoms_en", "symptoms_ar",
+    "check_en", "check_ar", "severity", "is_active", "notes",
+)
+
+
+def list_known_issues(
+    conn: sqlite3.Connection,
+    *,
+    make: str = "",
+    search: str = "",
+    include_inactive: bool = False,
+) -> list[Row]:
+    where, params = ["1 = 1"], []
+    if make:
+        where.append("make = ?")
+        params.append(make)
+    if not include_inactive:
+        where.append("is_active = 1")
+    if search:
+        where.append(
+            "(title_en LIKE ? OR title_ar LIKE ? OR model LIKE ? OR engine LIKE ?"
+            " OR symptoms_en LIKE ?)"
+        )
+        params += [f"%{search}%"] * 5
+    return _all(
+        conn,
+        f"""
+        SELECT k.*,
+               (SELECT COUNT(*) FROM repair_order_issues oi
+                 WHERE oi.known_issue_id = k.id) AS case_count
+          FROM known_issues k
+         WHERE {' AND '.join(where)}
+         ORDER BY make, model, title_en
+        """,
+        tuple(params),
+    )
+
+
+def known_issue_makes(conn: sqlite3.Connection) -> list[str]:
+    return [
+        row["make"]
+        for row in _all(conn, "SELECT DISTINCT make FROM known_issues ORDER BY make")
+    ]
+
+
+def get_known_issue(conn: sqlite3.Connection, issue_id: int) -> Row:
+    return _require(
+        _one(conn, "SELECT * FROM known_issues WHERE id = ?", (issue_id,)),
+        "Known issue",
+    )
+
+
+def create_known_issue(conn: sqlite3.Connection, data: Mapping[str, Any]) -> int:
+    values = _pick(data, ISSUE_FIELDS)
+    cols = ", ".join(values)
+    marks = ", ".join("?" for _ in values)
+    with transaction(conn):
+        cur = conn.execute(
+            f"INSERT INTO known_issues ({cols}) VALUES ({marks})", list(values.values())
+        )
+    return int(cur.lastrowid)
+
+
+def update_known_issue(
+    conn: sqlite3.Connection, issue_id: int, data: Mapping[str, Any]
+) -> None:
+    get_known_issue(conn, issue_id)
+    values = _pick(data, ISSUE_FIELDS)
+    if not values:
+        return
+    assignments = ", ".join(f"{col} = ?" for col in values)
+    with transaction(conn):
+        conn.execute(
+            f"UPDATE known_issues SET {assignments}, updated_at = datetime('now')"
+            " WHERE id = ?",
+            [*values.values(), issue_id],
+        )
+
+
+def delete_known_issue(conn: sqlite3.Connection, issue_id: int) -> None:
+    get_known_issue(conn, issue_id)
+    with transaction(conn):
+        conn.execute("DELETE FROM known_issues WHERE id = ?", (issue_id,))
+
+
+# -- faults attached to a job ----------------------------------------------
+
+
+def list_order_issues(conn: sqlite3.Connection, order_id: int) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT oi.*, k.make, k.model, k.engine, k.severity,
+               k.title_en, k.title_ar, k.symptoms_en, k.symptoms_ar,
+               k.check_en, k.check_ar
+          FROM repair_order_issues oi
+          JOIN known_issues k ON k.id = oi.known_issue_id
+         WHERE oi.repair_order_id = ?
+         ORDER BY oi.id
+        """,
+        (order_id,),
+    )
+
+
+def attach_issue(
+    conn: sqlite3.Connection,
+    order_id: int,
+    issue_id: int,
+    *,
+    outcome: str = "suspected",
+    show_on_print: bool = True,
+    note: str = "",
+) -> None:
+    """Record that a known fault was considered on this job.
+
+    Attaching the same fault twice is treated as editing the first, not as an
+    error: the second attempt is somebody updating what they found, and an
+    error message there would only be in the way.
+    """
+    get_repair_order(conn, order_id)
+    get_known_issue(conn, issue_id)
+    with transaction(conn):
+        conn.execute(
+            """
+            INSERT INTO repair_order_issues
+                (repair_order_id, known_issue_id, outcome, show_on_print, note)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (repair_order_id, known_issue_id) DO UPDATE SET
+                outcome = excluded.outcome,
+                show_on_print = excluded.show_on_print,
+                note = excluded.note
+            """,
+            (order_id, issue_id, outcome, 1 if show_on_print else 0, note[:500]),
+        )
+
+
+def detach_issue(conn: sqlite3.Connection, link_id: int) -> int:
+    """Remove a fault from a job, returning the job it was on."""
+    row = _require(
+        _one(conn, "SELECT * FROM repair_order_issues WHERE id = ?", (link_id,)),
+        "Linked issue",
+    )
+    with transaction(conn):
+        conn.execute("DELETE FROM repair_order_issues WHERE id = ?", (link_id,))
+    return int(row["repair_order_id"])
+
+
+def issue_case_counts(conn: sqlite3.Connection, limit: int = 12) -> list[Row]:
+    """How often each fault has actually been seen, most first."""
+    return _all(
+        conn,
+        """
+        SELECT k.id, k.make, k.model, k.title_en, k.title_ar, k.severity,
+               COUNT(oi.id) AS cases,
+               SUM(CASE WHEN oi.outcome IN ('confirmed', 'repaired') THEN 1 ELSE 0 END)
+                   AS confirmed
+          FROM known_issues k
+          JOIN repair_order_issues oi ON oi.known_issue_id = k.id
+         GROUP BY k.id
+         ORDER BY cases DESC, confirmed DESC
+         LIMIT ?
+        """,
+        (limit,),
+    )
+
+
+# ==========================================================================
+# Analytics
+# ==========================================================================
+# All of this is worked out from the records rather than stored. A cached
+# "active customer" flag is wrong the moment nobody updates it, and these
+# queries run against a few thousand rows on one PC -- the cost of being
+# right is nothing here.
+
+
+def monthly_money(conn: sqlite3.Connection, months: int = 12) -> list[Row]:
+    """Invoiced and collected per month, with the balance owed at month end.
+
+    The month-end balance is cumulative -- everything issued up to that point
+    less everything paid up to that point -- which is the figure a person
+    means by "what are we owed". A per-month difference would show the month's
+    movement and be mistaken for the balance.
+    """
+    return _all(
+        conn,
+        """
+        WITH months AS (
+            SELECT DISTINCT strftime('%Y-%m', issue_date) AS ym
+              FROM invoices WHERE status = 'issued'
+            UNION
+            SELECT DISTINCT strftime('%Y-%m', paid_on) FROM payments
+        )
+        SELECT m.ym,
+               COALESCE((SELECT SUM(i.total_minor) FROM invoices i
+                          WHERE i.status = 'issued'
+                            AND strftime('%Y-%m', i.issue_date) = m.ym), 0) AS invoiced_minor,
+               COALESCE((SELECT SUM(p.amount_minor) FROM payments p
+                          WHERE strftime('%Y-%m', p.paid_on) = m.ym), 0) AS collected_minor,
+               COALESCE((SELECT SUM(i.total_minor) FROM invoices i
+                          WHERE i.status = 'issued'
+                            AND strftime('%Y-%m', i.issue_date) <= m.ym), 0)
+               - COALESCE((SELECT SUM(p.amount_minor) FROM payments p
+                            WHERE strftime('%Y-%m', p.paid_on) <= m.ym), 0) AS outstanding_minor
+          FROM months m
+         ORDER BY m.ym DESC
+         LIMIT ?
+        """,
+        (months,),
+    )[::-1]
+
+
+def cars_by_make(conn: sqlite3.Connection, limit: int = 8) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT COALESCE(NULLIF(TRIM(make), ''), 'Unknown') AS label,
+               COUNT(*) AS cars,
+               COUNT(DISTINCT customer_id) AS customers
+          FROM vehicles
+         GROUP BY label
+         ORDER BY cars DESC
+         LIMIT ?
+        """,
+        (limit,),
+    )
+
+
+def cars_by_model(conn: sqlite3.Connection, limit: int = 10) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT TRIM(COALESCE(make, '') || ' ' || COALESCE(model, '')) AS label,
+               COUNT(*) AS cars
+          FROM vehicles
+         WHERE TRIM(COALESCE(make, '') || COALESCE(model, '')) <> ''
+         GROUP BY label
+         ORDER BY cars DESC
+         LIMIT ?
+        """,
+        (limit,),
+    )
+
+
+def customer_categories(conn: sqlite3.Connection) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT category AS label, COUNT(*) AS customers
+          FROM customers
+         WHERE is_active = 1
+         GROUP BY category
+         ORDER BY customers DESC
+        """,
+    )
+
+
+def customer_activity(conn: sqlite3.Connection, months: int = 12) -> dict[str, int]:
+    """How many customers have actually been in lately.
+
+    "Active" is a question about the records, not a flag somebody remembers to
+    tick. A customer who has not been seen in a year is not active however the
+    box is set.
+    """
+    cutoff = (date.today() - timedelta(days=30 * months)).isoformat()
+    row = _one(
+        conn,
+        """
+        SELECT
+          (SELECT COUNT(*) FROM customers WHERE is_active = 1) AS total,
+          (SELECT COUNT(DISTINCT customer_id) FROM invoices
+            WHERE status = 'issued' AND issue_date >= ?) AS invoiced,
+          (SELECT COUNT(DISTINCT customer_id) FROM repair_orders
+            WHERE date_in >= ?) AS visited
+        """,
+        (cutoff, cutoff),
+    )
+    seen = _one(
+        conn,
+        """
+        SELECT COUNT(*) AS n FROM (
+            SELECT customer_id FROM invoices
+             WHERE status = 'issued' AND issue_date >= ?
+            UNION
+            SELECT customer_id FROM repair_orders WHERE date_in >= ?
+        )
+        """,
+        (cutoff, cutoff),
+    )
+    total = int(row["total"] or 0)
+    active = int(seen["n"] or 0)
+    return {
+        "total": total,
+        "active": active,
+        "dormant": max(total - active, 0),
+        "months": months,
+    }
+
+
+def top_customers(conn: sqlite3.Connection, limit: int = 8) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT c.id, c.name, c.category,
+               COUNT(i.id) AS invoices,
+               COALESCE(SUM(i.total_minor), 0) AS total_minor
+          FROM customers c
+          JOIN invoices i ON i.customer_id = c.id AND i.status = 'issued'
+         GROUP BY c.id
+         ORDER BY total_minor DESC
+         LIMIT ?
+        """,
+        (limit,),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Inspections — the check that happens before anyone quotes
+# ---------------------------------------------------------------------------
+
+#: The standard walk-round, offered as the starting rows of a new check.
+#:
+#: A blank checklist gets filled in where something is wrong and left empty
+#: everywhere else, and an empty row is ambiguous forever after: was it not
+#: checked, or checked and fine? Starting from a list means every row carries
+#: an answer, and the ones nobody touched say 'ok' because that is what the
+#: technician saw.
+#:
+#: Edit freely: rows can be removed and added on the form. This is where to
+#: change what the workshop checks as standard.
+DEFAULT_CHECKLIST: tuple[tuple[str, str], ...] = (
+    ("Engine oil level and condition", "مستوى وحالة زيت المحرك"),
+    ("Coolant level and condition", "مستوى وحالة سائل التبريد"),
+    ("Brake pads — front", "فحمات الفرامل الأمامية"),
+    ("Brake pads — rear", "فحمات الفرامل الخلفية"),
+    ("Brake discs", "هوبات الفرامل"),
+    ("Brake fluid", "زيت الفرامل"),
+    ("Tyres — tread, pressure and age", "الإطارات: النقشة والضغط والعمر"),
+    ("Battery and charging", "البطارية والشحن"),
+    ("Air conditioning", "التكييف"),
+    ("Lights and indicators", "الأضواء والإشارات"),
+    ("Wipers and washers", "المساحات ورشاش الماء"),
+    ("Suspension and shock absorbers", "التعليق والمساعدات"),
+    ("Steering and alignment", "التوجيه وضبط الزوايا"),
+    ("Belts and hoses", "السيور والخراطيم"),
+    ("Exhaust system", "نظام العادم"),
+    ("Leaks — oil and coolant", "التسريبات: الزيت وسائل التبريد"),
+    ("Air and cabin filters", "فلاتر الهواء والمقصورة"),
+    ("Fault code scan", "فحص أكواد الأعطال"),
+)
+
+INSPECTION_HEADER_FIELDS = (
+    "customer_id", "vehicle_id", "inspected_on", "odometer", "technician",
+    "status", "summary", "notes",
+)
+
+INSPECTION_ITEM_FIELDS = (
+    "area", "area_ar", "condition", "finding", "finding_ar", "known_issue_id",
+    "catalog_item_id", "qty_milli", "unit_price_minor", "quote_it",
+)
+
+
+def reserve_inspection_no(conn: sqlite3.Connection) -> str:
+    """Take the next inspection number. Its own series, like contracts."""
+    row = conn.execute(
+        """
+        UPDATE settings
+           SET next_inspection_seq = next_inspection_seq + 1
+         WHERE id = 1
+        RETURNING inspection_prefix, next_inspection_seq - 1 AS seq
+        """
+    ).fetchone()
+    return f"{row['inspection_prefix']}{row['seq']:05d}"
+
+
+def _write_inspection_items(
+    conn: sqlite3.Connection,
+    inspection_id: int,
+    items: Sequence[Mapping[str, Any]],
+) -> None:
+    conn.execute("DELETE FROM inspection_items WHERE inspection_id = ?", (inspection_id,))
+    for line_no, item in enumerate(items, start=1):
+        values = _pick(item, INSPECTION_ITEM_FIELDS)
+        values["inspection_id"] = inspection_id
+        values["line_no"] = line_no
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        conn.execute(
+            f"INSERT INTO inspection_items ({cols}) VALUES ({marks})",
+            list(values.values()),
+        )
+
+
+def create_inspection(
+    conn: sqlite3.Connection,
+    header: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]],
+) -> int:
+    values = _pick(header, INSPECTION_HEADER_FIELDS)
+    values.setdefault("inspected_on", date.today().isoformat())
+    with transaction(conn):
+        values["inspection_no"] = reserve_inspection_no(conn)
+        cols = ", ".join(values)
+        marks = ", ".join("?" for _ in values)
+        cur = conn.execute(
+            f"INSERT INTO inspections ({cols}) VALUES ({marks})", list(values.values())
+        )
+        inspection_id = int(cur.lastrowid)
+        _write_inspection_items(conn, inspection_id, items)
+    return inspection_id
+
+
+def update_inspection(
+    conn: sqlite3.Connection,
+    inspection_id: int,
+    header: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]],
+) -> None:
+    inspection = get_inspection(conn, inspection_id)
+    if inspection["estimate_id"] is not None:
+        raise InUse(
+            f"This check has been quoted as {inspection['estimate_no']}. "
+            "Edit that estimate instead."
+        )
+    with transaction(conn):
+        _update(conn, "inspections", inspection_id, _pick(header, INSPECTION_HEADER_FIELDS))
+        _write_inspection_items(conn, inspection_id, items)
+
+
+def get_inspection(conn: sqlite3.Connection, inspection_id: int) -> Row:
+    row = conn.execute(
+        """
+        SELECT i.*,
+               c.name     AS customer_name,
+               c.name_ar  AS customer_name_ar,
+               c.phone    AS customer_phone,
+               v.plate_no, v.make, v.model, v.model_year,
+               e.estimate_no
+          FROM inspections i
+          JOIN customers c ON c.id = i.customer_id
+     LEFT JOIN vehicles  v ON v.id = i.vehicle_id
+     LEFT JOIN estimates e ON e.id = i.estimate_id
+         WHERE i.id = ?
+        """,
+        (inspection_id,),
+    ).fetchone()
+    if row is None:
+        raise NotFound(f"Inspection {inspection_id} not found.")
+    return row
+
+
+def get_inspection_items(conn: sqlite3.Connection, inspection_id: int) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT t.*, k.title_en AS issue_title, k.title_ar AS issue_title_ar,
+               k.severity      AS issue_severity
+          FROM inspection_items t
+     LEFT JOIN known_issues k ON k.id = t.known_issue_id
+         WHERE t.inspection_id = ?
+         ORDER BY t.line_no
+        """,
+        (inspection_id,),
+    )
+
+
+def list_inspections(conn: sqlite3.Connection, limit: int = 200) -> list[Row]:
+    return _all(
+        conn,
+        "SELECT * FROM v_inspections ORDER BY inspected_on DESC, id DESC LIMIT ?",
+        (limit,),
+    )
+
+
+def inspections_for_vehicle(conn: sqlite3.Connection, vehicle_id: int) -> list[Row]:
+    return _all(
+        conn,
+        """
+        SELECT * FROM v_inspections
+         WHERE id IN (SELECT id FROM inspections WHERE vehicle_id = ?)
+         ORDER BY inspected_on DESC
+        """,
+        (vehicle_id,),
+    )
+
+
+def convert_inspection_to_estimate(conn: sqlite3.Connection, inspection_id: int) -> int:
+    """Turn the findings marked for quoting into a draft estimate.
+
+    Only the rows ticked for quoting, and only those carrying a price: a
+    finding with no price is a note to the customer, not a line on a bill,
+    and quoting it at zero would say the work is free.
+
+    Refuses a second time round. The inspection records what was found; the
+    estimate is the offer made about it, and two offers from one check is how
+    a customer ends up with two different prices for the same brake pads.
+    """
+    inspection = get_inspection(conn, inspection_id)
+    if inspection["estimate_id"] is not None:
+        raise InUse(
+            f"This check has already been quoted as {inspection['estimate_no']}."
+        )
+
+    settings = get_settings(conn)
+    items = [
+        {
+            "catalog_item_id": item["catalog_item_id"],
+            "description": item["finding"] or item["area"],
+            "description_ar": item["finding_ar"] or item["area_ar"],
+            "kind": "service",
+            "unit": "pcs",
+            "qty_milli": item["qty_milli"],
+            "unit_price_minor": item["unit_price_minor"],
+        }
+        for item in get_inspection_items(conn, inspection_id)
+        if item["quote_it"] and item["unit_price_minor"] > 0
+    ]
+    if not items:
+        raise InUse(
+            "Nothing on this check is marked for quoting with a price on it."
+        )
+
+    with transaction(conn):
+        estimate_id = create_estimate(
+            conn,
+            {
+                "customer_id": inspection["customer_id"],
+                "vehicle_id": inspection["vehicle_id"],
+                "issue_date": date.today().isoformat(),
+                "valid_until": None,
+                "status": "draft",
+                "vat_rate_bp": settings["vat_rate_bp"],
+                "prices_include_vat": 0,
+                "currency_code": settings["currency_code"],
+                "discount_minor": 0,
+                "discount_mode": "amount",
+                "discount_rate_bp": 0,
+                "notes": inspection["summary"],
+                "inspection_id": inspection_id,
+            },
+            items,
+        )
+        conn.execute(
+            """
+            UPDATE inspections
+               SET estimate_id = ?, status = 'quoted', updated_at = datetime('now')
+             WHERE id = ?
+            """,
+            (estimate_id, inspection_id),
+        )
+    return estimate_id

@@ -22,8 +22,7 @@
     var partsBody = document.getElementById("parts-body");
     var repairTemplate = document.getElementById("repair-template");
     var partTemplate = document.getElementById("part-template");
-    var lang = M.lang();
-    var catalogById = M.readCatalog();
+    var catalogByName = M.readCatalogByName();
 
     var markupHint = document.getElementById("markup-hint");
     var markupBp = markupHint
@@ -63,20 +62,17 @@
        Filling a line from the catalogue
        --------------------------------------------------------------------- */
 
-    function applyCatalogPick(row, priceSelector) {
-        var picker = row.querySelector(".line-picker");
-        var item = catalogById[picker.value];
-        if (!item) {
-            row.querySelector(".line-catalog").value = "";
-            return;
-        }
-        row.querySelector(".line-catalog").value = item.id;
-        row.querySelector(".line-desc").value =
-            lang === "ar" && item.name_ar ? item.name_ar : item.name_en;
-        row.querySelector(".line-desc-ar").value = item.name_ar || "";
-
-        var price = row.querySelector(priceSelector);
-        if (price) { price.value = item.price; }
+    /* One box per line, as on the invoice and estimate editors: type the
+       work, or choose a catalogue entry from the list the browser offers.
+       A description that names an entry fills the price in; anything else
+       is a custom line. */
+    function applyCatalogMatch(row, priceSelector) {
+        M.applyCatalogByName(catalogByName, {
+            description:   row.querySelector(".line-desc"),
+            descriptionAr: row.querySelector(".line-desc-ar"),
+            catalogId:     row.querySelector(".line-catalog"),
+            price:         row.querySelector(priceSelector)
+        });
         recalculate();
     }
 
@@ -89,7 +85,7 @@
         var row = template.content.firstElementChild.cloneNode(true);
         body.appendChild(row);
         if (focus) {
-            var first = row.querySelector(".line-picker, input");
+            var first = row.querySelector(".line-desc, input");
             if (first) { first.focus(); }
         }
         recalculate();
@@ -116,11 +112,15 @@
             if (event.target.closest(".line-qty, .line-price, .line-expense")) {
                 recalculate();
             }
+            var typedRow = event.target.closest(".line-row");
+            if (typedRow && event.target.classList.contains("line-desc")) {
+                applyCatalogMatch(typedRow, priceSelector);
+            }
         });
         body.addEventListener("change", function (event) {
             var row = event.target.closest(".line-row");
-            if (row && event.target.classList.contains("line-picker")) {
-                applyCatalogPick(row, priceSelector);
+            if (row && event.target.classList.contains("line-desc")) {
+                applyCatalogMatch(row, priceSelector);
             }
             if (row && event.target.classList.contains("line-sourced")) {
                 showMarkup(row);

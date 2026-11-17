@@ -34,3 +34,14 @@ Thumbs.db
 
 # Local configuration
 .env
+
+# Notes left in one particular working copy on one particular machine. They
+# name local drive paths, so they belong to that machine and not to the
+# project everybody else clones.
+START-HERE.txt
+setup-git-once.bat
+
+# The walkthrough recording. Useful to have beside the code, too big to
+# be worth git's attention -- git stores a whole new copy of a binary
+# every time it changes.
+*.mp4

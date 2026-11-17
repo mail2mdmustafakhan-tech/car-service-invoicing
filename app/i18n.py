@@ -29,6 +29,56 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "nav.vehicles": ("Vehicles", "المركبات"),
     "nav.estimates": ("Estimates", "عروض الأسعار"),
     "nav.contracts": ("Repair contracts", "عقود الإصلاح"),
+    "nav.issues": ("Known issues", "الأعطال المعروفة"),
+    "iss.title": ("Known issues", "الأعطال المعروفة"),
+    "iss.intro": (
+        "Faults that come through the door often enough to be worth naming. "
+        "Attach one to a job instead of describing it again. Everything here "
+        "is yours to correct, retire or add to.",
+        "الأعطال التي تتكرر بما يكفي لتسميتها. أرفق العطل بالعمل بدل وصفه كل مرة. "
+        "كل ما هنا قابل للتعديل أو الإيقاف أو الإضافة عليه.",
+    ),
+    "iss.new": ("Add a fault", "إضافة عطل"),
+    "iss.edit": ("Edit fault", "تعديل العطل"),
+    "iss.none": ("Nothing listed yet.", "لا توجد أعطال مدرجة بعد."),
+    "iss.all_makes": ("All makes", "كل الماركات"),
+    "iss.show_retired": ("Include retired", "إظهار الموقوفة"),
+    "iss.make": ("Make", "الماركة"),
+    "iss.model": ("Model", "الموديل"),
+    "iss.engine": ("Engine", "المحرك"),
+    "iss.year_from": ("From year", "من سنة"),
+    "iss.year_to": ("To year", "إلى سنة"),
+    "iss.fault": ("Fault", "العطل"),
+    "iss.which_car": ("Which cars", "أي السيارات"),
+    "iss.the_fault": ("The fault", "العطل"),
+    "iss.title_en": ("Title (English)", "العنوان (إنجليزي)"),
+    "iss.title_ar": ("Title (Arabic)", "العنوان (عربي)"),
+    "iss.symptoms_en": ("Symptoms (English)", "الأعراض (إنجليزي)"),
+    "iss.symptoms_ar": ("Symptoms (Arabic)", "الأعراض (عربي)"),
+    "iss.check_en": ("What to check first (English)", "ما يُفحص أولاً (إنجليزي)"),
+    "iss.check_ar": ("What to check first (Arabic)", "ما يُفحص أولاً (عربي)"),
+    "iss.check_hint": (
+        "The one thing worth doing before the car is stripped.",
+        "الخطوة التي تستحق القيام بها قبل فك السيارة.",
+    ),
+    "iss.check": ("Check", "الفحص"),
+    "iss.severity": ("Severity", "الخطورة"),
+    "iss.sev_low": ("Low", "منخفضة"),
+    "iss.sev_medium": ("Medium", "متوسطة"),
+    "iss.sev_high": ("High", "عالية"),
+    "iss.seen": ("Seen", "تكرر"),
+    "iss.notes": ("Notes", "ملاحظات"),
+    "iss.in_use": ("In use", "قيد الاستخدام"),
+    "iss.attach": ("Record a known fault", "تسجيل عطل معروف"),
+    "iss.attached": ("Known faults on this job", "الأعطال المعروفة في هذا العمل"),
+    "iss.outcome": ("Finding", "النتيجة"),
+    "iss.out_suspected": ("Suspected", "مشتبه به"),
+    "iss.out_confirmed": ("Confirmed", "مؤكد"),
+    "iss.out_ruled_out": ("Ruled out", "مستبعد"),
+    "iss.out_repaired": ("Repaired", "تم إصلاحه"),
+    "iss.show_on_print": ("Show on the printed contract", "إظهاره في العقد المطبوع"),
+    "iss.note": ("Note", "ملاحظة"),
+    "iss.none_attached": ("No known faults recorded on this job.", "لم تُسجل أعطال معروفة في هذا العمل."),
     "nav.catalog": ("Services & Parts", "الخدمات وقطع الغيار"),
     "nav.settings": ("Settings", "الإعدادات"),
     "nav.language": ("Language", "اللغة"),
@@ -44,8 +94,10 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "action.back": ("Back", "رجوع"),
     "action.print": ("Print", "طباعة"),
     "action.download_pdf": ("Download PDF", "تحميل PDF"),
+    "action.remove": ("Remove", "إزالة"),
     "action.add": ("Add", "إضافة"),
     "action.view": ("View", "عرض"),
+    "action.upload": ("Upload", "رفع"),
     "action.confirm_delete": (
         "Are you sure? This cannot be undone.",
         "هل أنت متأكد؟ لا يمكن التراجع عن هذا.",
@@ -54,6 +106,45 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "action.apply": ("Apply", "تطبيق"),
 
     # -- Dashboard ---------------------------------------------------------
+    "dash.advanced": ("Advanced analytics", "تحليلات متقدمة"),
+    "dash.advanced_hint": (
+        "Trends, customers and recurring faults",
+        "الاتجاهات والعملاء والأعطال المتكررة",
+    ),
+    "dash.customers_total": ("Customers on the books", "العملاء المسجلون"),
+    "dash.customers_active": ("Seen in the last year", "زاروا خلال سنة"),
+    "dash.customers_dormant": ("Not seen in a year", "لم يزوروا منذ سنة"),
+    "dash.owed_trend": ("What you are owed", "المستحق لكم"),
+    "dash.owed_trend_hint": (
+        "Everything issued up to each month, less everything paid up to it.",
+        "كل ما صدر حتى نهاية كل شهر ناقص كل ما حُصّل حتى ذلك الحين.",
+    ),
+    "dash.invoiced_trend": ("Invoiced each month", "المفوتر شهرياً"),
+    "dash.invoiced_trend_hint": (
+        "Issued invoices only. Drafts are not counted.",
+        "الفواتير الصادرة فقط، دون المسودات.",
+    ),
+    "dash.by_make": ("Cars by make", "السيارات حسب الماركة"),
+    "dash.by_model": ("Cars by model", "السيارات حسب الموديل"),
+    "dash.by_category": ("Customers by type", "العملاء حسب النوع"),
+    "dash.by_category_hint": (
+        "Set on each customer. It changes nothing about how they are billed.",
+        "يُحدد لكل عميل، ولا يغيّر شيئاً في طريقة الفوترة.",
+    ),
+    "dash.known_faults": ("Faults seen most often", "الأعطال الأكثر تكراراً"),
+    "dash.known_faults_hint": (
+        "Counted from the faults recorded against repair contracts.",
+        "محسوبة من الأعطال المسجلة على عقود الإصلاح.",
+    ),
+    "dash.top_customers": ("Biggest customers", "أكبر العملاء"),
+    "dash.invoice_count": ("Invoices", "عدد الفواتير"),
+    "dash.not_enough": ("Not enough history yet.", "لا يوجد سجل كافٍ بعد."),
+    "dash.no_cars": ("No cars recorded yet.", "لا توجد سيارات مسجلة بعد."),
+    "dash.no_customers": ("No customers yet.", "لا يوجد عملاء بعد."),
+    "dash.no_faults": (
+        "No known faults recorded on a job yet.",
+        "لم تُسجل أعطال معروفة على أي عمل بعد.",
+    ),
     "dash.title": ("Dashboard", "الرئيسية"),
     "dash.this_month": ("Invoiced this month", "فواتير هذا الشهر"),
     "dash.vat_collected": ("VAT this month", "ضريبة هذا الشهر"),
@@ -90,6 +181,16 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "cust.address": ("Address", "العنوان"),
     "cust.vat_number": ("VAT number", "الرقم الضريبي"),
     "cust.notes": ("Notes", "ملاحظات"),
+    "cust.category": ("Customer type", "نوع العميل"),
+    "cust.category_hint": (
+        "Only changes how they are grouped in your figures. "
+        "Everyone is billed the same way.",
+        "يؤثر فقط على تجميعهم في التقارير. طريقة الفوترة واحدة للجميع.",
+    ),
+    "cust.cat_regular": ("Regular", "عادي"),
+    "cust.cat_vip": ("VIP", "عميل مميز"),
+    "cust.cat_family": ("Family and friends", "أهل وأصدقاء"),
+    "cust.cat_fleet": ("Fleet or business", "أسطول أو منشأة"),
     "cust.active": ("Active", "نشط"),
     "cust.inactive": ("Inactive", "غير نشط"),
     "cust.show_inactive": ("Show inactive", "إظهار غير النشطين"),
@@ -120,6 +221,22 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "cat.title": ("Services & Parts", "الخدمات وقطع الغيار"),
     "cat.new": ("New item", "بند جديد"),
     "cat.edit": ("Edit item", "تعديل البند"),
+    "cat.images": ("Photographs", "الصور"),
+    "cat.images_empty": (
+        "No photographs yet. A picture of the part answers \u201cis this the one?\u201d at the counter.",
+        "لا توجد صور بعد. صورة القطعة تجيب على سؤال \u201cهل هذه هي؟\u201d عند الاستلام.",
+    ),
+    "cat.add_image": ("Add a photograph", "إضافة صورة"),
+    "cat.image_caption": ("Caption", "وصف الصورة"),
+    "cat.images_hint": (
+        "JPEG or PNG, up to 10 MB each.",
+        "صيغة JPEG أو PNG، بحد أقصى ١٠ ميجابايت للصورة.",
+    ),
+    "cat.manufacturer": ("Manufacturer", "الصانع"),
+    "cat.manufacturer_hint": (
+        "Who made the part. Pick one or type your own.",
+        "من صنع القطعة. اختر من القائمة أو اكتب اسماً آخر.",
+    ),
     "cat.code": ("Code", "الرمز"),
     "cat.name_en": ("Name (English)", "الاسم بالإنجليزية"),
     "cat.name_ar": ("Name (Arabic)", "الاسم بالعربية"),
@@ -140,6 +257,29 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "cat.unit_km": ("km", "كم"),
 
     # -- Invoices ----------------------------------------------------------
+    # -- The quick invoice: a wiper blade, a bulb, a litre of oil ----------
+    "quick.title": ("Quick invoice", "فاتورة سريعة"),
+    "quick.nav": ("Quick invoice", "فاتورة سريعة"),
+    "quick.intro": (
+        "For small counter sales. Who, what, how much — issued and printed "
+        "in one go. Use the full invoice for anything with a car attached.",
+        "لعمليات البيع الصغيرة. العميل والبند والمبلغ، ثم الإصدار والطباعة مباشرة. "
+        "استخدم الفاتورة الكاملة لأي عمل مرتبط بمركبة.",
+    ),
+    "quick.new_customer": ("New customer — type the name below", "عميل جديد — اكتب الاسم أدناه"),
+    "quick.customer_name": ("Customer name", "اسم العميل"),
+    "quick.phone_hint": (
+        "Optional, but it is how you find them again.",
+        "اختياري، لكنه وسيلتك للعثور عليه لاحقاً.",
+    ),
+    "quick.what": ("What was sold", "البنود المباعة"),
+    "quick.paid_now": ("Paid now, in full", "مدفوعة بالكامل الآن"),
+    "quick.issue": ("Issue and print", "إصدار وطباعة"),
+    "quick.issue_hint": (
+        "This issues the invoice straight away and opens it for printing.",
+        "يصدر الفاتورة مباشرة ويفتحها للطباعة.",
+    ),
+    "quick.full_invoice": ("Full invoice instead", "الفاتورة الكاملة بدلاً من ذلك"),
     "inv.title": ("Invoices", "الفواتير"),
     "inv.details": ("Invoice details", "تفاصيل الفاتورة"),
     "inv.new": ("New invoice", "فاتورة جديدة"),
@@ -161,6 +301,11 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "inv.line_total": ("Amount", "المبلغ"),
     "inv.subtotal": ("Subtotal", "المجموع"),
     "inv.discount": ("Discount", "الخصم"),
+    "inv.discount_mode": ("Discount is in", "الخصم بـ"),
+    "inv.discount_hint": (
+        "A fixed amount, or a percentage of the subtotal.",
+        "مبلغ ثابت أو نسبة مئوية من المجموع.",
+    ),
     "inv.taxable": ("Taxable amount", "المبلغ الخاضع للضريبة"),
     "inv.vat": ("VAT", "ضريبة القيمة المضافة"),
     "inv.total": ("Total", "الإجمالي"),
@@ -168,8 +313,12 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "inv.balance": ("Balance due", "المتبقي"),
     "inv.add_line": ("Add item", "إضافة بند"),
     "inv.remove_line": ("Remove", "حذف"),
-    "inv.pick_catalog": ("Pick from catalogue", "اختر من القائمة"),
-    "inv.pick_custom": ("Or type your own description", "أو اكتب وصفاً خاصاً"),
+    # One box per line now: it suggests the catalogue as you type and accepts
+    # anything you write instead, so the wording has to invite both.
+    "inv.pick_custom": (
+        "Type a description, or pick from the catalogue",
+        "اكتب وصفاً أو اختر من القائمة",
+    ),
     "inv.none": ("No invoices yet.", "لا توجد فواتير بعد."),
     "inv.search_hint": (
         "Search by number, customer or plate",
@@ -191,12 +340,18 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "inv.needs_line": ("Add at least one item.", "أضف بنداً واحداً على الأقل."),
     "inv.doc_type": ("Invoice type", "نوع الفاتورة"),
     "inv.doc_tax": ("Tax invoice (with VAT)", "فاتورة ضريبية (شاملة الضريبة)"),
-    "inv.doc_plain": ("Plain invoice (no VAT)", "فاتورة عادية (بدون ضريبة)"),
+    "inv.doc_plain": (
+        "No VAT — cash sale, not a tax invoice",
+        "بدون ضريبة — بيع نقدي، ليست فاتورة ضريبية",
+    ),
     "inv.plain_invoice": ("INVOICE", "فاتورة"),
     "inv.doc_type_hint": (
         "A tax invoice charges VAT and prints the tax-invoice wording. "
-        "A plain invoice is a simple bill with no VAT line. Both are recorded here "
-        "and both appear in your reports.",
+        "The no-VAT option adds no tax at all and prints as a plain bill — "
+        "for cash sales and people you deal with directly. Both are recorded "
+        "and kept apart in your figures, so your VAT total covers tax "
+        "invoices only. Which sales may legally be billed without a tax "
+        "invoice is a question for your accountant.",
         "الفاتورة الضريبية تحتسب ضريبة القيمة المضافة وتُطبع بصيغة الفاتورة الضريبية. "
         "الفاتورة العادية فاتورة بسيطة بدون سطر ضريبة. كلاهما مسجل هنا ويظهر في التقارير.",
     ),
@@ -257,6 +412,53 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     ),
 
     # -- Estimates ---------------------------------------------------------
+    # -- Inspections: the check that happens before anyone quotes -----------
+    "nav.inspections": ("Inspections", "الفحوصات"),
+    "ins.title": ("Inspections", "الفحوصات"),
+    "ins.nav": ("Inspections", "الفحوصات"),
+    "ins.new": ("New check", "فحص جديد"),
+    "ins.number": ("Check no.", "رقم الفحص"),
+    "ins.date": ("Checked on", "تاريخ الفحص"),
+    "ins.details": ("Check details", "بيانات الفحص"),
+    "ins.checklist": ("What was checked", "البنود المفحوصة"),
+    "ins.checklist_hint": (
+        "The standard walk-round is filled in for you. Change the condition "
+        "where something is not right, and remove any row that does not apply.",
+        "تم تعبئة الفحص المعتاد مسبقاً. غيّر الحالة عند وجود ملاحظة، واحذف أي بند لا ينطبق.",
+    ),
+    "ins.area": ("Item", "البند"),
+    "ins.condition": ("Condition", "الحالة"),
+    "ins.finding": ("Finding", "الملاحظة"),
+    "ins.known_issue": ("Known fault", "عطل معروف"),
+    "ins.matches": ("Matches", "يطابق"),
+    "ins.est_price": ("Estimated", "التقدير"),
+    "ins.quote_it": ("Quote it", "إدراجه بالعرض"),
+    "ins.quote_yes": ("Quote", "يُدرج"),
+    "ins.quote_no": ("No", "لا"),
+    "ins.add_row": ("Add a row", "إضافة بند"),
+    "ins.cond_ok": ("OK", "سليم"),
+    "ins.cond_attention": ("Advisory", "يحتاج متابعة"),
+    "ins.cond_urgent": ("Urgent", "عاجل"),
+    "ins.cond_na": ("Not checked", "لم يُفحص"),
+    "ins.urgent": ("urgent", "عاجل"),
+    "ins.attention": ("advisory", "متابعة"),
+    "ins.all_ok": ("All clear", "الكل سليم"),
+    "ins.findings": ("Findings", "الملاحظات"),
+    "ins.quotable": ("To quote", "قيمة العرض"),
+    "ins.summary": ("Summary for the customer", "ملخص للعميل"),
+    "ins.summary_hint": (
+        "Carried onto the estimate if you make one from this check.",
+        "يُنقل إلى عرض السعر إذا أنشأته من هذا الفحص.",
+    ),
+    "ins.make_estimate": ("Make an estimate", "إنشاء عرض سعر"),
+    "ins.view_estimate": ("Estimate", "عرض السعر"),
+    "ins.none": ("No checks recorded yet.", "لا توجد فحوصات بعد."),
+    "ins.none_hint": (
+        "A check records what you found before anyone talks about price.",
+        "الفحص يسجل ما وجدته قبل الحديث عن السعر.",
+    ),
+    "status.checked": ("Checked", "تم الفحص"),
+    "status.quoted": ("Quoted", "تم التسعير"),
     "est.title": ("Estimates", "عروض الأسعار"),
     "est.one": ("Estimate", "عرض سعر"),
     "est.doc_title": ("ESTIMATE", "عرض سعر"),
@@ -300,6 +502,7 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "est.copy_message": ("Copy message", "نسخ الرسالة"),
     "est.copied": ("Copied", "تم النسخ"),
     "est.message": ("Message", "الرسالة"),
+    "est.msg_language": ("Message language", "لغة الرسالة"),
     "est.no_phone": (
         "This customer has no phone number on file.",
         "لا يوجد رقم هاتف مسجل لهذا العميل.",
@@ -473,9 +676,11 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "set.message_ar": ("Message template (Arabic)", "نص الرسالة بالعربية"),
     "set.message_hint": (
         "Filled in when you send an estimate. Available placeholders: "
-        "{customer} {business} {number} {total} {valid_until} {items}",
+        "{customer} {business} {number} {items} {subtotal} {vat} {total} "
+        "{valid_until}. {items} lists each item with its price.",
         "تُعبأ عند إرسال عرض السعر. العناصر المتاحة: "
-        "{customer} {business} {number} {total} {valid_until} {items}",
+        "{customer} {business} {number} {items} {subtotal} {vat} {total} "
+        "{valid_until}. العنصر {items} يعرض كل بند مع سعره.",
     ),
     "set.contract": ("Repair contract", "عقد الإصلاح"),
     "set.tagline_en": ("Services line (English)", "سطر الخدمات بالإنجليزية"),
@@ -513,10 +718,25 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "set.saved": ("Settings saved.", "تم حفظ الإعدادات."),
     "set.backup": ("Backup", "النسخ الاحتياطي"),
     "set.backup_hint": (
-        "Download a copy of the whole database. Keep these somewhere safe.",
-        "قم بتحميل نسخة من قاعدة البيانات بالكامل واحفظها في مكان آمن.",
+        "A zip holding the database and every scanned attachment. "
+        "This is the one to restore from. Keep it somewhere safe.",
+        "ملف مضغوط يحتوي على قاعدة البيانات وجميع المرفقات الممسوحة. "
+        "هذا هو الملف المستخدم للاستعادة. احفظه في مكان آمن.",
     ),
-    "set.download_backup": ("Download backup", "تحميل نسخة احتياطية"),
+    "set.download_backup": ("Download backup (.zip)", "تحميل نسخة احتياطية (zip)"),
+    "set.download_excel": ("Download as Excel (.xlsx)", "تحميل كملف إكسل (xlsx)"),
+    "set.excel_hint": (
+        "Every record in a workbook anyone can open. Readable without this "
+        "software — but it cannot be restored from, so keep the zip as well.",
+        "جميع السجلات في ملف إكسل يمكن لأي شخص فتحه. يمكن قراءته دون هذا "
+        "البرنامج، لكن لا يمكن الاستعادة منه، لذا احتفظ بالملف المضغوط أيضاً.",
+    ),
+    "set.excel_unavailable": (
+        "The Excel export needs the openpyxl package, which is not installed. "
+        "The zip backup still works.",
+        "يتطلب تصدير إكسل حزمة openpyxl غير المثبتة. "
+        "لا يزال بإمكانك تحميل النسخة الاحتياطية المضغوطة.",
+    ),
 
     # -- Messages ----------------------------------------------------------
     "msg.saved": ("Saved.", "تم الحفظ."),

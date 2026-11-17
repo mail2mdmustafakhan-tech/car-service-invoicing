@@ -364,7 +364,13 @@ def test_a_contract_may_have_no_parts(workshop):
 
 
 def test_the_source_of_each_part_stays_with_the_right_part(workshop):
-    """A checkbox would not submit when unticked and would shift the column."""
+    """A checkbox would not submit when unticked and would shift the column.
+
+    Posted here in the old 0/1 shape the field used to use, which is the
+    other half of what this guards: those values are still out there, and
+    read literally "0" is a supplier name, which would put a handling markup
+    on a part that came out of our own stock.
+    """
     workshop.post(
         "/contracts/new",
         data=_contract_payload(
@@ -378,8 +384,47 @@ def test_the_source_of_each_part_stays_with_the_right_part(workshop):
         ),
     )
     page = workshop.get("/contracts/1").text
-    agency_rows = page.count("From agency")
-    assert agency_rows == 1
+    assert page.count("Other supplier") == 1
+    assert page.count("Own stock") == 2
+
+
+def test_a_part_source_is_kept_in_the_words_it_was_given(workshop):
+    """Three months later, "where did this come from?" has a real answer."""
+    workshop.post(
+        "/contracts/new",
+        data=_contract_payload(
+            part_catalog_id=["", "", ""],
+            part_number=["A1", "B2", "C3"],
+            part_description=["Filter", "Alternator", "Bracket"],
+            part_description_ar=["", "", ""],
+            part_qty=["1", "1", "1"],
+            part_price=["10", "20", "30"],
+            part_sourced=["own_stock", "Used market", "Al-Jazeera Spare Parts"],
+        ),
+    )
+    page = workshop.get("/contracts/1").text
+    assert "Used market" in page
+    # Typed by hand, kept exactly as typed rather than forced into the list.
+    assert "Al-Jazeera Spare Parts" in page
+
+
+def test_only_a_part_bought_in_carries_the_handling_markup(workshop, conn):
+    """The markup follows where the part came from, and is asked only once."""
+    workshop.post(
+        "/contracts/new",
+        data=_contract_payload(
+            part_catalog_id=["", ""],
+            part_number=["A1", "B2"],
+            part_description=["From our shelf", "Brought in"],
+            part_description_ar=["", ""],
+            part_qty=["1", "1"],
+            part_price=["10", "20"],
+            part_sourced=["own_stock", "BMW"],
+        ),
+    )
+    page = workshop.get("/contracts/1").text
+    assert "BMW agency" in page
+    assert "Own stock" in page
 
 
 def test_the_printed_contract_follows_the_paper_form(workshop):

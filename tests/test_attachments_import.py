@@ -426,3 +426,65 @@ def test_the_country_code_is_configurable(shop):
 def test_a_template_placeholder_that_does_not_exist_is_left_alone(shop):
     """A typo in the template should not break sending a quote."""
     assert messaging.render_template("Hi {nobody}", {"customer": "x"}) == "Hi {nobody}"
+
+
+# ---------------------------------------------------------------------------
+# Photographs of catalogue parts
+# ---------------------------------------------------------------------------
+
+PNG = (b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+JPEG = (b"\xff\xd8\xff\xe0" + b"\x00" * 64)
+
+
+def test_a_photograph_can_be_added_to_a_part(shop):
+    response = shop.post(
+        "/catalog/1/images",
+        files={"image": ("alternator.png", PNG, "image/png")},
+        data={"caption": "Off the shelf, left bay"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Off the shelf, left bay" in response.text
+
+
+def test_a_file_pretending_to_be_an_image_is_refused(shop):
+    """The browser's declared type is a claim by whoever sent the file."""
+    response = shop.post(
+        "/catalog/1/images",
+        files={"image": ("part.png", b"%PDF-1.7 not an image at all", "image/png")},
+        data={"caption": ""},
+        follow_redirects=True,
+    )
+    # A PDF is a fine customer attachment and a poor photograph of a part.
+    assert "JPEG and PNG" in response.text
+
+
+def test_a_part_photograph_is_served_with_sniffing_turned_off(shop):
+    shop.post(
+        "/catalog/1/images",
+        files={"image": ("p.jpg", JPEG, "image/jpeg")},
+        data={"caption": ""},
+        follow_redirects=True,
+    )
+    response = shop.get("/item-images/1")
+    assert response.status_code == 200
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "default-src 'none'" in response.headers["Content-Security-Policy"]
+
+
+def test_deleting_a_photograph_removes_the_file_too(shop, tmp_path):
+    """A row without its file is tidy; a file without its row is litter."""
+    from app.db import attachments_dir
+
+    shop.post(
+        "/catalog/1/images",
+        files={"image": ("p.png", PNG, "image/png")},
+        data={"caption": ""},
+        follow_redirects=True,
+    )
+    before = list(attachments_dir().glob("*"))
+    assert before
+
+    shop.post("/item-images/1/delete", follow_redirects=True)
+    after = list(attachments_dir().glob("*"))
+    assert len(after) == len(before) - 1

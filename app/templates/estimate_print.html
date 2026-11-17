@@ -17,7 +17,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ estimate['estimate_no'] }} — {{ settings['business_name_en'] }}</title>
-  {% if not pdf %}<link rel="stylesheet" href="/static/css/print.css">{% endif %}
+  {% if not pdf %}<link rel="stylesheet" href="{{ static('css/print.css') }}">{% endif %}
 </head>
 <body class="print-view">
 

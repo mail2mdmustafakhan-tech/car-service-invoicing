@@ -29,7 +29,7 @@
   {# When WeasyPrint renders this for the PDF download it is handed the
      stylesheet directly, so the link (and the on-screen toolbar) are left
      out of that copy entirely. #}
-  {% if not pdf %}<link rel="stylesheet" href="/static/css/print.css">{% endif %}
+  {% if not pdf %}<link rel="stylesheet" href="{{ static('css/print.css') }}">{% endif %}
 </head>
 <body class="print-view">
 

@@ -181,7 +181,7 @@
             <td class="tight secondary">{{ p['part_number'] or '—' }}</td>
             <td>{{ loc(p, 'description') }}</td>
             <td class="tight secondary">
-              {{ t('con.sourced_agency') if p['sourced_externally'] else t('con.sourced_own') }}
+              {{ source_label(p['source'] or 'own_stock', lang) }}
             </td>
             <td class="num">{{ fmt_qty(p['qty_milli']) }}</td>
             <td class="num">{{ m(p['unit_price_minor']) }}</td>
@@ -205,4 +205,80 @@
   </div>
 </section>
 {% endif %}
+
+{# ---- Known faults ---------------------------------------------------------
+   Recording that a known fault was considered is worth as much as recording
+   that it was found: "we checked the chain guides and they were fine" is the
+   answer to a question somebody will ask in a year. Whether it reaches the
+   customer's copy is a separate decision, which is what the tick is for. #}
+<section class="panel">
+  <div class="panel-head"><h2>{{ t('iss.attached') }}</h2></div>
+  <div class="panel-body">
+    {% if order_issues %}
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>{{ t('iss.fault') }}</th>
+            <th>{{ t('iss.outcome') }}</th>
+            <th>{{ t('iss.note') }}</th>
+            <th>{{ t('iss.show_on_print') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for link in order_issues %}
+            <tr>
+              <td>
+                <strong>{{ loc(link, 'title_en') }}</strong>
+                <div class="sub">{{ link['make'] }}{% if link['model'] %} — {{ link['model'] }}{% endif %}</div>
+              </td>
+              <td><span class="pill">{{ t('iss.out_' ~ link['outcome']) }}</span></td>
+              <td>{{ link['note'] or '—' }}</td>
+              <td>{{ '✓' if link['show_on_print'] else '—' }}</td>
+              <td class="row-actions">
+                <form method="post" action="/contract-issues/{{ link['id'] }}/delete">
+                  <button class="btn small danger" type="submit">{{ t('action.remove') }}</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="hint">{{ t('iss.none_attached') }}</p>
+    {% endif %}
+
+    <form method="post" action="/contracts/{{ order['id'] }}/issues" class="uploadrow"
+          style="margin-block-start:var(--space-4)">
+      <div class="field" style="flex:2 1 280px">
+        <label for="f_known_issue">{{ t('iss.attach') }}</label>
+        <select id="f_known_issue" name="known_issue_id" required>
+          <option value="">—</option>
+          {% for issue in known_issues %}
+            <option value="{{ issue['id'] }}">{{ issue['make'] }} — {{ loc(issue, 'title_en') }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="f_outcome">{{ t('iss.outcome') }}</label>
+        <select id="f_outcome" name="outcome">
+          {% for o in ['suspected', 'confirmed', 'ruled_out', 'repaired'] %}
+            <option value="{{ o }}">{{ t('iss.out_' ~ o) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:2 1 220px">
+        <label for="f_issue_note">{{ t('iss.note') }}</label>
+        <input type="text" id="f_issue_note" name="note">
+      </div>
+      <div class="field">
+        <div class="check">
+          <input type="checkbox" id="f_show_on_print" name="show_on_print" value="1" checked>
+          <label for="f_show_on_print">{{ t('iss.show_on_print') }}</label>
+        </div>
+      </div>
+      <button class="btn" type="submit">{{ t('action.add') }}</button>
+    </form>
+  </div>
+</section>
 {% endblock %}

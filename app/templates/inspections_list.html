@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill with context %}
+{% block title %}{{ t('ins.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ t('ins.title') }}</h1>
+  <div class="actions"><a class="btn accent" href="/inspections/new">{{ t('ins.new') }}</a></div>
+</div>
+
+<div class="panel">
+  {% if inspections %}
+  <div class="panel-body tight scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('ins.number') }}</th>
+          <th>{{ t('ins.date') }}</th>
+          <th>{{ t('inv.customer') }}</th>
+          <th>{{ t('inv.vehicle') }}</th>
+          <th class="num">{{ t('ins.findings') }}</th>
+          <th class="num">{{ t('ins.quotable') }}</th>
+          <th>{{ t('inv.status') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in inspections %}
+        <tr>
+          <td><a href="/inspections/{{ i['id'] }}">{{ i['inspection_no'] }}</a></td>
+          <td>{{ i['inspected_on'] }}</td>
+          <td>{{ i['customer'] }}</td>
+          <td>
+            {% if i['plate_no'] %}<bdi>{{ i['plate_no'] }}</bdi>
+            <span class="sub">{{ i['make'] }} {{ i['model'] }}</span>{% endif %}
+          </td>
+          <td class="num">
+            {# Urgent and advisory counted apart: "four findings" tells you
+               nothing about whether the car should be driven home. #}
+            {% if i['urgent'] %}<span class="tag urgent">{{ i['urgent'] }} {{ t('ins.urgent') }}</span>{% endif %}
+            {% if i['attention'] %}<span class="tag attention">{{ i['attention'] }} {{ t('ins.attention') }}</span>{% endif %}
+            {% if not i['urgent'] and not i['attention'] %}<span class="sub">{{ t('ins.all_ok') }}</span>{% endif %}
+          </td>
+          <td class="num">{{ '%.2f'|format(i['quotable_value']) if i['quotable_value'] else '—' }}</td>
+          <td>{{ pill(i['status']) }}</td>
+          <td class="num">
+            {% if i['estimate_no'] %}<span class="sub">{{ i['estimate_no'] }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="panel-body empty">
+    <p>{{ t('ins.none') }}</p>
+    <p class="hint">{{ t('ins.none_hint') }}</p>
+    <a class="btn accent" href="/inspections/new">{{ t('ins.new') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

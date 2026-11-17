@@ -121,22 +121,38 @@
   <section class="panel">
     <div class="panel-head"><h2>{{ t('est.send') }}</h2></div>
     <div class="panel-body">
-      {% if whatsapp_url or sms_url %}
+      {% if has_phone %}
+        {# Which language the customer reads is its own decision, separate
+           from the language this screen is in. #}
+        <div class="msglang" role="group" aria-label="{{ t('est.msg_language') }}">
+          <span class="msglang-label">{{ t('est.msg_language') }}</span>
+          {% for code, name in LANGUAGES.items() %}
+            <button type="button" class="msglang-btn {{ 'active' if code == message_lang else '' }}"
+                    data-lang="{{ code }}">{{ name }}</button>
+          {% endfor %}
+        </div>
+
         <div class="row-actions" style="justify-content:flex-start;gap:var(--space-3);flex-wrap:wrap">
-          {% if whatsapp_url %}
-            <a class="btn accent" href="{{ whatsapp_url }}" target="_blank" rel="noopener">{{ t('est.whatsapp') }}</a>
-          {% endif %}
-          {% if sms_url %}
-            <a class="btn" href="{{ sms_url }}">{{ t('est.sms') }}</a>
-          {% endif %}
+          <a class="btn accent" id="whatsapp-link" href="{{ whatsapp_urls[message_lang] }}"
+             target="_blank" rel="noopener">{{ t('est.whatsapp') }}</a>
+          <a class="btn" id="sms-link" href="{{ sms_urls[message_lang] }}">{{ t('est.sms') }}</a>
           <button class="btn" type="button" id="copy-message"
                   data-copied="{{ t('est.copied') }}">{{ t('est.copy_message') }}</button>
         </div>
         <p class="hint">{{ provider_note }}</p>
         <div class="field" style="margin-block-start:var(--space-4)">
           <label for="message-text">{{ t('est.message') }}</label>
-          <textarea id="message-text" rows="9" readonly>{{ message }}</textarea>
+          <textarea id="message-text" rows="12" readonly
+                    dir="auto">{{ messages[message_lang] }}</textarea>
         </div>
+
+        {# Both versions travel with the page, so switching is instant and
+           works with no network. #}
+        <script id="message-data" type="application/json">{{ {
+            'messages': messages,
+            'whatsapp': whatsapp_urls,
+            'sms': sms_urls,
+        } | tojson }}</script>
       {% else %}
         <p class="hint" style="margin-block-start:0">{{ t('est.no_phone') }}</p>
         <a class="btn" href="/customers/{{ estimate['customer_id'] }}/edit">{{ t('action.edit') }}</a>
@@ -202,6 +218,46 @@
 
 {% block scripts %}
 <script>
+  /* Switch the message between English and Arabic.
+
+     Both versions were written into the page, so this swaps text that is
+     already here -- no reload, and the send buttons follow, because a button
+     still pointing at the previous language is how the wrong message gets
+     sent to a customer. */
+  (function () {
+      var node = document.getElementById("message-data");
+      var text = document.getElementById("message-text");
+      if (!node || !text) { return; }
+
+      var data;
+      try { data = JSON.parse(node.textContent); } catch (err) { return; }
+
+      var whatsapp = document.getElementById("whatsapp-link");
+      var sms = document.getElementById("sms-link");
+
+      function show(code) {
+          if (!data.messages[code]) { return; }
+          text.value = data.messages[code];
+          if (whatsapp) { whatsapp.href = data.whatsapp[code] || ""; }
+          if (sms) { sms.href = data.sms[code] || ""; }
+          Array.prototype.forEach.call(
+              document.querySelectorAll(".msglang-btn"),
+              function (b) {
+                  b.classList.toggle("active", b.getAttribute("data-lang") === code);
+              }
+          );
+      }
+
+      Array.prototype.forEach.call(
+          document.querySelectorAll(".msglang-btn"),
+          function (button) {
+              button.addEventListener("click", function () {
+                  show(button.getAttribute("data-lang"));
+              });
+          }
+      );
+  })();
+
   /* Copy the message, for pasting into whatever the customer actually uses. */
   (function () {
       var button = document.getElementById("copy-message");

@@ -134,8 +134,11 @@ def render_template(template: str, values: dict[str, str]) -> str:
 def summarise_items(descriptions: list[str], limit: int = 6) -> str:
     """A short bulleted list of what is being quoted, for the message body.
 
-    Long quotes are truncated: a WhatsApp message listing forty parts is not
-    read, and the printed estimate is the document that carries the detail.
+    Superseded by :func:`itemise`, which carries the prices too. Kept because
+    a customer's saved message template may still name it indirectly through
+    a stored ``{items}`` placeholder built before the change, and because
+    dropping a working function to replace it with a better one is how a
+    quiet regression gets shipped.
 
     >>> summarise_items(["Oil change", "Brake pads"])
     '- Oil change\\n- Brake pads'
@@ -151,6 +154,63 @@ def summarise_items(descriptions: list[str], limit: int = 6) -> str:
     if remaining > 0:
         shown.append(f"- ...and {remaining} more")
     return "\n".join(shown)
+
+
+def itemise(lines: list[dict[str, str]], limit: int = 12, more: str = "and {n} more") -> str:
+    """The priced breakdown that goes in the message body.
+
+    A total on its own invites the reply "what for?", and that reply arrives
+    by phone, to somebody holding a spanner. Listing the work with its price
+    answers it before it is asked.
+
+    Each line is a dict of already-formatted strings -- ``description``,
+    ``qty``, ``price`` and ``amount`` -- because the money and quantity
+    formatting rules live in :mod:`app.money` and must not be reinvented
+    here with a different idea of how many decimal places a riyal has.
+
+    A quantity of one is left out. "Oil change: 200.00" is how someone would
+    say it; "Oil change: 1 x 200.00 = 200.00" is how a spreadsheet would.
+
+    >>> print(itemise([{"description": "Oil change", "qty": "1",
+    ...                 "price": "200.00", "amount": "200.00"}]))
+    - Oil change: 200.00
+
+    >>> print(itemise([{"description": "Brake pads", "qty": "2",
+    ...                 "price": "150.00", "amount": "300.00"}]))
+    - Brake pads: 2 × 150.00 = 300.00
+
+    Long lists are cut short, because a message listing forty parts is not
+    read and the printed estimate is what carries the full detail:
+
+    >>> lines = [{"description": f"Part {n}", "qty": "1",
+    ...           "price": "10.00", "amount": "10.00"} for n in range(1, 6)]
+    >>> print(itemise(lines, limit=2))
+    - Part 1: 10.00
+    - Part 2: 10.00
+    - ...and 3 more
+
+    >>> itemise([])
+    ''
+    """
+    if not lines:
+        return ""
+
+    out = []
+    for line in lines[:limit]:
+        description = (line.get("description") or "").strip()
+        qty = (line.get("qty") or "").strip()
+        price = (line.get("price") or "").strip()
+        amount = (line.get("amount") or "").strip()
+
+        if qty and qty not in ("1", "1.0", "١"):
+            out.append(f"- {description}: {qty} × {price} = {amount}")
+        else:
+            out.append(f"- {description}: {amount}")
+
+    remaining = len(lines) - limit
+    if remaining > 0:
+        out.append("- ..." + more.replace("{n}", str(remaining)))
+    return "\n".join(out)
 
 
 def provider_note(lang: str = "en") -> str:

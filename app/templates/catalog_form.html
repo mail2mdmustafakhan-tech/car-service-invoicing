@@ -39,6 +39,20 @@
                  attrs='inputmode="decimal" class="num"', hint=currency) }}
       </div>
 
+      {# Suggested, not restricted: the part in the box may be made by somebody
+         the list has never heard of, and a name typed in is worth more than a
+         blank column. #}
+      <div class="field">
+        <label for="f_manufacturer">{{ t('cat.manufacturer') }}</label>
+        <input type="text" id="f_manufacturer" name="manufacturer" list="manufacturers"
+               value="{{ item['manufacturer'] if editing else '' }}">
+        <p class="hint">{{ t('cat.manufacturer_hint') }}</p>
+      </div>
+      <datalist id="manufacturers">
+        {% for value, en, ar in MANUFACTURERS %}<option value="{{ value }}" label="{{ ar if lang == 'ar' else en }}"></option>
+        {% endfor %}
+      </datalist>
+
       {{ field('code', t('cat.code'), item['code'] if editing else '',
                hint='Optional. Must be unique if used.' if lang == 'en' else 'اختياري. يجب أن يكون فريداً إن استُخدم.') }}
 
@@ -51,4 +65,51 @@
     </div>
   </div>
 </form>
+
+{% if editing %}
+{# ---- Photographs ---------------------------------------------------------
+   Its own form, outside the one above: a file upload posts the whole form,
+   and nobody wants adding a picture to also save half-finished edits to the
+   price. Only once the item exists, because a photograph needs something to
+   belong to. #}
+<section class="panel" style="margin-block-start:var(--space-5)">
+  <div class="panel-head"><h2>{{ t('cat.images') }}</h2></div>
+  <div class="panel-body">
+    {% if images %}
+      <div class="thumbs">
+        {% for img in images %}
+          <figure class="thumb">
+            <a href="/item-images/{{ img['id'] }}" target="_blank" rel="noopener">
+              <img src="/item-images/{{ img['id'] }}" alt="{{ img['caption'] or img['original_name'] }}">
+            </a>
+            <figcaption>
+              <span>{{ img['caption'] or img['original_name'] }}</span>
+              <form method="post" action="/item-images/{{ img['id'] }}/delete"
+                    onsubmit="return confirm('{{ t('action.confirm_delete') }}')">
+                <button class="btn small danger" type="submit">{{ t('action.delete') }}</button>
+              </form>
+            </figcaption>
+          </figure>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="hint">{{ t('cat.images_empty') }}</p>
+    {% endif %}
+
+    <form method="post" action="/catalog/{{ item['id'] }}/images"
+          enctype="multipart/form-data" class="uploadrow">
+      <div class="field">
+        <label for="f_image">{{ t('cat.add_image') }}</label>
+        <input type="file" id="f_image" name="image" accept="image/jpeg,image/png" required>
+      </div>
+      <div class="field">
+        <label for="f_caption">{{ t('cat.image_caption') }}</label>
+        <input type="text" id="f_caption" name="caption">
+      </div>
+      <button class="btn" type="submit">{{ t('action.upload') }}</button>
+    </form>
+    <p class="hint">{{ t('cat.images_hint') }}</p>
+  </div>
+</section>
+{% endif %}
 {% endblock %}

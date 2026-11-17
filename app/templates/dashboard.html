@@ -246,4 +246,123 @@
   </div>
 </section>
 {% endif %}
+
+{# ---- Advanced analytics ---------------------------------------------------
+   A <details> element, closed on arrival. No JavaScript: the browser has done
+   collapsible sections natively for years, it works with the keyboard and a
+   screen reader without any help, and it still opens if a script fails.
+
+   Every chart here is either comparing magnitudes or showing one quantity
+   over time, so all of them use one hue, more-is-darker, and every bar
+   carries its name and figure as text. Nobody is asked to tell two colours
+   apart to read any of this. #}
+<details class="analytics">
+  <summary>
+    <span class="analytics-title">{{ t('dash.advanced') }}</span>
+    <span class="hint">{{ t('dash.advanced_hint') }}</span>
+  </summary>
+
+  <div class="analytics-body">
+    <div class="statrow">
+      <div class="stat">
+        <div class="stat-value">{{ analytics['activity']['total'] }}</div>
+        <div class="stat-label">{{ t('dash.customers_total') }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">{{ analytics['activity']['active'] }}</div>
+        <div class="stat-label">{{ t('dash.customers_active') }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">{{ analytics['activity']['dormant'] }}</div>
+        <div class="stat-label">{{ t('dash.customers_dormant') }}</div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.owed_trend') }}</h2></div>
+        <div class="panel-body">
+          {{ trend_chart(analytics['owed_trend'], title=t('dash.owed_trend'),
+                         unit=currency, empty=t('dash.not_enough')) | safe }}
+          <p class="hint">{{ t('dash.owed_trend_hint') }}</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.invoiced_trend') }}</h2></div>
+        <div class="panel-body">
+          {{ trend_chart(analytics['invoiced_trend'], title=t('dash.invoiced_trend'),
+                         unit=currency, empty=t('dash.not_enough')) | safe }}
+          <p class="hint">{{ t('dash.invoiced_trend_hint') }}</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="cols">
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.by_make') }}</h2></div>
+        <div class="panel-body">
+          {{ meter_list(analytics['by_make'], title=t('dash.by_make'),
+                        empty=t('dash.no_cars'), rtl=(lang == 'ar'), label_width=175) | safe }}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.by_model') }}</h2></div>
+        <div class="panel-body">
+          {{ meter_list(analytics['by_model'], title=t('dash.by_model'),
+                        empty=t('dash.no_cars'), rtl=(lang == 'ar'), label_width=175) | safe }}
+        </div>
+      </section>
+    </div>
+
+    <div class="cols">
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.by_category') }}</h2></div>
+        <div class="panel-body">
+          {{ meter_list(analytics['by_category'], title=t('dash.by_category'),
+                        empty=t('dash.no_customers'), rtl=(lang == 'ar')) | safe }}
+          <p class="hint">{{ t('dash.by_category_hint') }}</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.known_faults') }}</h2></div>
+        <div class="panel-body">
+          {{ meter_list(analytics['faults'], title=t('dash.known_faults'),
+                        empty=t('dash.no_faults'), rtl=(lang == 'ar'), label_width=250) | safe }}
+          <p class="hint">{{ t('dash.known_faults_hint') }}</p>
+        </div>
+      </section>
+    </div>
+
+    {% if analytics['top_customers'] %}
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('dash.top_customers') }}</h2></div>
+      <div class="panel-body">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>{{ t('cust.title') }}</th>
+              <th>{{ t('cust.category') }}</th>
+              <th class="num">{{ t('dash.invoice_count') }}</th>
+              <th class="num">{{ t('inv.total') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in analytics['top_customers'] %}
+              <tr>
+                <td><a href="/customers/{{ row['id'] }}">{{ row['name'] }}</a></td>
+                <td>{{ t('cust.cat_' ~ row['category']) }}</td>
+                <td class="num">{{ row['invoices'] }}</td>
+                <td class="num">{{ from_minor(row['total_minor']) }} {{ currency }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</details>
 {% endblock %}

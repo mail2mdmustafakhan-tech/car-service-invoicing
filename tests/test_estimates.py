@@ -386,3 +386,34 @@ def test_estimate_filters_narrow_the_list(shop):
 
     assert "EST-00002" not in shop.get("/estimates?status=approved").text
     assert "EST-00001" not in shop.get("/estimates?status=draft").text
+
+
+def test_the_send_button_sits_beside_print_at_every_stage(shop):
+    """A quote is discussed with the customer long before it is approved.
+
+    Walking down the page to the send panel to do that was a step for
+    nothing, so the button is in the header -- and it has to be there on a
+    draft, not only once the customer has already said yes.
+    """
+    shop.post("/estimates/new", data={
+        "customer_id": "1", "vehicle_id": "1", "issue_date": "2026-11-16",
+        "vat_rate": "15", "item_catalog_id": [""],
+        "item_description": ["Full service"], "item_description_ar": [""],
+        "item_kind": ["service"], "item_unit": ["pcs"],
+        "item_qty": ["1"], "item_price": ["450"],
+    })
+
+    def header_links(page):
+        head = page.split('class="actions"')[1].split("</div>")[0]
+        return head
+
+    draft = shop.get("/estimates/1").text
+    assert "wa.me" in header_links(draft), "draft has no send button"
+
+    shop.post("/estimates/1/status", data={"status": "sent"})
+    shop.post("/estimates/1/status", data={"status": "approved"})
+
+    approved = shop.get("/estimates/1").text
+    assert "wa.me" in header_links(approved), "approved has no send button"
+    # And the gate it sits next to is still there.
+    assert "/estimates/1/invoice" in approved

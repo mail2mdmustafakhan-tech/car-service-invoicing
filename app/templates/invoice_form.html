@@ -99,17 +99,9 @@
             {% for item in items %}
             <tr class="line-row">
               <td class="col-desc">
-                <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
-                  <option value="">{{ t('inv.pick_catalog') }}…</option>
-                  {% for ci in catalog %}
-                  <option value="{{ ci['id'] }}" {% if item['catalog_item_id'] == ci['id'] %}selected{% endif %}>
-                    {{ loc(ci, 'name_en') }}
-                  </option>
-                  {% endfor %}
-                </select>
-                <input type="text" name="item_description" class="line-desc"
+                <input type="text" name="item_description" class="line-desc" list="catalog-names"
                        value="{{ item['description'] }}"
-                       placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
+                       placeholder="{{ t('inv.pick_custom') }}">
                 <input type="hidden" name="item_catalog_id" class="line-catalog"
                        value="{{ item['catalog_item_id'] or '' }}">
                 <input type="hidden" name="item_description_ar" class="line-desc-ar"
@@ -142,14 +134,8 @@
       <template id="line-template">
         <tr class="line-row">
           <td class="col-desc">
-            <select class="line-picker" aria-label="{{ t('inv.pick_catalog') }}">
-              <option value="">{{ t('inv.pick_catalog') }}…</option>
-              {% for ci in catalog %}
-              <option value="{{ ci['id'] }}">{{ loc(ci, 'name_en') }}</option>
-              {% endfor %}
-            </select>
-            <input type="text" name="item_description" class="line-desc" value=""
-                   placeholder="{{ t('inv.pick_custom') }}" style="margin-top:4px">
+            <input type="text" name="item_description" class="line-desc" list="catalog-names" value=""
+                   placeholder="{{ t('inv.pick_custom') }}">
             <input type="hidden" name="item_catalog_id" class="line-catalog" value="">
             <input type="hidden" name="item_description_ar" class="line-desc-ar" value="">
             <input type="hidden" name="item_kind" class="line-kind" value="service">
@@ -178,9 +164,23 @@
             {{ field('vat_rate', t('inv.vat_rate'),
                      fmt_rate(invoice['vat_rate_bp']) if editing else fmt_rate(default_vat_bp),
                      attrs='inputmode="decimal" class="num" id="f_vat_rate"') }}
-            {{ field('discount', t('inv.discount'),
-                     from_minor(invoice['discount_minor']) if editing and invoice['discount_minor'] else '',
-                     attrs='inputmode="decimal" class="num" id="f_discount"', hint=currency) }}
+            {# Amount or percentage, in one control. The figure stored is
+               always the money -- the percentage is remembered so this form
+               can show what was typed, but an issued document must not change
+               its mind about the discount on it because a line was edited. #}
+            <div class="field">
+              <label for="f_discount">{{ t('inv.discount') }}</label>
+              <div class="input-pair">
+                <input type="text" id="f_discount" name="discount" class="num"
+                       inputmode="decimal"
+                       value="{% if editing %}{% if invoice['discount_mode'] == 'percent' and invoice['discount_rate_bp'] %}{{ fmt_rate(invoice['discount_rate_bp']) }}{% elif invoice['discount_minor'] %}{{ from_minor(invoice['discount_minor']) }}{% endif %}{% endif %}">
+                <select name="discount_mode" id="f_discount_mode" aria-label="{{ t('inv.discount_mode') }}">
+                  <option value="amount" {% if not editing or invoice['discount_mode'] != 'percent' %}selected{% endif %}>{{ currency }}</option>
+                  <option value="percent" {% if editing and invoice['discount_mode'] == 'percent' %}selected{% endif %}>%</option>
+                </select>
+              </div>
+              <p class="hint">{{ t('inv.discount_hint') }}</p>
+            </div>
           </div>
           <div class="field">
             <div class="check">
@@ -219,7 +219,15 @@
 {% endblock %}
 
 {% block scripts %}
+{# The one list behind every description box on this page. A <datalist> is
+   the browser's own combo box: the field still accepts anything typed, so a
+   custom description needs no second field to live in. #}
+<datalist id="catalog-names">
+  {% for ci in catalog %}<option value="{{ loc(ci, 'name_en') }}"></option>
+  {% endfor %}
+</datalist>
+
 <script id="catalog-data" type="application/json">{{ catalog_json | tojson }}</script>
-<script src="/static/js/money.js"></script>
-<script src="/static/js/invoice-form.js"></script>
+<script src="{{ static('js/money.js') }}"></script>
+<script src="{{ static('js/invoice-form.js') }}"></script>
 {% endblock %}

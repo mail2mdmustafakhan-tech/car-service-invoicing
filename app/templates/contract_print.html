@@ -25,7 +25,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ order['contract_no'] }} — {{ settings['business_name_en'] }}</title>
-  {% if not pdf %}<link rel="stylesheet" href="/static/css/print.css">{% endif %}
+  {% if not pdf %}<link rel="stylesheet" href="{{ static('css/print.css') }}">{% endif %}
 </head>
 <body class="print-view">
 
@@ -75,6 +75,27 @@
       <div class="dates"><bdi>Date / التاريخ</bdi>: <bdi>{{ order['date_in'] }}</bdi></div>
     </div>
   </div>
+
+
+  {# ---- Known faults noted on this job ---------------------------------
+     Only the ones ticked to be shown. Printed left-to-right like the rest of
+     this document, and quiet: it explains why the bill is what it is, it is
+     not the headline. #}
+  {% if order_issues %}
+  <div class="known-faults">
+    <h3>{{ t2('iss.attached') }}</h3>
+    <ul>
+      {% for link in order_issues %}
+        <li>
+          <strong>{{ link['title_en'] }}</strong>
+          {% if link['title_ar'] %}<span class="ar"> / {{ link['title_ar'] }}</span>{% endif %}
+          — {{ t2('iss.out_' ~ link['outcome']) }}
+          {% if link['note'] %}<span class="note"> ({{ link['note'] }})</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 
   {# ---- The notice, both languages, numbered automatically --------------- #}
   {% set terms_en = settings['contract_terms_en'].split('\n') | map('trim') | select | list %}

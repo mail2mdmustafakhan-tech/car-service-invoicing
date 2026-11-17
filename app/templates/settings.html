@@ -232,8 +232,19 @@
 <section class="panel" style="margin-block-start:var(--space-6)">
   <div class="panel-head"><h2>{{ t('set.backup') }}</h2></div>
   <div class="panel-body">
-    <p class="hint" style="margin-block-start:0">{{ t('set.backup_hint') }}</p>
-    <a class="btn" href="/settings/backup">{{ t('set.download_backup') }}</a>
+    {# Two downloads doing different jobs, labelled so nobody grabs the wrong
+       one in a hurry: the zip is what you restore from, the workbook is what
+       you can still read if this software is gone. #}
+    <div class="backup-choice">
+      <div class="backup-option">
+        <a class="btn" href="/settings/backup">{{ t('set.download_backup') }}</a>
+        <p class="hint">{{ t('set.backup_hint') }}</p>
+      </div>
+      <div class="backup-option">
+        <a class="btn" href="/settings/backup.xlsx">{{ t('set.download_excel') }}</a>
+        <p class="hint">{{ t('set.excel_hint') }}</p>
+      </div>
+    </div>
   </div>
 </section>
 {% endblock %}

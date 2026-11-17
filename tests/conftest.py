@@ -51,6 +51,38 @@ def client(tmp_path, monkeypatch) -> Iterator:
 
 
 @pytest.fixture()
+def web_db(tmp_path) -> Path:
+    """The database the `client` fixture is wired to.
+
+    `conn` is a *different* database, which catches people out: data created
+    through it is invisible to the web client and vice versa. When a test
+    needs to look at what the application actually stored, it opens this one.
+    """
+    return tmp_path / "web.db"
+
+
+@pytest.fixture()
+def read_web_db(web_db):
+    """Open the web client's database read-only, for checking what was saved.
+
+    Returns a callable so the connection is opened at the moment of asking --
+    the file does not exist until the client has started.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _open() -> Iterator[sqlite3.Connection]:
+        connection = sqlite3.connect(web_db)
+        connection.row_factory = sqlite3.Row
+        try:
+            yield connection
+        finally:
+            connection.close()
+
+    return _open
+
+
+@pytest.fixture()
 def shop(client):
     """A client with a customer, a vehicle and a catalogue item already set up.
 

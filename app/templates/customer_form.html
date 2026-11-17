@@ -34,6 +34,19 @@
         </div>
       </div>
 
+      <div class="field" style="max-width:320px">
+        <label for="f_category">{{ t('cust.category') }}</label>
+        <select id="f_category" name="category">
+          {% for value in ['regular', 'vip', 'family', 'fleet'] %}
+            <option value="{{ value }}"
+              {% if (editing and customer['category'] == value) or (not editing and value == 'regular') %}selected{% endif %}>
+              {{ t('cust.cat_' ~ value) }}
+            </option>
+          {% endfor %}
+        </select>
+        <p class="hint">{{ t('cust.category_hint') }}</p>
+      </div>
+
       {% if editing %}
         {{ check('is_active', t('cust.active'), customer['is_active']) }}
       {% endif %}

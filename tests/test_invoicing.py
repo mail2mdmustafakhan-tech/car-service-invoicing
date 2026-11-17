@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from app import invoicing
 from app.invoicing import (
     balance_due,
     compute_totals,
@@ -258,3 +259,49 @@ def test_money_formatting(minor, expected):
 )
 def test_quantity_formatting(milli, expected):
     assert format_qty(milli) == expected
+
+
+# ---------------------------------------------------------------------------
+# Discounts entered as a percentage
+# ---------------------------------------------------------------------------
+
+
+def test_a_percentage_discount_becomes_money():
+    """Totals are always worked out from the amount, never from the rate."""
+    assert invoicing.discount_amount(10000, 1000) == 1000      # 10% of 100.00
+    assert invoicing.discount_amount(3333, 1250) == 417        # rounds half-up
+
+
+def test_a_discount_larger_than_the_bill_is_capped():
+    """A typing slip should not produce an invoice that owes the customer."""
+    assert invoicing.discount_amount(5000, 2000000) == 5000
+
+
+def test_a_percentage_discount_is_frozen_once_it_is_money(shop):
+    """An issued document must not change its mind when a line is edited."""
+    shop.post("/invoices/new", data={
+        "customer_id": "1", "vehicle_id": "1", "issue_date": "2026-11-16",
+        "vat_rate": "15", "discount": "10", "discount_mode": "percent",
+        "status": "issued",
+        "item_catalog_id": [""], "item_description": ["Full service"],
+        "item_description_ar": [""], "item_kind": ["service"],
+        "item_unit": ["pcs"], "item_qty": ["1"], "item_price": ["1000"],
+    })
+    page = shop.get("/invoices/1").text
+    # 10% of 1,000 is 100; VAT 15% on the remaining 900 is 135.
+    assert "100.00" in page
+    assert "1,035.00" in page
+
+
+def test_a_fixed_discount_still_works_the_way_it_did(shop):
+    shop.post("/invoices/new", data={
+        "customer_id": "1", "vehicle_id": "1", "issue_date": "2026-11-16",
+        "vat_rate": "15", "discount": "250", "discount_mode": "amount",
+        "status": "issued",
+        "item_catalog_id": [""], "item_description": ["Full service"],
+        "item_description_ar": [""], "item_kind": ["service"],
+        "item_unit": ["pcs"], "item_qty": ["1"], "item_price": ["1000"],
+    })
+    page = shop.get("/invoices/1").text
+    assert "250.00" in page
+    assert "862.50" in page            # 750 + 15%

@@ -444,3 +444,28 @@ body.print-view { background: #e9ebee; }
     }
     a { color: inherit; text-decoration: none; }
 }
+
+/* Known faults noted on the job: an explanation of the bill, printed quietly
+   rather than as a headline. */
+.known-faults { margin: 4mm 0 2mm; font-size: 8.5pt; }
+.known-faults h3 { font-size: 9pt; margin: 0 0 1.5mm; font-weight: 700; }
+.known-faults ul { margin: 0; padding-inline-start: 5mm; }
+.known-faults li { margin-bottom: 0.8mm; }
+.known-faults .note { color: #444; font-style: italic; }
+
+/* ---------------------------------------------------------------------------
+   Vehicle check
+   ---------------------------------------------------------------------------
+   The condition column has to survive a photocopier and a fax machine, which
+   is still how a workshop's paperwork travels. The word does the work; weight
+   and a rule reinforce it. No colour is load-bearing here.
+   --------------------------------------------------------------------------- */
+
+.c-cond { width: 22mm; font-weight: 700; font-size: 8.5pt; letter-spacing: 0.02em; }
+.cond-ok        { color: var(--doc-soft); font-weight: 400; }
+.cond-attention { color: var(--doc-ink); }
+.cond-urgent    { color: var(--doc-ink); text-decoration: underline; text-underline-offset: 2px; }
+.cond-na        { color: var(--doc-soft); font-weight: 400; }
+
+/* A row that needs doing now should be findable at arm's length. */
+tr:has(.cond-urgent) { background: #f4f4f4; }

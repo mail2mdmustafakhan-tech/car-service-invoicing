@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ t('iss.title') }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ t('iss.title') }}</h1>
+    <p class="hint" style="max-width:62ch">{{ t('iss.intro') }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn accent" href="/issues/new">{{ t('iss.new') }}</a>
+  </div>
+</div>
+
+<form method="get" action="/issues" class="filterbar">
+  <input type="search" name="q" value="{{ q }}" placeholder="{{ t('action.search') }}">
+  <select name="make">
+    <option value="">{{ t('iss.all_makes') }}</option>
+    {% for m in makes %}
+      <option value="{{ m }}" {% if m == make %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <div class="check">
+    <input type="checkbox" id="f_inactive" name="inactive" value="1" {% if inactive %}checked{% endif %}>
+    <label for="f_inactive">{{ t('iss.show_retired') }}</label>
+  </div>
+  <button class="btn" type="submit">{{ t('action.search') }}</button>
+</form>
+
+{% if issues %}
+  <table class="ledger">
+    <thead>
+      <tr>
+        <th>{{ t('iss.make') }}</th>
+        <th>{{ t('iss.fault') }}</th>
+        <th>{{ t('iss.severity') }}</th>
+        <th class="num">{{ t('iss.seen') }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for issue in issues %}
+        <tr {% if not issue['is_active'] %}class="muted"{% endif %}>
+          <td>
+            <strong>{{ issue['make'] }}</strong>
+            {% if issue['model'] %}<div class="sub">{{ issue['model'] }}</div>{% endif %}
+            {% if issue['engine'] or issue['year_from'] %}
+              <div class="sub">
+                {{ issue['engine'] }}
+                {% if issue['year_from'] %}
+                  {{ issue['year_from'] }}{% if issue['year_to'] %}–{{ issue['year_to'] }}{% endif %}
+                {% endif %}
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            <strong>{{ loc(issue, 'title_en') }}</strong>
+            {% if loc(issue, 'symptoms_en') %}
+              <div class="sub">{{ loc(issue, 'symptoms_en') }}</div>
+            {% endif %}
+            {% if loc(issue, 'check_en') %}
+              <div class="sub checkline">{{ t('iss.check') }}: {{ loc(issue, 'check_en') }}</div>
+            {% endif %}
+          </td>
+          <td><span class="pill sev-{{ issue['severity'] }}">{{ t('iss.sev_' ~ issue['severity']) }}</span></td>
+          <td class="num">{{ issue['case_count'] or '—' }}</td>
+          <td class="row-actions">
+            <a class="btn small" href="/issues/{{ issue['id'] }}/edit">{{ t('action.edit') }}</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="empty">
+    <p>{{ t('iss.none') }}</p>
+    <a class="btn accent" href="/issues/new">{{ t('iss.new') }}</a>
+  </div>
+{% endif %}
+{% endblock %}

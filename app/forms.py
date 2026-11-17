@@ -15,7 +15,8 @@ from collections.abc import Sequence
 from datetime import date
 from typing import Any
 
-from .money import MoneyError, to_milli, to_minor
+from . import invoicing, sources
+from .money import MoneyError, rate_to_bp, to_milli, to_minor
 
 
 class FormError(ValueError):
@@ -63,6 +64,40 @@ def iso_date(raw: str | None, *, default_today: bool = False) -> str | None:
         return date.fromisoformat(value).isoformat()
     except ValueError as exc:
         raise FormError(f"{value!r} is not a valid date.") from exc
+
+
+def discount(
+    raw: str | None,
+    mode: str | None,
+    *,
+    subtotal_minor: int,
+    field: str = "Discount",
+) -> tuple[int, str, int]:
+    """Read a discount entered either as money or as a percentage.
+
+    Returns ``(amount in minor units, mode, rate in basis points)``. The
+    amount is what the totals use; the mode and rate are kept only so the
+    form can show back what was typed.
+
+    A percentage needs the subtotal to become money, which is why this is
+    settled after the lines are parsed rather than alongside the other
+    fields.
+    """
+    chosen = one_of(mode or "amount", ("amount", "percent"), default="amount")
+    value = text(raw)
+
+    if chosen != "percent":
+        return money(value, field=field), "amount", 0
+
+    if not value:
+        return 0, "percent", 0
+    try:
+        rate_bp = rate_to_bp(value)
+    except MoneyError as exc:
+        raise FormError(f"{field}: {exc}") from exc
+    if rate_bp > 100_00:
+        raise FormError(f"{field} cannot be more than 100%.")
+    return invoicing.discount_amount(subtotal_minor, rate_bp), "percent", rate_bp
 
 
 def money(raw: str | None, *, field: str = "Amount", default: int = 0) -> int:
@@ -234,10 +269,15 @@ def parse_contract_parts(
 ) -> list[dict[str, Any]]:
     """The spare parts sheet. A contract may have no parts at all.
 
-    ``sourced`` is a select rather than a checkbox on purpose: an unticked
-    checkbox is simply absent from the submission, which would shift every
-    later row's value up by one and silently attach the wrong flag to the
-    wrong part. A select always submits, so the columns stay aligned.
+    ``sourced`` now carries where the part came from in words rather than a
+    yes/no. The old flag is derived from it instead of being asked twice: a
+    part that did not come out of our own stock was bought in for this
+    customer, which is the only thing that flag ever meant.
+
+    It must still be a field that always submits, never a checkbox: an
+    unticked checkbox is simply absent from the submission, which would shift
+    every later row's value up by one and silently attach the wrong origin to
+    the wrong part.
     """
     row_count = max(len(descriptions), len(quantities), len(prices), 0)
     parts: list[dict[str, Any]] = []
@@ -265,8 +305,63 @@ def parse_contract_parts(
                 "unit_price_minor": money(
                     price_raw, field=f"Part line {len(parts) + 1} price"
                 ),
-                "sourced_externally": 1 if text(_at(sourced, i)) == "1" else 0,
+                "source": sources.normalise(text(_at(sourced, i))),
+                "sourced_externally": 1 if sources.is_external(text(_at(sourced, i))) else 0,
             }
         )
 
     return parts
+
+
+def parse_inspection_items(
+    *,
+    areas: Sequence[str] | None,
+    areas_ar: Sequence[str] | None,
+    conditions: Sequence[str] | None,
+    findings: Sequence[str] | None,
+    findings_ar: Sequence[str] | None,
+    issue_ids: Sequence[str] | None,
+    catalog_ids: Sequence[str] | None,
+    quantities: Sequence[str] | None,
+    prices: Sequence[str] | None,
+    quote_flags: Sequence[str] | None,
+) -> list[dict[str, Any]]:
+    """Read the checklist rows off the form.
+
+    A row survives if it names something that was checked. Unlike an invoice
+    line, it needs no price and no finding: "brake fluid — ok" is a complete
+    and useful row, and most of a check reads like that.
+
+    ``quote_flags`` is a select rather than a checkbox for the same reason
+    the part source is: an unticked checkbox is simply absent from the
+    submission, which would shift every later row's value up by one and mark
+    the wrong finding for quoting.
+    """
+    rows: list[dict[str, Any]] = []
+    count = max(len(areas or ()), len(findings or ()), len(conditions or ()))
+
+    for i in range(count):
+        area = text(_at(areas, i))
+        finding = text(_at(findings, i))
+        if not area and not finding:
+            continue
+
+        price = _at(prices, i)
+        qty = _at(quantities, i)
+        rows.append(
+            {
+                "area": area,
+                "area_ar": text(_at(areas_ar, i)),
+                "condition": one_of(
+                    _at(conditions, i), ("ok", "attention", "urgent", "na"), default="ok"
+                ),
+                "finding": finding,
+                "finding_ar": text(_at(findings_ar, i)),
+                "known_issue_id": opt_int(_at(issue_ids, i)),
+                "catalog_item_id": opt_int(_at(catalog_ids, i)),
+                "qty_milli": to_milli(qty) if text(qty) else 1000,
+                "unit_price_minor": to_minor(price) if text(price) else 0,
+                "quote_it": 1 if text(_at(quote_flags, i)) == "1" else 0,
+            }
+        )
+    return rows

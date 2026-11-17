@@ -5,7 +5,7 @@
    Three jobs, and nothing else:
 
    1. Narrow the vehicle list to the chosen customer's cars.
-   2. Fill a line in when a catalogue item is picked.
+   2. Fill a line in when its description names a catalogue item.
    3. Keep the totals on screen in step as numbers are typed.
 
    The totals shown here are a *preview*. The figures that get stored are
@@ -33,8 +33,7 @@
 
     var body = document.getElementById("lines-body");
     var template = document.getElementById("line-template");
-    var lang = M.lang();
-    var catalogById = M.readCatalog();
+    var catalogByName = M.readCatalogByName();
 
     /* ---------------------------------------------------------------------
        Totals -- the same sequence of steps as invoicing.compute_totals()
@@ -87,31 +86,26 @@
        Lines
        --------------------------------------------------------------------- */
 
-    function applyCatalogPick(row) {
-        var picker = row.querySelector(".line-picker");
-        var item = catalogById[picker.value];
-        if (!item) {
-            row.querySelector(".line-catalog").value = "";
-            return;
-        }
-
-        row.querySelector(".line-catalog").value = item.id;
-        row.querySelector(".line-desc").value =
-            lang === "ar" && item.name_ar ? item.name_ar : item.name_en;
-        row.querySelector(".line-desc-ar").value = item.name_ar || "";
-        row.querySelector(".line-kind").value = item.kind || "service";
-        row.querySelector(".line-price").value = item.price;
-
-        var unit = row.querySelector(".line-unit");
-        if (item.unit) { unit.value = item.unit; }
-
+    /* One box per line: type a description, or choose a catalogue entry from
+       the list the browser offers as you type. If what ends up in the box
+       names a catalogue item, the rest of the line fills itself in. If it
+       does not, it is a custom line, which is an ordinary thing to want. */
+    function applyCatalogMatch(row) {
+        M.applyCatalogByName(catalogByName, {
+            description:   row.querySelector(".line-desc"),
+            descriptionAr: row.querySelector(".line-desc-ar"),
+            catalogId:     row.querySelector(".line-catalog"),
+            kind:          row.querySelector(".line-kind"),
+            price:         row.querySelector(".line-price"),
+            unit:          row.querySelector(".line-unit")
+        });
         recalculate();
     }
 
     function addLine(focus) {
         var row = template.content.firstElementChild.cloneNode(true);
         body.appendChild(row);
-        if (focus) { row.querySelector(".line-picker").focus(); }
+        if (focus) { row.querySelector(".line-desc").focus(); }
         recalculate();
         return row;
     }
@@ -122,8 +116,8 @@
             row.querySelector(".line-desc").value = "";
             row.querySelector(".line-qty").value = "1";
             row.querySelector(".line-price").value = "";
+            row.querySelector(".line-price").removeAttribute("data-catalog-price");
             row.querySelector(".line-catalog").value = "";
-            row.querySelector(".line-picker").value = "";
             recalculate();
             return;
         }
@@ -137,10 +131,20 @@
         if (event.target.closest(".line-qty, .line-price")) { recalculate(); }
     });
 
+    /* Picking from the browser's suggestion list fires `input` but not always
+       `change`, and typing a name by hand fires `change` only on blur. Both
+       are handled, so the line fills in whether the name was chosen or typed. */
+    body.addEventListener("input", function (event) {
+        var row = event.target.closest(".line-row");
+        if (row && event.target.classList.contains("line-desc")) {
+            applyCatalogMatch(row);
+        }
+    });
+
     body.addEventListener("change", function (event) {
         var row = event.target.closest(".line-row");
-        if (row && event.target.classList.contains("line-picker")) {
-            applyCatalogPick(row);
+        if (row && event.target.classList.contains("line-desc")) {
+            applyCatalogMatch(row);
         }
     });
 

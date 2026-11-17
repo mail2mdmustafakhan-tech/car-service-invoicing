@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 # --------------------------------------------------------------------------
@@ -383,3 +385,49 @@ def test_browser_preview_totals_match_the_server(shop):
     shop.post("/invoices/new", data=_invoice_payload())
     saved = shop.get("/invoices/1").text
     assert "327.75" in saved
+
+
+# ---------------------------------------------------------------------------
+# Static files and caching
+# ---------------------------------------------------------------------------
+
+
+def test_the_stylesheet_url_carries_a_version(client):
+    """Without this, a browser keeps yesterday's CSS and the update looks broken.
+
+    This is not theoretical: an update once arrived with new buttons from the
+    templates and old styling for them, which is indistinguishable from the
+    update not having been delivered at all.
+    """
+    page = client.get("/").text
+    assert "/static/css/app.css?v=" in page
+    assert 'href="/static/css/app.css"' not in page
+
+
+def test_the_version_follows_the_file(client, monkeypatch):
+    """A changed file must get a different address, or caches win."""
+    import re
+
+    from app.main import static_url
+
+    first = static_url("css/app.css")
+    assert re.fullmatch(r"/static/css/app\.css\?v=\d+", first)
+
+    from pathlib import Path
+
+    import app.main as main_module
+
+    css = Path(main_module.BASE_DIR) / "static" / "css" / "app.css"
+    original = css.stat().st_mtime
+    try:
+        os.utime(css, (original + 60, original + 60))
+        assert static_url("css/app.css") != first
+    finally:
+        os.utime(css, (original, original))
+
+
+def test_a_missing_static_file_does_not_crash_the_page(client):
+    """A broken link is a bad page; an exception is no page at all."""
+    from app.main import static_url
+
+    assert static_url("css/not-there.css") == "/static/css/not-there.css"

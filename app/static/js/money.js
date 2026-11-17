@@ -117,6 +117,73 @@ window.CSMoney = (function () {
         return byId;
     }
 
+    /* The same catalogue, indexed by what the user would type.
+
+       A line has one field now: type a description, or pick a catalogue
+       entry from the list the browser offers. Both land in the same box, so
+       recognising a catalogue item means matching on its name rather than
+       on a chosen id. Both languages are indexed, because someone working
+       in Arabic may still type the English name and should get the price.
+
+       Matching is case-insensitive and ignores surrounding space -- a
+       trailing space from a double-click should not turn a cataloged
+       service into an unpriced custom one. Anything that does not match is
+       a custom description, which is a normal thing to want, not an error. */
+    function readCatalogByName() {
+        var node = document.getElementById("catalog-data");
+        if (!node) { return {}; }
+        var byName = {};
+        try {
+            JSON.parse(node.textContent).forEach(function (item) {
+                [item.name_en, item.name_ar].forEach(function (name) {
+                    if (name) { byName[String(name).trim().toLowerCase()] = item; }
+                });
+            });
+        } catch (err) { /* a malformed block just means no suggestions */ }
+        return byName;
+    }
+
+    /* Fill a line from the catalogue when its description names an entry.
+
+       `fields` maps the parts of a row onto elements, so invoices, estimates
+       and contracts can share this without pretending their rows are the
+       same shape. Returns true when a catalogue item was recognised. */
+    function applyCatalogByName(byName, fields) {
+        var typed = (fields.description.value || "").trim().toLowerCase();
+        var item = byName[typed];
+
+        if (!item) {
+            if (fields.catalogId) { fields.catalogId.value = ""; }
+            return false;
+        }
+
+        if (fields.catalogId) { fields.catalogId.value = item.id; }
+        if (fields.descriptionAr) { fields.descriptionAr.value = item.name_ar || ""; }
+        if (fields.kind) { fields.kind.value = item.kind || "service"; }
+
+        /* A price the user typed is theirs, and must survive. A price this
+           function put there is ours, and must follow the description when it
+           changes to another catalogue entry.
+
+           The two are told apart by remembering what we last wrote on the
+           row: if the box still holds exactly that, nobody has touched it.
+           Without this, either a deliberate discount gets silently undone, or
+           correcting a mis-picked line leaves the wrong price behind -- and
+           the second is worse, because it reaches the customer looking
+           entirely plausible. */
+        if (fields.price) {
+            var ours = fields.price.dataset.catalogPrice;
+            var current = fields.price.value.trim();
+            if (!current || current === ours) {
+                fields.price.value = item.price;
+                fields.price.dataset.catalogPrice = item.price;
+            }
+        }
+        if (fields.unit && item.unit) { fields.unit.value = item.unit; }
+
+        return true;
+    }
+
     return {
         MINOR: MINOR,
         MILLI: MILLI,
@@ -127,6 +194,8 @@ window.CSMoney = (function () {
         lineTotal: lineTotal,
         linkCustomerToVehicle: linkCustomerToVehicle,
         readCatalog: readCatalog,
+        readCatalogByName: readCatalogByName,
+        applyCatalogByName: applyCatalogByName,
         lang: function () {
             return document.documentElement.lang === "ar" ? "ar" : "en";
         }

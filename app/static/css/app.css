@@ -107,87 +107,161 @@ h3 { font-size: 0.95rem; color: var(--ink-soft); font-weight: 600; }
    -------------------------------------------------------------------------- */
 
 .topbar {
-    background: var(--ink);
+    /* A hint of the navy from the ARC roundel, so the bar reads as this
+       workshop's rather than as a default dark header. Kept shallow: it is
+       chrome, and the figures below it are what people came to look at. */
+    /* A wider sweep than before, moving through the navy of the ARC roundel
+       and back down. Still dark enough everywhere that white text keeps its
+       contrast -- a gradient that forces the eye to work on half the bar is
+       decoration bought at the reader's expense. */
+    background:
+        radial-gradient(120% 180% at 18% -40%, rgba(96, 124, 214, 0.22), transparent 62%),
+        linear-gradient(104deg, #0e1623 0%, #1a2748 34%, #24306b 58%, #16213c 82%, #101827 100%);
     color: #fff;
     border-block-end: 3px solid var(--amber);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.25);
 }
-
 .topbar-inner {
-    max-width: 1140px;
+    /* Wider than the 1140px content below it. Eight sections plus a long
+       business name do not fit in 1140, and a bar that silently hides
+       Settings off the right edge is worse than one that is a little wider
+       than the page. */
+    max-width: 1400px;
     margin-inline: auto;
     padding: 0 var(--space-5);
     display: flex;
     align-items: center;
-    gap: var(--space-5);
-    min-height: 56px;
-    flex-wrap: wrap;
+    gap: var(--space-4);
+    min-height: 80px;
+    /* Never wrap. Wrapping is what turned this into a two-storey bar that
+       ate 106px of every screen before any content appeared. */
+    flex-wrap: nowrap;
 }
-
 .brandmark {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     color: #fff;
+    min-width: 0;          /* lets the wordmark truncate instead of pushing */
+    flex-shrink: 1;
 }
 .brandmark:hover { text-decoration: none; opacity: 0.9; }
 /* Logos are usually dark ink, which would disappear against the dark bar,
    so the image sits on a white chip. */
 .brandmark img {
-    height: 34px;
+    height: 50px;
     width: auto;
-    max-width: 56px;
+    max-width: 64px;
+    flex: none;
     background: #fff;
-    border-radius: 4px;
-    padding: 3px;
+    border-radius: 6px;
+    padding: 4px;
     object-fit: contain;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
-
 .wordmark {
     color: #fff;
     font-weight: 600;
-    font-size: 0.95rem;
-    letter-spacing: 0.01em;
+    font-size: 1.12rem;
+    letter-spacing: 0.005em;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* No fixed width. The name takes what is left after the sections have
+       taken what they need, and ellipsises into it. See .topnav below for
+       why that is the right way round. */
+    max-width: 26rem;
+    min-width: 0;
 }
 .wordmark:hover { text-decoration: none; opacity: 0.85; }
-.wordmark span {
-    display: block;
-    font-size: 0.7rem;
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.55);
-    letter-spacing: 0.04em;
-}
 
 .topnav {
     display: flex;
-    gap: var(--space-1);
+    gap: 2px;
     margin-inline-end: auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    /* The sections do not give up width; the business name does. A flex row
+       shrinks every child by default, which meant the name held its full
+       width while "Settings" was quietly cut to "Sett" -- and a half-word
+       reads as a broken page, where a shortened name reads as a shortened
+       name. This one line is what keeps the sections whole at every width;
+       the breakpoints below only tune how much room they ask for. */
+    flex: 0 0 auto;
+    /* On a narrow screen the links slide sideways rather than wrapping down.
+       A scroll gesture costs less than permanently losing a row of screen. */
+    overflow-x: auto;
+    scrollbar-width: none;
 }
-
+.topnav::-webkit-scrollbar { display: none; }
 .topnav a {
-    color: rgba(255, 255, 255, 0.78);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius);
-    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.72);
+    padding: 9px var(--space-3);
+    border-radius: 999px;
+    font-size: 0.92rem;
+    line-height: 1.5;
     white-space: nowrap;
+    transition: background-color 0.12s ease, color 0.12s ease;
 }
 .topnav a:hover { background: rgba(255, 255, 255, 0.1); color: #fff; text-decoration: none; }
 .topnav a[aria-current="page"] {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.16);
     color: #fff;
     font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
-
-.langswitch { display: flex; gap: 2px; align-items: center; }
+.langswitch { display: flex; gap: 2px; align-items: center; flex: none; }
 .langswitch a {
     color: rgba(255, 255, 255, 0.7);
-    font-size: 0.82rem;
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius);
+    font-size: 0.86rem;
+    padding: 6px var(--space-3);
+    border-radius: 999px;
 }
 .langswitch a:hover { background: rgba(255,255,255,0.12); color: #fff; text-decoration: none; }
 .langswitch a.active { color: var(--ink); background: var(--amber-rule); font-weight: 600; }
+
+/* The top bar gives things up in a fixed order as the screen narrows: first
+   the space around the links, then the length of the business name, then the
+   name itself, and only on a tablet does the row of sections break in two.
+   The order matters -- a half-cut word reads as a broken page, while a
+   shortened name reads as a shortened name.
+
+   These thresholds were set when the bar carried eight sections. It carries
+   ten now, and every number below was measured against those ten, at the
+   widths the workshop actually uses. A 1366 laptop was showing "Sett". */
+@media (min-width: 1540px) {
+    .topbar-inner { max-width: 1540px; }
+}
+
+/* Laptops. The padding around each link goes first; it is the cheapest
+   thing on the bar. */
+@media (max-width: 1539px) {
+    .topnav a { padding-inline: var(--space-2); font-size: 0.86rem; }
+}
+
+/* Smaller laptops. The name gives up width before it gives up existence:
+   a shortened name still says whose workshop this is, and the logo is
+   beside it. The whole name stays in the tooltip. */
+@media (max-width: 1400px) {
+    .topnav a { font-size: 0.84rem; }
+    .topbar-inner { gap: var(--space-3); padding-inline: var(--space-4); }
+}
+
+/* Tablets. Now the name does step aside, and the logo carries the brand. */
+@media (max-width: 1150px) {
+    .wordmark { display: none; }
+}
+
+/* Ten sections genuinely do not fit a narrow tablet on one line, however
+   tight the padding. Here they wrap onto a second row: a taller bar costs
+   less than sections parked off-screen behind a scrollbar nobody can see. */
+@media (max-width: 1100px) {
+    /* The sections may shrink again here, because shrinking is what lets
+       them wrap: held at their full width they would simply run off the
+       side of the page instead. The name is already out of the way by this
+       point, so nothing is competing with them for the room. */
+    .topnav { flex: 1 1 auto; flex-wrap: wrap; overflow-x: visible; row-gap: 4px; }
+}
 
 /* --------------------------------------------------------------------------
    Page shell
@@ -551,3 +625,205 @@ textarea { min-height: 72px; resize: vertical; }
 
 /* Anything marked this way exists only on paper, or only on screen. */
 .print-only { display: none; }
+
+/* --------------------------------------------------------------------------
+   Message language switch, on the estimate's send panel
+   --------------------------------------------------------------------------
+   Separate from the interface language switch in the top bar, and that is the
+   point: the workshop may work in Arabic and still need to send an English
+   quote. Styled as a quiet segmented control so it reads as a setting for the
+   message rather than as another way to change the whole screen.
+   -------------------------------------------------------------------------- */
+
+.msglang {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block-end: var(--space-4);
+    flex-wrap: wrap;
+}
+.msglang-label {
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    margin-inline-end: var(--space-1);
+}
+.msglang-btn {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 3px var(--space-3);
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    cursor: pointer;
+}
+.msglang-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+.msglang-btn.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Two backup downloads, side by side: one to restore from, one to read. */
+.backup-choice {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-5);
+}
+.backup-option .hint { margin-block: var(--space-2) 0; }
+
+/* A value and the unit it is in, as one control: "50" + "%" or "50" + "SAR". */
+.input-pair { display: flex; gap: 0; }
+.input-pair input { border-start-end-radius: 0; border-end-end-radius: 0; flex: 1 1 auto; min-width: 0; }
+.input-pair select {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    margin-inline-start: -1px;
+    flex: none;
+    width: auto;
+    min-width: 5.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   Part photographs
+   --------------------------------------------------------------------------
+   A small gallery at the counter, not a lightbox: the question being answered
+   is "is this the one?", and a thumbnail large enough to recognise a part
+   answers it without anyone having to click.
+   -------------------------------------------------------------------------- */
+
+.thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-4);
+    margin-block-end: var(--space-5);
+}
+.thumb {
+    margin: 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+}
+.thumb img {
+    display: block;
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    background: #f3f4f6;
+}
+.thumb figcaption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+}
+.thumb figcaption span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.uploadrow {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+}
+.uploadrow .field { margin: 0; }
+
+/* Severity, as a quiet label rather than a traffic light: these are prompts
+   for a technician, not alarms, and a page of red pills stops meaning
+   anything by the third one. */
+.pill.sev-low    { background: #eef1f5; color: var(--ink-soft); }
+.pill.sev-medium { background: #fdf2e0; color: #8a5a06; }
+.pill.sev-high   { background: #fbe9e9; color: #8f2b2b; }
+.checkline { color: var(--ink-soft); font-style: italic; }
+tr.muted td { opacity: 0.55; }
+.filterbar {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    flex-wrap: wrap;
+    margin-block-end: var(--space-5);
+}
+.filterbar input[type="search"] { min-width: 220px; }
+
+/* --------------------------------------------------------------------------
+   Advanced analytics
+   --------------------------------------------------------------------------
+   A native <details>, closed on arrival. The browser has done collapsible
+   sections for years: it works with the keyboard and a screen reader with no
+   help from us, and it still opens if a script fails to load.
+   -------------------------------------------------------------------------- */
+
+.analytics {
+    margin-block-start: var(--space-6);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+.analytics > summary {
+    cursor: pointer;
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    list-style: none;
+}
+.analytics > summary::-webkit-details-marker { display: none; }
+.analytics > summary::before {
+    content: "▸";
+    color: var(--ink-faint);
+    font-size: 0.9em;
+    transition: transform 0.15s ease;
+    display: inline-block;
+}
+.analytics[open] > summary::before { transform: rotate(90deg); }
+.analytics > summary:hover { background: var(--paper); }
+.analytics-title { font-weight: 600; color: var(--ink); }
+.analytics-body {
+    padding: 0 var(--space-5) var(--space-5);
+    border-block-start: 1px solid var(--rule);
+}
+.analytics-body .panel { margin-block-start: var(--space-5); }
+
+.chart { display: block; max-width: 100%; height: auto; }
+
+.statrow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-4);
+    margin-block-start: var(--space-5);
+}
+.stat {
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: var(--space-4);
+    background: var(--paper);
+}
+/* Proportional figures on a standalone number: equal-width digits make a
+   three-digit value look loose at this size. */
+.stat-value { font-size: 1.7rem; font-weight: 600; color: var(--ink); line-height: 1.1; }
+.stat-label { font-size: 0.82rem; color: var(--ink-soft); margin-block-start: var(--space-1); }
+
+/* Condition tags on a vehicle check.
+   The word carries the meaning and the colour only reinforces it: a check
+   read in black and white, or by someone who sees colour differently, still
+   has to say which items are urgent. */
+.tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px var(--space-2);
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.tag.ok        { background: #e8f1ea; color: #1d5233; }
+.tag.attention { background: #fdf0db; color: #7a4e07; }
+.tag.urgent    { background: #fbe5e5; color: #8c1d1d; }
+.tag.na        { background: var(--surface-sunken); color: var(--ink-faint); }

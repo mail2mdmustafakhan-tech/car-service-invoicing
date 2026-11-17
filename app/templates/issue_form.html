@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field, check with context %}
+{% set editing = issue is not none %}
+{% block title %}{{ t('iss.edit') if editing else t('iss.new') }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/issues">{{ t('iss.title') }}</a></div>
+<div class="pagehead">
+  <h1>{{ t('iss.edit') if editing else t('iss.new') }}</h1>
+</div>
+
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ '/issues/' ~ issue['id'] ~ '/edit' if editing else '/issues/new' }}">
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('iss.which_car') }}</h2></div>
+    <div class="panel-body">
+      <div class="grid-2">
+        {{ field('make', t('iss.make'), issue['make'] if editing else '', required=True,
+                 attrs='list="issue-makes"') }}
+        {{ field('model', t('iss.model'), issue['model'] if editing else '',
+                 hint='3 Series (F30), X5, or leave blank for all' if lang == 'en'
+                      else 'مثل 3 Series (F30) أو X5، أو اتركه فارغاً للكل') }}
+      </div>
+      <datalist id="issue-makes">
+        {% for m in ['BMW', 'Mercedes-Benz', 'Audi', 'Volkswagen', 'Rolls-Royce', 'All'] %}
+          <option value="{{ m }}"></option>
+        {% endfor %}
+      </datalist>
+
+      <div class="grid-3">
+        {{ field('engine', t('iss.engine'), issue['engine'] if editing else '',
+                 hint='N20, B58, EA888, M276') }}
+        {{ field('year_from', t('iss.year_from'), issue['year_from'] if editing and issue['year_from'] else '',
+                 type='number', attrs='min="1950" max="2100" step="1" class="num"') }}
+        {{ field('year_to', t('iss.year_to'), issue['year_to'] if editing and issue['year_to'] else '',
+                 type='number', attrs='min="1950" max="2100" step="1" class="num"') }}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('iss.the_fault') }}</h2></div>
+    <div class="panel-body">
+      <div class="grid-2">
+        {{ field('title_en', t('iss.title_en'), issue['title_en'] if editing else '', required=True) }}
+        {{ field('title_ar', t('iss.title_ar'), issue['title_ar'] if editing else '',
+                 attrs='dir="rtl"') }}
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_symptoms_en">{{ t('iss.symptoms_en') }}</label>
+          <textarea id="f_symptoms_en" name="symptoms_en">{{ issue['symptoms_en'] if editing else '' }}</textarea>
+        </div>
+        <div class="field">
+          <label for="f_symptoms_ar">{{ t('iss.symptoms_ar') }}</label>
+          <textarea id="f_symptoms_ar" name="symptoms_ar" dir="rtl">{{ issue['symptoms_ar'] if editing else '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="f_check_en">{{ t('iss.check_en') }}</label>
+          <textarea id="f_check_en" name="check_en">{{ issue['check_en'] if editing else '' }}</textarea>
+          <p class="hint">{{ t('iss.check_hint') }}</p>
+        </div>
+        <div class="field">
+          <label for="f_check_ar">{{ t('iss.check_ar') }}</label>
+          <textarea id="f_check_ar" name="check_ar" dir="rtl">{{ issue['check_ar'] if editing else '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="field" style="max-width:260px">
+        <label for="f_severity">{{ t('iss.severity') }}</label>
+        <select id="f_severity" name="severity">
+          {% for level in ['low', 'medium', 'high'] %}
+            <option value="{{ level }}"
+              {% if (editing and issue['severity'] == level) or (not editing and level == 'medium') %}selected{% endif %}>
+              {{ t('iss.sev_' ~ level) }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f_notes">{{ t('iss.notes') }}</label>
+        <textarea id="f_notes" name="notes">{{ issue['notes'] if editing else '' }}</textarea>
+      </div>
+
+      {% if editing %}{{ check('is_active', t('iss.in_use'), issue['is_active']) }}{% endif %}
+
+      <div class="formactions">
+        <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+        <a class="btn" href="/issues">{{ t('action.cancel') }}</a>
+        {% if editing %}
+          <form method="post" action="/issues/{{ issue['id'] }}/delete" style="display:inline"
+                onsubmit="return confirm('{{ t('action.confirm_delete') }}')">
+            <button class="btn danger" type="submit">{{ t('action.delete') }}</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</form>
+{% endblock %}

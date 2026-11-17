@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pill with context %}
+{% block title %}{{ inspection['inspection_no'] }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>{{ inspection['inspection_no'] }} {{ pill(inspection['status']) }}</h1>
+  <div class="actions">
+    {% if not inspection['estimate_id'] %}
+      <a class="btn" href="/inspections/{{ inspection['id'] }}/edit">{{ t('action.edit') }}</a>
+    {% endif %}
+    <a class="btn" href="/inspections/{{ inspection['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+    {% if inspection['estimate_id'] %}
+      <a class="btn accent" href="/estimates/{{ inspection['estimate_id'] }}">
+        {{ t('ins.view_estimate') }} {{ inspection['estimate_no'] }}
+      </a>
+    {% else %}
+      {# The whole point of a check: it becomes the quote. #}
+      <form method="post" action="/inspections/{{ inspection['id'] }}/estimate" style="display:inline">
+        <button class="btn accent" type="submit">{{ t('ins.make_estimate') }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="cols">
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('ins.checklist') }}</h2></div>
+      <div class="panel-body tight scrollx">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>{{ t('ins.area') }}</th>
+              <th>{{ t('ins.condition') }}</th>
+              <th>{{ t('ins.finding') }}</th>
+              <th class="num">{{ t('ins.est_price') }}</th>
+              <th>{{ t('ins.quote_it') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+            <tr>
+              <td>{{ it['area'] }}</td>
+              <td>
+                {# The word carries the meaning; the colour only reinforces it.
+                   A row read in black and white still says "urgent". #}
+                <span class="tag {{ it['condition'] }}">{{ t('ins.cond_' ~ it['condition']) }}</span>
+              </td>
+              <td>
+                {{ it['finding'] }}
+                {% if it['issue_title'] %}
+                <span class="sub">{{ t('ins.matches') }}: {{ loc(it, 'issue_title') }}</span>
+                {% endif %}
+              </td>
+              <td class="num">
+                {% if it['unit_price_minor'] %}{{ from_minor(it['qty_milli'] * it['unit_price_minor'] // 1000) }}{% else %}—{% endif %}
+              </td>
+              <td>{% if it['quote_it'] %}✓{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {% if inspection['summary'] or inspection['notes'] %}
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('ins.summary') }}</h2></div>
+      <div class="panel-body">
+        {% if inspection['summary'] %}<p>{{ inspection['summary'] }}</p>{% endif %}
+        {% if inspection['notes'] %}<p class="hint">{{ inspection['notes'] }}</p>{% endif %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('ins.details') }}</h2></div>
+      <div class="panel-body">
+        <dl class="facts">
+          <dt>{{ t('inv.customer') }}</dt>
+          <dd><a href="/customers/{{ inspection['customer_id'] }}">{{ loc(inspection, 'customer_name') }}</a></dd>
+          {% if inspection['plate_no'] %}
+          <dt>{{ t('inv.vehicle') }}</dt>
+          <dd><bdi>{{ inspection['plate_no'] }}</bdi><span class="sub">{{ inspection['make'] }} {{ inspection['model'] }} {{ inspection['model_year'] or '' }}</span></dd>
+          {% endif %}
+          <dt>{{ t('ins.date') }}</dt><dd>{{ inspection['inspected_on'] }}</dd>
+          {% if inspection['odometer'] %}
+          <dt>{{ t('inv.odometer') }}</dt><dd>{{ '{:,}'.format(inspection['odometer']) }} km</dd>
+          {% endif %}
+          {% if inspection['technician'] %}
+          <dt>{{ t('con.technician') }}</dt><dd>{{ inspection['technician'] }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

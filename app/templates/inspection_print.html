@@ -1,0 +1,152 @@
+{#
+  The printed check — what the customer is handed before any price is agreed.
+
+  Not a bill and shaped so nobody mistakes it for one: no totals block, no
+  amount due, no signature line accepting anything. What it carries is a list
+  of what was looked at and what was found, with the urgent items unmissable.
+
+  A price column appears only where a finding has been priced, and it is
+  headed as an estimate. The document that asks for money is the estimate,
+  and it comes later.
+
+  Laid out left-to-right whatever the interface language, like the invoice
+  and the estimate: the customer's copy should not change shape depending on
+  who printed it.
+#}
+<!doctype html>
+<html lang="{{ lang }}" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ inspection['inspection_no'] }} — {{ settings['business_name_en'] }}</title>
+  {% if not pdf %}<link rel="stylesheet" href="{{ static('css/print.css') }}">{% endif %}
+</head>
+<body class="print-view">
+
+{% if not pdf %}
+<div class="print-bar">
+  <button type="button" onclick="window.print()">{{ t('action.print') }}</button>
+  <a href="/inspections/{{ inspection['id'] }}">{{ t('action.back') }}</a>
+  <span class="note">
+    {{ 'Choose "Save as PDF" in the print dialogue to keep a copy.' if lang == 'en'
+       else 'اختر "حفظ كملف PDF" في نافذة الطباعة للاحتفاظ بنسخة.' }}
+  </span>
+</div>
+{% endif %}
+
+<div class="sheet">
+
+  <div class="doc-head">
+    <div class="issuer">
+      <div class="name">{{ settings['business_name_en'] }}</div>
+      {% if settings['business_name_ar'] %}
+        <div class="name-alt" dir="rtl">{{ settings['business_name_ar'] }}</div>
+      {% endif %}
+      <div class="meta">
+        {% if settings['address_en'] %}<div>{{ settings['address_en'] }}</div>{% endif %}
+        {% if settings['phone'] %}<div>{{ settings['phone'] }}</div>{% endif %}
+      </div>
+    </div>
+
+    {% if logo_uri %}
+      <div class="doc-logo"><img src="{{ logo_uri }}" alt=""></div>
+    {% endif %}
+
+    <div class="doc-title">
+      <div class="kind">VEHICLE CHECK</div>
+      <div class="kind-alt" dir="rtl">فحص المركبة</div>
+      <table class="doc-meta">
+        <tr><th>No.</th><td>{{ inspection['inspection_no'] }}</td></tr>
+        <tr><th>Date</th><td>{{ inspection['inspected_on'] }}</td></tr>
+        {% if inspection['technician'] %}
+        <tr><th>Checked by</th><td>{{ inspection['technician'] }}</td></tr>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party">
+      <div class="party-label">Customer / العميل</div>
+      <div class="party-name">{{ inspection['customer_name'] }}</div>
+      {% if inspection['customer_phone'] %}<div>{{ inspection['customer_phone'] }}</div>{% endif %}
+    </div>
+    {% if inspection['plate_no'] %}
+    <div class="party">
+      <div class="party-label">Vehicle / المركبة</div>
+      <div class="party-name"><bdi>{{ inspection['plate_no'] }}</bdi></div>
+      <div>{{ inspection['make'] }} {{ inspection['model'] }} {{ inspection['model_year'] or '' }}</div>
+      {% if inspection['odometer'] %}<div>{{ '{:,}'.format(inspection['odometer']) }} km</div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <table class="lines">
+    <thead>
+      <tr>
+        <th class="c-no">#</th>
+        <th>Checked / البند</th>
+        <th class="c-cond">Condition</th>
+        <th>Finding / الملاحظة</th>
+        <th class="c-amt">Estimate</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td class="c-no">{{ loop.index }}</td>
+        <td>{{ it['area'] }}</td>
+        {# The word carries the meaning. A check photocopied in black and
+           white still has to say which items are urgent. #}
+        <td class="c-cond cond-{{ it['condition'] }}">
+          {% if it['condition'] == 'ok' %}OK
+          {% elif it['condition'] == 'attention' %}ADVISORY
+          {% elif it['condition'] == 'urgent' %}URGENT
+          {% else %}n/a{% endif %}
+        </td>
+        <td>
+          {{ it['finding'] }}
+          {% if it['issue_title'] %}<div class="sub">Known issue: {{ it['issue_title'] }}</div>{% endif %}
+        </td>
+        <td class="c-amt">
+          {% if it['unit_price_minor'] %}{{ from_minor(it['qty_milli'] * it['unit_price_minor'] // 1000) }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if inspection['summary'] %}
+  <div class="notice">
+    <div class="en">
+      <strong>Summary</strong>
+      <p>{{ inspection['summary'] }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="notice">
+    <div class="en">
+      <p><strong>This is a record of a vehicle check, not a bill.</strong>
+         Any prices shown are estimates for the work described and are not
+         charged unless you ask us to go ahead. A separate written estimate
+         follows for anything you would like us to do.</p>
+    </div>
+    <div class="ar" dir="rtl">
+      <p><strong>هذا تقرير فحص للمركبة وليس فاتورة.</strong>
+         الأسعار الواردة تقديرية للأعمال الموصوفة ولا تُحتسب إلا بطلبكم
+         المضي قدماً، ويصدر عرض سعر منفصل لما ترغبون في تنفيذه.</p>
+    </div>
+  </div>
+
+  <div class="doc-foot">
+    <div>{{ settings['business_name_en'] }}</div>
+    {% if settings['vat_number'] %}<div>VAT {{ settings['vat_number'] }}</div>{% endif %}
+  </div>
+</div>
+
+{% if autoprint and not pdf %}
+<script>window.addEventListener("load", function () { window.print(); });</script>
+{% endif %}
+</body>
+</html>
