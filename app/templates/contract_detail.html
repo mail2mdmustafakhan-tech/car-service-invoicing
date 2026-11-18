@@ -181,7 +181,7 @@
             <td class="tight secondary">{{ p['part_number'] or '—' }}</td>
             <td>{{ loc(p, 'description') }}</td>
             <td class="tight secondary">
-              {{ source_label(p['source'] or 'own_stock', lang) }}
+              {{ opt_label('sources', p['source'] or 'own_stock') }}
             </td>
             <td class="num">{{ fmt_qty(p['qty_milli']) }}</td>
             <td class="num">{{ m(p['unit_price_minor']) }}</td>

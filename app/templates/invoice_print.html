@@ -208,7 +208,7 @@
       {% for p in payments %}
       <tr>
         <td style="width:28mm">{{ p['paid_on'] }}</td>
-        <td><bdi>{{ t2('pay.method_' ~ p['method']) }}</bdi>{% if p['reference'] %} — <bdi>{{ p['reference'] }}</bdi>{% endif %}</td>
+        <td><bdi>{{ opt_label2('payment_methods', p['method']) }}</bdi>{% if p['reference'] %} — <bdi>{{ p['reference'] }}</bdi>{% endif %}</td>
         <td class="num" style="width:30mm">{{ m_plain(p['amount_minor']) }}</td>
       </tr>
       {% endfor %}

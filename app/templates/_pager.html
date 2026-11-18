@@ -1,0 +1,44 @@
+{#
+  The pager under a list.
+
+  Two jobs, and the first matters more than the buttons: say what you are
+  looking at. "Showing 51-100 of 4,312" is the line that tells somebody the
+  list did not end at row 50 -- without it, a page of fifty rows and a list of
+  fifty rows look identical, which is exactly how the old `LIMIT 500` managed
+  to hide 3,800 customers without anybody noticing.
+
+  Every link carries the current filters and sort forward. A pager that drops
+  them sends you to page 2 of something else.
+#}
+{% macro pager(page, request, label="") -%}
+  {%- if page.total -%}
+  <nav class="pager" aria-label="{{ t('pager.nav') }}">
+    <p class="pager-count">
+      {{ t("pager.showing") }} <strong>{{ "{:,}".format(page.first) }}&ndash;{{ "{:,}".format(page.last) }}</strong>
+      {{ t("pager.of") }} <strong>{{ "{:,}".format(page.total) }}</strong>{% if label %} {{ label }}{% endif %}
+    </p>
+
+    {%- if page.pages > 1 %}
+    <div class="pager-links">
+      {%- if page.has_prev %}
+        <a class="btn small" href="{{ page_url(request, 1) }}" aria-label="{{ t('pager.first') }}">&laquo;</a>
+        <a class="btn small" href="{{ page_url(request, page.prev) }}" rel="prev">{{ t("pager.previous") }}</a>
+      {%- else %}
+        <span class="btn small is-off" aria-disabled="true">&laquo;</span>
+        <span class="btn small is-off" aria-disabled="true">{{ t("pager.previous") }}</span>
+      {%- endif %}
+
+      <span class="pager-page">{{ t("pager.page") }} {{ page.number }} / {{ page.pages }}</span>
+
+      {%- if page.has_next %}
+        <a class="btn small" href="{{ page_url(request, page.next) }}" rel="next">{{ t("pager.next") }}</a>
+        <a class="btn small" href="{{ page_url(request, page.pages) }}" aria-label="{{ t('pager.last') }}">&raquo;</a>
+      {%- else %}
+        <span class="btn small is-off" aria-disabled="true">{{ t("pager.next") }}</span>
+        <span class="btn small is-off" aria-disabled="true">&raquo;</span>
+      {%- endif %}
+    </div>
+    {%- endif %}
+  </nav>
+  {%- endif %}
+{%- endmacro %}

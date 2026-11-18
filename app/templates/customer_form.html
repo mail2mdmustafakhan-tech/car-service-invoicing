@@ -37,14 +37,35 @@
       <div class="field" style="max-width:320px">
         <label for="f_category">{{ t('cust.category') }}</label>
         <select id="f_category" name="category">
-          {% for value in ['regular', 'vip', 'family', 'fleet'] %}
-            <option value="{{ value }}"
-              {% if (editing and customer['category'] == value) or (not editing and value == 'regular') %}selected{% endif %}>
-              {{ t('cust.cat_' ~ value) }}
+          {% for o in options.customer_types %}
+            <option value="{{ o['value'] }}"
+              {% if (editing and customer['category'] == o['value']) or (not editing and o['value'] == 'regular') %}selected{% endif %}>
+              {{ loc(o, 'label_en') }}
             </option>
           {% endfor %}
         </select>
         <p class="hint">{{ t('cust.category_hint') }}</p>
+      </div>
+
+      <div class="field">
+        <label for="f_alert_level">{{ t('alert.title') }}</label>
+        <select id="f_alert_level" name="alert_level">
+          <option value="">{{ t('alert.none') }}</option>
+          {% for level in ALERT_LEVELS %}
+            <option value="{{ level }}"
+              {% if editing and customer['alert_level'] == level %}selected{% endif %}>
+              {{ t('alert.' ~ level) }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field field-wide">
+        <label for="f_alert_note">{{ t('alert.reason') }}</label>
+        <input type="text" id="f_alert_note" name="alert_note"
+               value="{{ customer['alert_note'] if editing else '' }}"
+               maxlength="300">
+        <p class="hint">{{ t('alert.reason_hint') }}</p>
       </div>
 
       {% if editing %}

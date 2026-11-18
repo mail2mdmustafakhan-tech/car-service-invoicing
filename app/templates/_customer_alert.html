@@ -1,0 +1,82 @@
+{#
+  The warning that appears when somebody picks a flagged customer.
+
+  There are two parts and they do different jobs.
+
+  The dialog interrupts. It is modal, so the form cannot be filled in behind
+  it, and it has to be dismissed deliberately. That is the right amount of
+  friction for "do not accept this car": the whole value of the warning is
+  that it arrives before the car is booked in, not after.
+
+  The banner persists. A dialog that has been dismissed is gone, and whoever
+  walks over to the desk ten minutes later sees nothing -- so the warning
+  also sits beside the customer field for as long as that customer is
+  selected.
+
+  A plain note gets the banner only. Interrupting someone's work to tell
+  them the driver's name is how people learn to click through warnings
+  without reading them, and then the one that mattered goes unread too.
+#}
+
+{% macro customer_alert_dialog() -%}
+{#
+  No <form> inside this dialog, and that is not a style choice.
+
+  A dialog's close button is usually written as <form method="dialog">, and
+  this one was. But the dialog sits beside the customer picker, which is
+  inside the page's own form -- and HTML does not allow a form inside a
+  form. The parser does not complain: it quietly closes the outer one at the
+  nested tag. Everything after the customer field -- the vehicle, the
+  odometer, all eighteen checklist rows and the Save button -- fell outside
+  the form, so Save submitted nothing at all and the page simply sat there.
+  The same break hit all six screens where a customer is picked.
+
+  So the button is an ordinary button and the script closes the dialog.
+  Escape still works; that is the dialog element's own behaviour.
+#}
+<dialog id="customer-alert" class="alert-dialog">
+  <div class="alert-dialog-body">
+    <div class="alert-dialog-head">
+      <span class="alert-chip" id="customer-alert-level"></span>
+      <strong id="customer-alert-name"></strong>
+    </div>
+    <p class="alert-dialog-note" id="customer-alert-note"></p>
+    <p class="alert-dialog-when" id="customer-alert-when"></p>
+    <div class="formactions">
+      <button type="button" class="btn" id="customer-alert-close" autofocus>{{ t('alert.understood') }}</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="alert-banner" id="customer-alert-banner" hidden>
+  <span class="alert-chip" id="customer-alert-banner-level"></span>
+  <span id="customer-alert-banner-note"></span>
+</div>
+{%- endmacro %}
+
+{#
+  Put on each <option> so the browser already knows, with no second request
+  at the moment of choosing. The list is a few hundred customers of which a
+  dozen carry anything at all, so the cost is a handful of bytes.
+#}
+{% macro customer_option_data(c) -%}
+{%- if c['alert_level'] %} data-alert-level="{{ c['alert_level'] }}" data-alert-label="{{ t('alert.' ~ c['alert_level']) }}" data-alert-note="{{ c['alert_note'] }}" data-alert-when="{{ c['alert_set_on'] }}"{% endif %}
+{%- endmacro %}
+
+{#
+  The banner on a customer's own page, and anywhere their record is shown in
+  full. Always visible -- no dismissing.
+#}
+{% macro customer_alert_panel(c) -%}
+{% if c['alert_level'] %}
+<div class="alert-panel alert-{{ c['alert_level'] }}" role="{{ 'alert' if c['alert_level'] == 'refuse' else 'status' }}">
+  <span class="alert-chip">{{ t('alert.' ~ c['alert_level']) }}</span>
+  <div class="alert-panel-body">
+    <p class="alert-panel-note">{{ c['alert_note'] or t('alert.no_reason') }}</p>
+    {% if c['alert_set_on'] %}
+      <p class="alert-panel-when">{{ t('alert.set_on') }} {{ c['alert_set_on'] }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}

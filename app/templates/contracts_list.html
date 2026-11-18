@@ -1,10 +1,15 @@
 {% extends "base.html" %}
+{% from "_counts.html" import countline with context %}
 {% from "_macros.html" import pill with context %}
+{% from "_pager.html" import pager with context %}
 {% block title %}{{ t('con.title') }}{% endblock %}
 
 {% block content %}
 <div class="pagehead">
-  <h1>{{ t('con.title') }}</h1>
+  <div>
+    <h1>{{ t('con.title') }}</h1>
+    {{ countline(counts_for('contracts'), 'count.contracts') }}
+  </div>
   <div class="actions"><a class="btn accent" href="/contracts/new">{{ t('con.new') }}</a></div>
 </div>
 
@@ -74,6 +79,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(page, request) }}
   {% else %}
   <div class="empty">
     <p>{{ t('con.none') if not (q or status) else t('msg.no_results') }}</p>

@@ -1,0 +1,32 @@
+{#
+  The search box that sits above a customer dropdown.
+
+  Why it exists: the forms used to render one <option> per customer. On the
+  real register that is 4,000 of them -- most of a megabyte of HTML on a form
+  with two fields worth filling in, and a dropdown you could not find anybody
+  in without scrolling past three thousand strangers. Now the page carries the
+  fifty most recent customers plus whoever is already chosen, and this box
+  fetches the rest from /api/customers as a name is typed.
+
+  The control that does the choosing is still the native <select> underneath,
+  deliberately. A hand-built combobox means hand-built keyboard handling,
+  hand-built screen-reader semantics, and a list that behaves like nothing
+  else in the browser. Only the filling-in is ours.
+
+  The hint goes above the box rather than below it, so the box and the list
+  it fills stay next to each other: a line of explanation wedged between two
+  controls that work together reads as though they are unrelated.
+
+  Nothing else about the forms changes: the select keeps its id, its name and
+  its `required`, so every POST handler, every test and the alert dialog carry
+  on exactly as before. The box is a sibling rather than a wrapper for the
+  same reason -- no existing markup has to move to make room for it.
+#}
+{% macro customer_search(target) -%}
+<p class="picker-hint" id="{{ target }}-hint">{{ t('pick.customer_hint') }}</p>
+<input type="search" class="picker-search" autocomplete="off"
+       data-picker-search="{{ target }}" aria-controls="{{ target }}"
+       aria-describedby="{{ target }}-hint"
+       placeholder="{{ t('pick.search_customer') }}"
+       aria-label="{{ t('pick.search_customer') }}">
+{%- endmacro %}

@@ -1,12 +1,30 @@
 {% extends "base.html" %}
+{% from "_counts.html" import countline with context %}
 {% from "_macros.html" import pill with context %}
+{% from "_pager.html" import pager with context %}
 {% block title %}{{ t('ins.title') }}{% endblock %}
 
 {% block content %}
 <div class="pagehead">
-  <h1>{{ t('ins.title') }}</h1>
+  <div>
+    <h1>{{ t('ins.title') }}</h1>
+    {{ countline(counts_for('inspections'), 'count.inspections') }}
+  </div>
   <div class="actions"><a class="btn accent" href="/inspections/new">{{ t('ins.new') }}</a></div>
 </div>
+
+<form class="toolbar" method="get" action="/inspections">
+  <input class="grow" type="search" name="q" value="{{ q }}"
+         placeholder="{{ t('ins.search_hint') }}" aria-label="{{ t('action.search') }}">
+  <select name="status" aria-label="{{ t('inv.status') }}">
+    <option value="">{{ t('inv.status') }}: {{ t('status.all') }}</option>
+    {% for s in ['draft', 'checked', 'quoted'] %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ t('status.' ~ s) }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">{{ t('action.search') }}</button>
+  {% if q or status %}<a class="btn link" href="/inspections">{{ t('action.clear') }}</a>{% endif %}
+</form>
 
 <div class="panel">
   {% if inspections %}
@@ -51,6 +69,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(page, request) }}
   {% else %}
   <div class="panel-body empty">
     <p>{{ t('ins.none') }}</p>

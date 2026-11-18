@@ -1,10 +1,13 @@
 {% extends "base.html" %}
+{% from "_sortable.html" import sort_th with context %}
+{% from "_counts.html" import countline with context %}
 {% block title %}{{ t('iss.title') }}{% endblock %}
 
 {% block content %}
 <div class="pagehead">
   <div>
     <h1>{{ t('iss.title') }}</h1>
+    {{ countline(counts_for('issues'), 'count.issues') }}
     <p class="hint" style="max-width:62ch">{{ t('iss.intro') }}</p>
   </div>
   <div class="actions">
@@ -25,15 +28,24 @@
     <label for="f_inactive">{{ t('iss.show_retired') }}</label>
   </div>
   <button class="btn" type="submit">{{ t('action.search') }}</button>
+  {#
+    Only when something is actually filtered. A Clear button on an unfiltered
+    list is a button that does nothing, and people learn to ignore the row it
+    sits in.
+  #}
+  {% if q or make or inactive %}
+    <a class="btn link" href="/issues">{{ t('action.clear') }}</a>
+  {% endif %}
 </form>
 
 {% if issues %}
   <table class="ledger">
     <thead>
       <tr>
-        <th>{{ t('iss.make') }}</th>
-        <th>{{ t('iss.fault') }}</th>
-        <th>{{ t('iss.severity') }}</th>
+        {% set keep = {'q': q, 'make': make, 'inactive': inactive} %}
+        {{ sort_th('make',     t('iss.make'), extra=keep) }}
+        {{ sort_th('title',    t('iss.fault'), extra=keep) }}
+        {{ sort_th('severity', t('iss.severity'), extra=keep) }}
         <th class="num">{{ t('iss.seen') }}</th>
         <th></th>
       </tr>

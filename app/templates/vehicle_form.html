@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% from "_customer_alert.html" import customer_alert_dialog, customer_option_data with context %}
 {% from "_macros.html" import field, check with context %}
+{% from "_picker.html" import customer_search with context %}
 {% set editing = vehicle is not none %}
 {% block title %}{{ t('veh.edit') if editing else t('veh.new') }}{% endblock %}
 
@@ -18,14 +20,16 @@
       {% set selected_customer = vehicle['customer_id'] if editing else preset_customer_id %}
       <div class="field">
         <label for="f_customer_id">{{ t('veh.owner') }} *</label>
+        {{ customer_search('f_customer_id') }}
         <select id="f_customer_id" name="customer_id" required>
           <option value="">{{ t('inv.select_customer') }}</option>
-          {% for c in customers %}
-          <option value="{{ c['id'] }}" {% if selected_customer == c['id'] %}selected{% endif %}>
+          {% for c in picker_customers(selected_customer) %}
+          <option value="{{ c['id'] }}"{{ customer_option_data(c) }} {% if selected_customer == c['id'] %}selected{% endif %}>
             {{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}
           </option>
           {% endfor %}
         </select>
+          {{ customer_alert_dialog() }}
       </div>
 
       <div class="grid-3">
@@ -55,4 +59,9 @@
     </div>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/customer-alert.js') }}"></script>
+<script src="{{ static('js/picker.js') }}"></script>
 {% endblock %}

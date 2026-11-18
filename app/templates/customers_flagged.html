@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_counts.html" import countline with context %}
+{% block title %}{{ t('alert.flagged_title') }}{% endblock %}
+
+{#
+  The warning list, worst first.
+
+  Ordered by severity rather than by name, because the reason anybody opens
+  this page is to see the refusals. The reason is shown in full on every
+  row: a list of names under a red heading tells whoever reads it that
+  something is wrong without telling them what to do about it, and the
+  thing that actually stops a car being accepted is the sentence, not the
+  colour.
+#}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ t('alert.flagged_title') }}</h1>
+    <p class="countline">
+      <span class="count-total">{{ alerts.total }} {{ t('alert.flagged') }}</span>
+      {% if alerts.refuse %}<span class="count-part"><b>{{ alerts.refuse }}</b> {{ t('alert.refuse') }}</span>{% endif %}
+      {% if alerts.check %}<span class="count-part"><b>{{ alerts.check }}</b> {{ t('alert.check') }}</span>{% endif %}
+      {% if alerts.note %}<span class="count-part"><b>{{ alerts.note }}</b> {{ t('alert.note') }}</span>{% endif %}
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/customers">{{ t('cust.title') }}</a>
+  </div>
+</div>
+
+{% if not flagged %}
+  <div class="panel"><div class="panel-body empty">
+    <p>{{ t('alert.none_flagged') }}</p>
+  </div></div>
+{% else %}
+  <section class="panel">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('alert.title') }}</th>
+          <th>{{ t('cust.name') }}</th>
+          <th>{{ t('cust.phone') }}</th>
+          <th>{{ t('alert.reason') }}</th>
+          <th>{{ t('alert.set_on') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in flagged %}
+        <tr>
+          <td><span class="alert-chip alert-{{ c['alert_level'] }}">{{ t('alert.' ~ c['alert_level']) }}</span></td>
+          <td><a href="/customers/{{ c['id'] }}">{{ loc(c, 'name') }}</a></td>
+          <td>{{ c['phone'] }}</td>
+          <td>{{ c['alert_note'] or t('alert.no_reason') }}</td>
+          <td class="hint">{{ c['alert_set_on'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endif %}
+{% endblock %}

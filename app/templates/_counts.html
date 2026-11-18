@@ -1,0 +1,47 @@
+{#
+  The count line that sits under the heading of each list page:
+
+      12 invoices    3 draft  ·  8 issued  ·  1 void
+
+  Only the states that have something in them are named here. The list
+  underneath already shows what is there, so a row of zeroes would be five
+  things to read past on the way to the one number that moved. The dashboard
+  does the opposite and shows them all, because a tile that changes shape as
+  the week goes on is harder to read at a glance than one that does not.
+#}
+
+{% macro countline(counts, noun_key) -%}
+<p class="countline">
+  <span class="count-total">{{ counts.total }} {{ t(noun_key) }}</span>
+  {%- if counts.by_status is defined %}
+    {%- for status, n in counts.by_status if n %}
+      <span class="count-part"><b>{{ n }}</b> {{ t('status.' ~ status) }}</span>
+    {%- endfor %}
+  {%- elif counts.total %}
+    {%- if counts.active < counts.total %}
+      <span class="count-part"><b>{{ counts.active }}</b> {{ t('count.active') }}</span>
+      <span class="count-part"><b>{{ counts.total - counts.active }}</b> {{ t('count.retired') }}</span>
+    {%- endif %}
+  {%- endif %}
+</p>
+{%- endmacro %}
+
+{#
+  The dashboard version: a tile, with every state shown including the empty
+  ones, so the tiles keep their shape from Monday to Friday.
+#}
+{% macro counttile(counts, noun_key, href, tone='') -%}
+<a class="kpi {{ 'kpi-' ~ tone if tone }}" href="{{ href }}">
+  <span class="kpi-figure">{{ counts.total }}</span>
+  <span class="kpi-label">{{ t(noun_key) }}</span>
+  <span class="kpi-parts">
+    {%- if counts.by_status is defined %}
+      {%- for status, n in counts.by_status %}
+        <span class="{{ 'is-zero' if not n }}">{{ n }} {{ t('status.' ~ status) }}</span>
+      {%- endfor %}
+    {%- else %}
+      <span class="{{ 'is-zero' if not counts.active }}">{{ counts.active }} {{ t('count.active') }}</span>
+    {%- endif %}
+  </span>
+</a>
+{%- endmacro %}

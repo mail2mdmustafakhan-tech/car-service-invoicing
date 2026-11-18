@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pill with context %}
+{% from "_counts.html" import counttile with context %}
 {% block title %}{{ t('dash.title') }}{% endblock %}
 
 {% block content %}
@@ -51,6 +52,44 @@
       {% if stats.contracts_to_invoice %}{{ stats.contracts_to_invoice }} {{ t('dash.to_invoice') | lower }}{% else %}{{ stats.customer_count }} {{ t('dash.customers') | lower }}{% endif %}
     </div>
   </div>
+</div>
+
+{#
+  How much of everything there is, and what state it is in. The same numbers
+  as the line under each list heading, from the same function -- two counts
+  of the same thing that disagree are worse than no count at all.
+
+  Each tile is a link to the list it counts, because the next thing anyone
+  does after reading "3 in workshop" is go and look at the three.
+#}
+<h2 class="section-title">{{ t('dash.whats_on') }}</h2>
+<div class="kpi-row">
+  {{ counttile(counts.inspections, 'count.inspections', '/inspections', 'inspections') }}
+  {{ counttile(counts.estimates,   'count.estimates',   '/estimates') }}
+  {{ counttile(counts.contracts,   'count.contracts',   '/contracts') }}
+  {{ counttile(counts.invoices,    'count.invoices',    '/invoices') }}
+</div>
+<div class="kpi-row">
+  {% if alerts.total %}
+    {#
+      Only here when there is something to say. A tile reading "0 flagged"
+      every day is a tile people stop seeing, and this is the one that must
+      still register on the day it turns into a 1.
+    #}
+    <a class="kpi kpi-flagged" href="/customers/flagged">
+      <span class="kpi-figure">{{ alerts.total }}</span>
+      <span class="kpi-label">{{ t('alert.flagged') }}</span>
+      <span class="kpi-parts">
+        {% if alerts.refuse %}<span>{{ alerts.refuse }} {{ t('alert.refuse') }}</span>{% endif %}
+        {% if alerts.check %}<span>{{ alerts.check }} {{ t('alert.check') }}</span>{% endif %}
+        {% if alerts.note %}<span>{{ alerts.note }} {{ t('alert.note') }}</span>{% endif %}
+      </span>
+    </a>
+  {% endif %}
+  {{ counttile(counts.customers, 'count.customers', '/customers', 'customers') }}
+  {{ counttile(counts.vehicles,  'count.vehicles',  '/vehicles') }}
+  {{ counttile(counts.catalog,   'count.catalog',   '/catalog') }}
+  {{ counttile(counts.issues,    'count.issues',    '/issues') }}
 </div>
 
 {% if waiting_estimates %}
@@ -256,7 +295,9 @@
    over time, so all of them use one hue, more-is-darker, and every bar
    carries its name and figure as text. Nobody is asked to tell two colours
    apart to read any of this. #}
-<details class="analytics">
+{# Open on arrival when a filter is in force: a filtered section that is
+   still folded away looks as though the filter did nothing. #}
+<details class="analytics"{% if analytics['make'] %} open{% endif %}>
   <summary>
     <span class="analytics-title">{{ t('dash.advanced') }}</span>
     <span class="hint">{{ t('dash.advanced_hint') }}</span>
@@ -278,7 +319,30 @@
       </div>
     </div>
 
-    <div class="cols">
+    {#
+      Narrow the car charts to one make. The make and fleet-share charts
+      above are how somebody picks a make in the first place, so they always
+      show everything; this filters the breakdowns underneath them.
+
+      A plain form with a submit button, so it works without JavaScript and
+      the filtered view has an address that can be bookmarked or sent on.
+    #}
+    <form method="get" class="filterbar" id="chart-filter">
+      <label for="f_chart_make">{{ t('dash.filter_make') }}</label>
+      <select id="f_chart_make" name="make">
+        <option value="">{{ t('dash.all_makes') }}</option>
+        {% for m in analytics['makes'] %}
+          <option value="{{ m }}" {% if analytics['make'] == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">{{ t('action.apply') }}</button>
+      {% if analytics['make'] %}
+        <a class="btn link" href="/">{{ t('action.clear') }}</a>
+        <span class="filter-note">{{ t('dash.showing_only') }} <b>{{ analytics['make'] }}</b></span>
+      {% endif %}
+    </form>
+
+    <div class="chartgrid">
       <section class="panel">
         <div class="panel-head"><h2>{{ t('dash.owed_trend') }}</h2></div>
         <div class="panel-body">
@@ -296,14 +360,28 @@
           <p class="hint">{{ t('dash.invoiced_trend_hint') }}</p>
         </div>
       </section>
-    </div>
-
-    <div class="cols">
       <section class="panel">
         <div class="panel-head"><h2>{{ t('dash.by_make') }}</h2></div>
         <div class="panel-body">
           {{ meter_list(analytics['by_make'], title=t('dash.by_make'),
-                        empty=t('dash.no_cars'), rtl=(lang == 'ar'), label_width=175) | safe }}
+                        empty=t('dash.no_cars'), label_width=120) | safe }}
+        </div>
+      </section>
+
+      {#
+        The same numbers as a share of the whole fleet. The bars answer
+        "which makes, in what order"; this answers "how much of the work is
+        BMW" -- a different question, which is why both are here rather than
+        one replacing the other. Capped at six slices with the tail folded
+        into Other, because below that the slices are slivers.
+      #}
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.make_share') }}</h2></div>
+        <div class="panel-body">
+          {{ donut(analytics['by_make'], title=t('dash.make_share'),
+                   centre_label=counts.vehicles.total | string,
+                   empty=t('dash.no_cars'), other_label=t('dash.other')) | safe }}
+          <p class="hint">{{ t('dash.make_share_hint') }}</p>
         </div>
       </section>
 
@@ -311,26 +389,72 @@
         <div class="panel-head"><h2>{{ t('dash.by_model') }}</h2></div>
         <div class="panel-body">
           {{ meter_list(analytics['by_model'], title=t('dash.by_model'),
-                        empty=t('dash.no_cars'), rtl=(lang == 'ar'), label_width=175) | safe }}
+                        empty=t('dash.no_cars'), label_width=120) | safe }}
+          {% if analytics['without_model'] %}
+            {# Cars with no model recorded are not counted above. They used
+               to be, which put 979 of them under a bare "BMW" at the top of
+               a chart about models. #}
+            <p class="hint">{{ analytics['without_model'] }} {{ t('dash.no_model_note') }}</p>
+          {% endif %}
         </div>
       </section>
-    </div>
+      {#
+        Year and colour, the two things a register records about every car
+        and nothing had ever asked about.
+      #}
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.by_age') }}</h2></div>
+        <div class="panel-body">
+          {{ meter_list(analytics['by_age'], title=t('dash.by_age'),
+                        empty=t('dash.no_cars'), label_width=110) | safe }}
+          <p class="hint">{{ t('dash.by_age_hint') }}</p>
+        </div>
+      </section>
 
-    <div class="cols">
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('dash.by_colour') }}</h2></div>
+        <div class="panel-body">
+          {{ donut(analytics['by_colour'], title=t('dash.by_colour'),
+                   centre_label=analytics['coloured_cars'] | string,
+                   empty=t('dash.no_cars'), other_label=t('dash.other_colours')) | safe }}
+          {% if analytics['odd_colours'] %}
+            {# Model codes typed where the colour goes. Counting them is how
+               somebody who knows the cars finds out there is tidying to do. #}
+            <p class="hint">{{ analytics['odd_colours'] }} {{ t('dash.odd_colours') }}
+               <a href="/vehicles/tidy">{{ t('tidy.title') }}</a></p>
+          {% endif %}
+        </div>
+      </section>
       <section class="panel">
         <div class="panel-head"><h2>{{ t('dash.by_category') }}</h2></div>
         <div class="panel-body">
           {{ meter_list(analytics['by_category'], title=t('dash.by_category'),
-                        empty=t('dash.no_customers'), rtl=(lang == 'ar')) | safe }}
+                        empty=t('dash.no_customers')) | safe }}
           <p class="hint">{{ t('dash.by_category_hint') }}</p>
         </div>
       </section>
+
+      {% if alerts.total %}
+      <section class="panel">
+        <div class="panel-head"><h2>{{ t('alert.flagged_title') }}</h2></div>
+        <div class="panel-body">
+          {{ donut([
+               (t('alert.refuse'), alerts.refuse),
+               (t('alert.check'),  alerts.check),
+               (t('alert.note'),   alerts.note),
+             ], title=t('alert.flagged_title'),
+             centre_label=alerts.total | string,
+             empty=t('alert.none_flagged')) | safe }}
+          <p class="hint"><a href="/customers/flagged">{{ t('dash.see_flagged') }}</a></p>
+        </div>
+      </section>
+      {% endif %}
 
       <section class="panel">
         <div class="panel-head"><h2>{{ t('dash.known_faults') }}</h2></div>
         <div class="panel-body">
           {{ meter_list(analytics['faults'], title=t('dash.known_faults'),
-                        empty=t('dash.no_faults'), rtl=(lang == 'ar'), label_width=250) | safe }}
+                        empty=t('dash.no_faults'), label_width=250) | safe }}
           <p class="hint">{{ t('dash.known_faults_hint') }}</p>
         </div>
       </section>
@@ -353,7 +477,7 @@
             {% for row in analytics['top_customers'] %}
               <tr>
                 <td><a href="/customers/{{ row['id'] }}">{{ row['name'] }}</a></td>
-                <td>{{ t('cust.cat_' ~ row['category']) }}</td>
+                <td>{{ opt_label('customer_types', row['category']) }}</td>
                 <td class="num">{{ row['invoices'] }}</td>
                 <td class="num">{{ from_minor(row['total_minor']) }} {{ currency }}</td>
               </tr>

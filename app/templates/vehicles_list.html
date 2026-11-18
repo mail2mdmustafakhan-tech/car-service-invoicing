@@ -1,10 +1,21 @@
 {% extends "base.html" %}
+{% from "_sortable.html" import sort_th with context %}
+{% from "_counts.html" import countline with context %}
+{% from "_pager.html" import pager with context %}
 {% block title %}{{ t('veh.title') }}{% endblock %}
 
 {% block content %}
 <div class="pagehead">
-  <h1>{{ t('veh.title') }}</h1>
-  <div class="actions"><a class="btn accent" href="/vehicles/new">{{ t('veh.new') }}</a></div>
+  <div>
+    <h1>{{ t('veh.title') }}</h1>
+    {{ countline(counts_for('vehicles'), 'count.vehicles') }}
+  </div>
+  <div class="actions">
+    <a class="btn" href="/vehicles/tidy">{{ t('tidy.title') }}</a>
+    <a class="btn" href="/vehicles/import/template">{{ t('reg.template') }}</a>
+    <a class="btn" href="/vehicles/import">{{ t('reg.title') }}</a>
+    <a class="btn accent" href="/vehicles/new">{{ t('veh.new') }}</a>
+  </div>
 </div>
 
 <form class="toolbar" method="get" action="/vehicles">
@@ -24,11 +35,14 @@
     <table class="ledger">
       <thead>
         <tr>
-          <th>{{ t('veh.plate') }}</th>
-          <th>{{ t('veh.make') }} / {{ t('veh.model') }}</th>
-          <th>{{ t('veh.owner') }}</th>
-          <th class="num">{{ t('veh.odometer') }}</th>
-          <th class="num">{{ t('nav.invoices') }}</th>
+          {% set keep = {'q': q, 'inactive': inactive} %}
+          {{ sort_th('plate',    t('veh.plate'), extra=keep) }}
+          {{ sort_th('make',     t('veh.make') ~ ' / ' ~ t('veh.model'), extra=keep) }}
+          {{ sort_th('year',     t('veh.year'),  numeric=True, extra=keep) }}
+          {{ sort_th('colour',   t('veh.colour'), extra=keep) }}
+          {{ sort_th('owner',    t('veh.owner'), extra=keep) }}
+          {{ sort_th('odometer', t('veh.odometer'), numeric=True, extra=keep) }}
+          {{ sort_th('invoices', t('nav.invoices'), numeric=True, extra=keep) }}
           <th></th>
         </tr>
       </thead>
@@ -39,10 +53,9 @@
             <a href="/vehicles/{{ v['id'] }}">{{ v['plate_no'] }}</a>
             {% if not v['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
           </td>
-          <td>
-            {{ (v['make'] ~ ' ' ~ v['model']) | trim or '—' }}
-            {% if v['model_year'] %}<div class="secondary">{{ v['model_year'] }}{% if v['colour'] %} — {{ v['colour'] }}{% endif %}</div>{% endif %}
-          </td>
+          <td>{{ (v['make'] ~ ' ' ~ v['model']) | trim or '—' }}</td>
+          <td class="num">{{ v['model_year'] or '—' }}</td>
+          <td>{{ v['colour'] or '—' }}</td>
           <td><a href="/customers/{{ v['customer_id'] }}">{{ v['customer_name'] }}</a></td>
           <td class="num">{% if v['odometer'] %}{{ '{:,}'.format(v['odometer']) }}{% else %}—{% endif %}</td>
           <td class="num">{{ v['invoice_count'] }}</td>
@@ -57,6 +70,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(page, request) }}
   {% else %}
   <div class="empty">
     <p>{{ t('veh.none') if not q else t('msg.no_results') }}</p>

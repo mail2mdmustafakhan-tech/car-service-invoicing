@@ -3,7 +3,12 @@
 {% block title %}{{ t('set.title') }}{% endblock %}
 
 {% block content %}
-<div class="pagehead"><h1>{{ t('set.title') }}</h1></div>
+<div class="pagehead">
+  <h1>{{ t('set.title') }}</h1>
+  <div class="actions">
+    <a class="btn" href="/settings/lists">{{ t('lists.title') }}</a>
+  </div>
+</div>
 
 <form method="post" action="/settings">
 

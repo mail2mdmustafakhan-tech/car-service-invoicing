@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_customer_alert.html" import customer_alert_dialog, customer_option_data with context %}
+{% from "_picker.html" import customer_search with context %}
 {% block title %}{{ t('quick.title') }}{% endblock %}
 
 {% block content %}
@@ -22,12 +24,14 @@
          reach for a paper pad instead. #}
       <div class="field">
         <label for="f_customer">{{ t('inv.customer') }}</label>
+        {{ customer_search('f_customer') }}
         <select id="f_customer" name="customer_id">
           <option value="">{{ t('quick.new_customer') }}</option>
-          {% for c in customers %}
-          <option value="{{ c['id'] }}">{{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}</option>
+          {% for c in picker_customers(None) %}
+          <option value="{{ c['id'] }}"{{ customer_option_data(c) }}>{{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}</option>
           {% endfor %}
         </select>
+          {{ customer_alert_dialog() }}
       </div>
 
       <div class="grid-2" id="new-customer">
@@ -88,8 +92,8 @@
         <div class="field">
           <label for="f_method">{{ t('pay.method') }}</label>
           <select id="f_method" name="payment_method">
-            {% for m in ['cash', 'card', 'transfer'] %}
-            <option value="{{ m }}">{{ t('pay.method_' ~ m) }}</option>
+            {% for o in options.payment_methods %}
+            <option value="{{ o['value'] }}">{{ loc(o, 'label_en') }}</option>
             {% endfor %}
           </select>
         </div>
@@ -122,6 +126,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ static('js/customer-alert.js') }}"></script>
+<script src="{{ static('js/picker.js') }}"></script>
 <script src="{{ static('js/money.js') }}"></script>
 <script>
   /* Two small things: hide the name fields when an existing customer is

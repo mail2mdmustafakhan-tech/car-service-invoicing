@@ -28,8 +28,8 @@
         <div class="field">
           <label for="f_unit">{{ t('cat.unit') }}</label>
           <select id="f_unit" name="unit">
-            {% for u in ['pcs', 'hour', 'litre', 'set', 'km'] %}
-            <option value="{{ u }}" {% if editing and item['unit'] == u %}selected{% endif %}>{{ t('cat.unit_' ~ u) }}</option>
+            {% for u in options.units %}
+            <option value="{{ u['value'] }}" {% if editing and item['unit'] == u['value'] %}selected{% endif %}>{{ loc(u, 'label_en') }}</option>
             {% endfor %}
           </select>
         </div>
@@ -49,7 +49,7 @@
         <p class="hint">{{ t('cat.manufacturer_hint') }}</p>
       </div>
       <datalist id="manufacturers">
-        {% for value, en, ar in MANUFACTURERS %}<option value="{{ value }}" label="{{ ar if lang == 'ar' else en }}"></option>
+        {% for o in options.manufacturers %}<option value="{{ o['value'] }}" label="{{ loc(o, 'label_en') }}"></option>
         {% endfor %}
       </datalist>
 

@@ -1,10 +1,17 @@
 {% extends "base.html" %}
+{% from "_sortable.html" import sort_th with context %}
+{% from "_counts.html" import countline with context %}
+{% from "_pager.html" import pager with context %}
 {% block title %}{{ t('cust.title') }}{% endblock %}
 
 {% block content %}
 <div class="pagehead">
-  <h1>{{ t('cust.title') }}</h1>
+  <div>
+    <h1>{{ t('cust.title') }}</h1>
+    {{ countline(counts_for('customers'), 'count.customers') }}
+  </div>
   <div class="actions">
+    <a class="btn" href="/customers/import/template">{{ t('imp.template') }}</a>
     <a class="btn" href="/customers/import">{{ t('imp.title') }}</a>
     <a class="btn accent" href="/customers/new">{{ t('cust.new') }}</a>
   </div>
@@ -27,10 +34,11 @@
     <table class="ledger">
       <thead>
         <tr>
-          <th>{{ t('cust.name') }}</th>
-          <th>{{ t('cust.phone') }}</th>
-          <th class="num">{{ t('cust.vehicles') }}</th>
-          <th class="num">{{ t('cust.balance') }}</th>
+          {% set keep = {'q': q, 'inactive': inactive} %}
+          {{ sort_th('name',     t('cust.name'),     extra=keep) }}
+          {{ sort_th('phone',    t('cust.phone'),    extra=keep) }}
+          {{ sort_th('vehicles', t('cust.vehicles'), numeric=True, extra=keep) }}
+          {{ sort_th('balance',  t('cust.balance'),  numeric=True, extra=keep) }}
           <th></th>
         </tr>
       </thead>
@@ -38,6 +46,8 @@
         {% for c in customers %}
         <tr>
           <td>
+            {% if c['alert_level'] %}<span class="alert-dot alert-dot-{{ c['alert_level'] }}"
+                  title="{{ t('alert.' ~ c['alert_level']) }}{% if c['alert_note'] %} — {{ c['alert_note'] }}{% endif %}"></span>{% endif %}
             <a href="/customers/{{ c['id'] }}">{{ loc(c, 'name') }}</a>
             {% if not c['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
             {% if c['vat_number'] %}<div class="secondary">{{ t('cust.vat_number') }}: {{ c['vat_number'] }}</div>{% endif %}
@@ -56,6 +66,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(page, request) }}
   {% else %}
   <div class="empty">
     <p>{{ t('cust.none') if not q else t('msg.no_results') }}</p>

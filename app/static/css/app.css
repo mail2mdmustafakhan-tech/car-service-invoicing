@@ -44,6 +44,58 @@
 
     --focus:        #2563eb;
 
+    /* Deeper inks for text sitting on the soft tints above, and the hairline
+       and hover values the tints need. Separated out because dark has to
+       answer each of them differently -- a wash that works on white is a
+       glow on charcoal. */
+    --paid-ink:     #0b4c38;
+    --paid-rule:    #bcdfd1;
+    --void-ink:     #7d1d22;
+    --void-rule:    #ecc3c5;
+    --draft-rule:   #d5dbe1;
+    --amber-deep:   #9c6408;
+    /* Text sitting ON the amber button. White here; on the dark theme the
+       amber itself lightens, so white would wash out and the ink flips. */
+    --on-amber:     #ffffff;
+    --row-hover:    #fafbfc;
+
+    /* Charts. The bars ask nobody to tell colours apart: the largest row is
+       the accent and every other row is one quiet tone, which is what makes
+       the answer the thing the eye lands on. The track has to stay lighter
+       than the quiet tone or a small bar disappears into it -- which is
+       exactly how the old five-step ramp failed. */
+    --chart-bar:    #9db4c9;
+    --chart-top:    #24306b;
+    --chart-track:  #eef1f4;
+    --chart-line:   #1f4d7a;
+    --chart-fill:   #dce7f2;
+
+    /* Slice colours for the donut -- the one chart that does ask. A fixed
+       order, never cycled, checked for colour-vision separation and for
+       contrast against this surface. Three of them sit under 3:1 here,
+       which is why every slice carries its name, figure and share in the
+       legend rather than relying on the colour. */
+    --slice-1: #2a78d6;
+    --slice-2: #eb6834;
+    --slice-3: #1baf7a;
+    --slice-4: #eda100;
+    --slice-5: #e87ba4;
+    --slice-6: #008300;
+    --btn-hover:    #f1f3f5;
+
+    /* A little more colour than the ledger started with, but kept to the
+       places where colour carries information: the section a figure belongs
+       to. Each is a tint and an ink that pass contrast on both papers. */
+    --accent:       #24306b;   /* the navy of the ARC roundel */
+    --accent-soft:  #eef1fb;
+    --accent-ink:   #2c3a7d;
+    --info:         #1d6a8c;
+    --info-soft:    #e6f3f8;
+    --plum:         #6b3f7a;
+    --plum-soft:    #f4ecf7;
+    --teal:         #0f6b63;
+    --teal-soft:    #e6f4f2;
+
     --space-1: 0.25rem;
     --space-2: 0.5rem;
     --space-3: 0.75rem;
@@ -65,6 +117,90 @@
                      0 8px 24px -12px rgba(22, 32, 43, 0.18);
 }
 
+/* ==========================================================================
+   Dark
+   ==========================================================================
+
+   Every colour in this application comes from the tokens above, so the dark
+   theme is those same tokens given different values -- not a second
+   stylesheet to keep in step with the first.
+
+   It is not the light theme inverted. Pure white on pure black glares in a
+   lit workshop and makes thin rules disappear, so the paper is a soft
+   charcoal, the ink is just short of white, and the status tints are
+   rebuilt as dark washes rather than lightened: a pale green panel that
+   worked on white becomes a glowing block on charcoal.
+
+   The amber stays amber. It means money owed, and a colour that means
+   something cannot change meaning with the lights.
+   ========================================================================== */
+[data-theme="dark"] {
+    --ink:          #e8edf2;
+    --ink-soft:     #a8b5c2;
+    --ink-faint:    #7b8a99;
+    --paper:        #11161c;
+    --surface:      #1a212a;
+    --rule:         #2b3642;
+    --rule-strong:  #3e4b59;
+
+    --amber:        #e0a23c;
+    --amber-soft:   #33280f;
+    --amber-rule:   #6b5120;
+
+    --paid:         #4cc39a;
+    --paid-soft:    #10322a;
+    --void:         #f08b8f;
+    --void-soft:    #3a1e20;
+    --draft:        #9aa7b4;
+    --draft-soft:   #242d37;
+
+    --focus:        #6ea8fe;
+
+    --accent:       #8fa3e8;
+    --accent-soft:  #1d2440;
+    --accent-ink:   #a9b8ef;
+    --info:         #6dc0dd;
+    --info-soft:    #152b34;
+    --plum:         #c49ad4;
+    --plum-soft:    #2b1e31;
+    --teal:         #5cc3b8;
+    --teal-soft:    #12302d;
+
+    --paid-ink:     #8fe0c2;
+    --paid-rule:    #1d5244;
+    --void-ink:     #f5b4b7;
+    --void-rule:    #5c2e31;
+    --draft-rule:   #353f4b;
+    --amber-deep:   #f0b659;
+    --on-amber:     #1a1203;
+    --row-hover:    #212a34;
+
+    /* Charts, stepped for the dark surface rather than lightened from the
+       light values. The whole analytics section used to render as an empty
+       rectangle here, because the chart colours were hex literals chosen
+       against white and were being drawn near-black on near-black. */
+    --chart-bar:    #5b728c;
+    --chart-top:    #8fa3e8;
+    --chart-track:  #232c37;
+    --chart-line:   #8fa3e8;
+    --chart-fill:   #1d2440;
+
+    /* The same eight hues stepped for this surface, not an automatic flip.
+       All six clear 3:1 against the dark card. */
+    --slice-1: #3987e5;
+    --slice-2: #d95926;
+    --slice-3: #199e70;
+    --slice-4: #c98500;
+    --slice-5: #d55181;
+    --slice-6: #0ca30c;
+    --btn-hover:    #273140;
+
+    /* On a dark surface a drop shadow is invisible; depth has to come from
+       the surface being lighter than the paper, plus a hairline. */
+    --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4),
+                     0 8px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -76,6 +212,17 @@ body {
     font-family: var(--font);
     font-size: 15px;
     line-height: 1.55;
+    /* The page is a column: bar, content, ribbon. The content is the part
+       that stretches, so on a short page -- an empty list, a one-line form
+       -- the ribbon is pushed down to the bottom of the window instead of
+       sitting wherever the content happened to stop. On a long page nothing
+       here applies and it simply follows the content off the bottom.
+
+       Without this the ribbon lands at a different height on every screen,
+       which reads as the page jumping as you move between sections. */
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Every figure in this application is a column of money or a quantity, so
@@ -107,9 +254,6 @@ h3 { font-size: 0.95rem; color: var(--ink-soft); font-weight: 600; }
    -------------------------------------------------------------------------- */
 
 .topbar {
-    /* A hint of the navy from the ARC roundel, so the bar reads as this
-       workshop's rather than as a default dark header. Kept shallow: it is
-       chrome, and the figures below it are what people came to look at. */
     /* A wider sweep than before, moving through the navy of the ARC roundel
        and back down. Still dark enough everywhere that white text keeps its
        contrast -- a gradient that forces the eye to work on half the bar is
@@ -122,94 +266,81 @@ h3 { font-size: 0.95rem; color: var(--ink-soft); font-weight: 600; }
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
                 inset 0 -1px 0 rgba(0, 0, 0, 0.25);
 }
-.topbar-inner {
-    /* Wider than the 1140px content below it. Eight sections plus a long
-       business name do not fit in 1140, and a bar that silently hides
-       Settings off the right edge is worse than one that is a little wider
-       than the page. */
-    max-width: 1400px;
+
+/* ---- Row one: who this is ------------------------------------------------
+   The name had been sharing a line with ten sections and losing, truncating
+   on every laptop in the workshop. On a row of its own it is shown in full
+   at every width, with no ellipsis and no tooltip needed to read it. */
+.topbar-brand {
+    max-width: 1540px;
     margin-inline: auto;
-    padding: 0 var(--space-5);
+    padding: var(--space-3) var(--space-5) var(--space-2);
     display: flex;
     align-items: center;
     gap: var(--space-4);
-    min-height: 80px;
-    /* Never wrap. Wrapping is what turned this into a two-storey bar that
-       ate 106px of every screen before any content appeared. */
-    flex-wrap: nowrap;
 }
 .brandmark {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     color: #fff;
-    min-width: 0;          /* lets the wordmark truncate instead of pushing */
-    flex-shrink: 1;
+    margin-inline-end: auto;
+    min-width: 0;
 }
 .brandmark:hover { text-decoration: none; opacity: 0.9; }
 /* Logos are usually dark ink, which would disappear against the dark bar,
    so the image sits on a white chip. */
 .brandmark img {
-    height: 50px;
+    height: 65px;
     width: auto;
-    max-width: 64px;
+    max-width: 84px;
     flex: none;
     background: #fff;
-    border-radius: 6px;
-    padding: 4px;
+    border-radius: 7px;
+    padding: 5px;
     object-fit: contain;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
 }
+.brandtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .wordmark {
     color: #fff;
     font-weight: 600;
-    font-size: 1.12rem;
+    font-size: 1.32rem;
+    line-height: 1.25;
     letter-spacing: 0.005em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /* No fixed width. The name takes what is left after the sections have
-       taken what they need, and ellipsises into it. See .topnav below for
-       why that is the right way round. */
-    max-width: 26rem;
-    min-width: 0;
+    /* Wraps rather than truncates. A business name is not a menu item: the
+       whole of it matters, and a second line costs less than an ellipsis. */
 }
-.wordmark:hover { text-decoration: none; opacity: 0.85; }
+.tagline {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.78rem;
+    line-height: 1.3;
+    font-weight: 400;
+}
+.topbar-tools { display: flex; align-items: center; gap: var(--space-3); flex: none; }
 
-.topnav {
-    display: flex;
-    gap: 2px;
-    margin-inline-end: auto;
-    flex-wrap: nowrap;
-    /* The sections do not give up width; the business name does. A flex row
-       shrinks every child by default, which meant the name held its full
-       width while "Settings" was quietly cut to "Sett" -- and a half-word
-       reads as a broken page, where a shortened name reads as a shortened
-       name. This one line is what keeps the sections whole at every width;
-       the breakpoints below only tune how much room they ask for. */
-    flex: 0 0 auto;
-    /* On a narrow screen the links slide sideways rather than wrapping down.
-       A scroll gesture costs less than permanently losing a row of screen. */
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-.topnav::-webkit-scrollbar { display: none; }
-.topnav a {
-    color: rgba(255, 255, 255, 0.72);
-    padding: 9px var(--space-3);
+.themetoggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 999px;
-    font-size: 0.92rem;
-    line-height: 1.5;
-    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
     transition: background-color 0.12s ease, color 0.12s ease;
 }
-.topnav a:hover { background: rgba(255, 255, 255, 0.1); color: #fff; text-decoration: none; }
-.topnav a[aria-current="page"] {
-    background: rgba(255, 255, 255, 0.16);
-    color: #fff;
-    font-weight: 600;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-}
+.themetoggle:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+/* One button, two faces: it shows the thing you would be switching TO, so
+   the moon means "go dark" rather than "you are dark". */
+.theme-ico { display: none; line-height: 0; }
+.theme-ico-moon { display: inline-flex; }
+[data-theme="dark"] .theme-ico-moon { display: none; }
+[data-theme="dark"] .theme-ico-sun { display: inline-flex; }
+
 .langswitch { display: flex; gap: 2px; align-items: center; flex: none; }
 .langswitch a {
     color: rgba(255, 255, 255, 0.7);
@@ -220,47 +351,54 @@ h3 { font-size: 0.95rem; color: var(--ink-soft); font-weight: 600; }
 .langswitch a:hover { background: rgba(255,255,255,0.12); color: #fff; text-decoration: none; }
 .langswitch a.active { color: var(--ink); background: var(--amber-rule); font-weight: 600; }
 
-/* The top bar gives things up in a fixed order as the screen narrows: first
-   the space around the links, then the length of the business name, then the
-   name itself, and only on a tablet does the row of sections break in two.
-   The order matters -- a half-cut word reads as a broken page, while a
-   shortened name reads as a shortened name.
-
-   These thresholds were set when the bar carried eight sections. It carries
-   ten now, and every number below was measured against those ten, at the
-   widths the workshop actually uses. A 1366 laptop was showing "Sett". */
-@media (min-width: 1540px) {
-    .topbar-inner { max-width: 1540px; }
+/* ---- Row two: where you can go ------------------------------------------
+   The sections now have the full width of the screen to themselves, so they
+   fit without shrinking at any laptop size. */
+.topnav {
+    max-width: 1540px;
+    margin-inline: auto;
+    padding: 0 var(--space-5) var(--space-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    row-gap: 4px;
 }
-
-/* Laptops. The padding around each link goes first; it is the cheapest
-   thing on the bar. */
-@media (max-width: 1539px) {
-    .topnav a { padding-inline: var(--space-2); font-size: 0.86rem; }
+.topnav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: rgba(255, 255, 255, 0.72);
+    padding: 8px var(--space-3);
+    border-radius: 999px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, color 0.12s ease;
 }
-
-/* Smaller laptops. The name gives up width before it gives up existence:
-   a shortened name still says whose workshop this is, and the logo is
-   beside it. The whole name stays in the tooltip. */
-@media (max-width: 1400px) {
-    .topnav a { font-size: 0.84rem; }
-    .topbar-inner { gap: var(--space-3); padding-inline: var(--space-4); }
+/* The icon is a second label, never the only one -- it rides at the opacity
+   of the text beside it so it never looks like the selected item. */
+.topnav a .ico { flex: none; opacity: 0.85; }
+.topnav a:hover { background: rgba(255, 255, 255, 0.1); color: #fff; text-decoration: none; }
+.topnav a[aria-current="page"] {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
+.topnav a[aria-current="page"] .ico { opacity: 1; }
 
-/* Tablets. Now the name does step aside, and the logo carries the brand. */
-@media (max-width: 1150px) {
-    .wordmark { display: none; }
-}
-
-/* Ten sections genuinely do not fit a narrow tablet on one line, however
-   tight the padding. Here they wrap onto a second row: a taller bar costs
-   less than sections parked off-screen behind a scrollbar nobody can see. */
+/* Narrow screens. The sections wrap on their own (the row is flex-wrap by
+   default now), so all that is left to do is tighten them a little and drop
+   the tagline, which is the least load-bearing thing on the bar. */
 @media (max-width: 1100px) {
-    /* The sections may shrink again here, because shrinking is what lets
-       them wrap: held at their full width they would simply run off the
-       side of the page instead. The name is already out of the way by this
-       point, so nothing is competing with them for the room. */
-    .topnav { flex: 1 1 auto; flex-wrap: wrap; overflow-x: visible; row-gap: 4px; }
+    .topnav a { padding-inline: var(--space-2); font-size: 0.86rem; gap: 5px; }
+    .topbar-brand { padding-inline: var(--space-4); }
+    .topnav { padding-inline: var(--space-4); }
+}
+@media (max-width: 720px) {
+    .tagline { display: none; }
+    .brandmark img { height: 48px; }
+    .wordmark { font-size: 1.1rem; }
 }
 
 /* --------------------------------------------------------------------------
@@ -299,13 +437,13 @@ h3 { font-size: 0.95rem; color: var(--ink-soft); font-weight: 600; }
     border-radius: var(--radius);
     border-inline-start: 3px solid var(--paid);
     background: var(--paid-soft);
-    color: #0b4c38;
+    color: var(--paid-ink);
     margin-block-end: var(--space-5);
 }
 .flash.error {
     border-inline-start-color: var(--void);
     background: var(--void-soft);
-    color: #7d1d22;
+    color: var(--void-ink);
 }
 
 /* --------------------------------------------------------------------------
@@ -353,7 +491,7 @@ table.ledger td {
 }
 
 table.ledger tbody tr:last-child td { border-block-end: 0; }
-table.ledger tbody tr:hover { background: #fafbfc; }
+table.ledger tbody tr:hover { background: var(--row-hover); }
 
 table.ledger th.num, table.ledger td.num { text-align: end; }
 table.ledger td.tight { white-space: nowrap; }
@@ -392,12 +530,12 @@ table.ledger td,
     white-space: nowrap;
     border: 1px solid transparent;
 }
-.pill.draft          { background: var(--draft-soft); color: var(--draft); border-color: #d5dbe1; }
+.pill.draft          { background: var(--draft-soft); color: var(--draft); border-color: var(--draft-rule); }
 .pill.issued,
 .pill.unpaid         { background: var(--amber-soft); color: var(--amber); border-color: var(--amber-rule); }
 .pill.partially_paid { background: var(--amber-soft); color: var(--amber); border-color: var(--amber-rule); }
-.pill.paid           { background: var(--paid-soft); color: var(--paid); border-color: #bcdfd1; }
-.pill.void           { background: var(--void-soft); color: var(--void); border-color: #ecc3c5; }
+.pill.paid           { background: var(--paid-soft); color: var(--paid); border-color: var(--paid-rule); }
+.pill.void           { background: var(--void-soft); color: var(--void); border-color: var(--void-rule); }
 
 /* --------------------------------------------------------------------------
    Buttons
@@ -418,24 +556,24 @@ table.ledger td,
     text-decoration: none;
     white-space: nowrap;
 }
-.btn:hover { background: #f1f3f5; text-decoration: none; }
+.btn:hover { background: var(--btn-hover); text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 
 .btn.primary {
     background: var(--ink);
     border-color: var(--ink);
-    color: #fff;
+    color: var(--surface);
 }
-.btn.primary:hover { background: #1f2d3c; }
+.btn.primary:hover { background: var(--ink-soft); }
 
 .btn.accent {
     background: var(--amber);
     border-color: var(--amber);
-    color: #fff;
+    color: var(--on-amber);
 }
-.btn.accent:hover { background: #9c6408; }
+.btn.accent:hover { background: var(--amber-deep); }
 
-.btn.danger { color: var(--void); border-color: #e3bfc1; background: #fff; }
+.btn.danger { color: var(--void); border-color: var(--void-rule); background: var(--surface); }
 .btn.danger:hover { background: var(--void-soft); }
 
 .btn.small { padding: var(--space-1) var(--space-2); font-size: 0.82rem; }
@@ -496,10 +634,14 @@ textarea { min-height: 72px; resize: vertical; }
 
 .toolbar {
     display: flex;
-    gap: var(--space-2);
+    gap: var(--space-2) var(--space-3);
     align-items: center;
     flex-wrap: wrap;
-    margin-block-end: var(--space-4);
+    margin-block-end: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
 }
 .toolbar input[type="search"], .toolbar select { width: auto; min-width: 140px; }
 /* Capped, so the search box does not push the filters and the Apply button
@@ -661,7 +803,7 @@ textarea { min-height: 72px; resize: vertical; }
 .msglang-btn.active {
     background: var(--ink);
     border-color: var(--ink);
-    color: #fff;
+    color: var(--surface);
     font-weight: 600;
 }
 
@@ -711,7 +853,7 @@ textarea { min-height: 72px; resize: vertical; }
     width: 100%;
     height: 130px;
     object-fit: cover;
-    background: #f3f4f6;
+    background: var(--row-hover);
 }
 .thumb figcaption {
     display: flex;
@@ -738,11 +880,53 @@ textarea { min-height: 72px; resize: vertical; }
 /* Severity, as a quiet label rather than a traffic light: these are prompts
    for a technician, not alarms, and a page of red pills stops meaning
    anything by the third one. */
-.pill.sev-low    { background: #eef1f5; color: var(--ink-soft); }
-.pill.sev-medium { background: #fdf2e0; color: #8a5a06; }
-.pill.sev-high   { background: #fbe9e9; color: #8f2b2b; }
+.pill.sev-low    { background: var(--draft-soft); color: var(--ink-soft); }
+.pill.sev-medium { background: var(--amber-soft); color: var(--amber); }
+.pill.sev-high   { background: var(--void-soft); color: var(--void); }
 .checkline { color: var(--ink-soft); font-style: italic; }
 tr.muted td { opacity: 0.55; }
+
+/* --- Pager ---------------------------------------------------------------
+   Under every list. The count on the left is the part that matters: it is
+   what tells somebody a fifty-row page is not a fifty-row list. */
+
+/* --- Customer search box -------------------------------------------------
+   Sits above the customer dropdown on the forms. The hint under it matters
+   as much as the box: the list is recent customers, not all of them. */
+.picker-search {
+  width: 100%;
+  margin-bottom: var(--space-1);
+}
+.picker-hint {
+  margin: 0 0 var(--space-1);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.pager-count { margin: 0; color: var(--ink-soft); font-size: 0.88rem; }
+.pager-count strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pager-links { display: flex; align-items: center; gap: var(--space-1); }
+.pager-page {
+  padding: 0 var(--space-2);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.btn.small.is-off { opacity: 0.4; pointer-events: none; }
+
+/* A single page of a short list needs no navigation at all, but the count
+   still earns its place -- it is the proof that nothing is being hidden. */
+@media print { .pager-links { display: none; } }
+
 .filterbar {
     display: flex;
     gap: var(--space-3);
@@ -823,7 +1007,670 @@ tr.muted td { opacity: 0.55; }
     border-radius: 4px;
     white-space: nowrap;
 }
-.tag.ok        { background: #e8f1ea; color: #1d5233; }
-.tag.attention { background: #fdf0db; color: #7a4e07; }
-.tag.urgent    { background: #fbe5e5; color: #8c1d1d; }
+.tag.ok        { background: var(--paid-soft); color: var(--paid-ink); }
+.tag.attention { background: var(--amber-soft); color: var(--amber); }
+.tag.urgent    { background: var(--void-soft); color: var(--void-ink); }
 .tag.na        { background: var(--surface-sunken); color: var(--ink-faint); }
+
+/* --------------------------------------------------------------------------
+   Printing an application page
+   --------------------------------------------------------------------------
+   The customer's documents have their own stylesheet and never come through
+   here. This is for the times someone prints a list or a detail page from
+   the screen -- and if they are working in the dark theme, that would
+   otherwise come out of the printer as a charcoal page with white text:
+   unreadable once photocopied, and most of a cartridge.
+
+   Paper is white. The tokens are reset to their light values for print, so
+   every screen prints the same way whichever theme is on.
+   -------------------------------------------------------------------------- */
+@media print {
+    [data-theme="dark"] {
+        --ink:          #16202b;
+        --ink-soft:     #4a5a6a;
+        --ink-faint:    #7c8a98;
+        --paper:        #ffffff;
+        --surface:      #ffffff;
+        --rule:         #dce1e6;
+        --rule-strong:  #b9c2cb;
+        --amber:        #b4740a;
+        --amber-soft:   #fdf4e3;
+        --amber-rule:   #e8c98a;
+        --paid:         #0f6b4f;
+        --paid-soft:    #e8f4ef;
+        --paid-ink:     #0b4c38;
+        --void:         #a4262c;
+        --void-soft:    #fbecec;
+        --void-ink:     #7d1d22;
+        --draft:        #5a6876;
+        --draft-soft:   #eef1f4;
+        --row-hover:    #ffffff;
+        --btn-hover:    #ffffff;
+        --on-amber:     #ffffff;
+        --accent:       #24306b;
+        --accent-soft:  #eef1fb;
+    }
+    body { background: #fff; }
+    /* The watermark is behind a min-width query that paper never matches,
+       but saying so explicitly costs one line and removes the question. */
+    body::before, body::after { display: none; }
+    /* Navigation, the theme switch and the language switch are controls, and
+       a control on paper is a smudge of ink that cannot be pressed. */
+    .topbar, .pagefoot { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   The dropdown lists in Settings
+   -------------------------------------------------------------------------- */
+.listtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-block-end: var(--space-5);
+    border-block-end: 1px solid var(--rule);
+}
+.listtabs a {
+    padding: var(--space-2) var(--space-4);
+    color: var(--ink-soft);
+    border-block-end: 2px solid transparent;
+    margin-block-end: -1px;
+}
+.listtabs a:hover { color: var(--ink); text-decoration: none; }
+.listtabs a.active {
+    color: var(--accent-ink);
+    border-block-end-color: var(--accent);
+    font-weight: 600;
+}
+/* The stored value is shown but never editable: renaming it would leave
+   every document that records it pointing at nothing. */
+.stored {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.84rem;
+    color: var(--ink-soft);
+    background: var(--draft-soft);
+    padding: 2px 6px;
+    border-radius: var(--radius);
+}
+/* A switched-off value is dimmed rather than hidden: its existence is what
+   explains why re-adding it says it is already there. */
+tr.is-off { opacity: 0.55; }
+tr.is-off .stored { text-decoration: line-through; }
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4);
+}
+/* Present to the form, invisible to the eye: it makes Enter mean "save"
+   rather than "delete the first deletable row". Not display:none, which
+   browsers skip when picking the default submit button. */
+.default-submit {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Counts
+   --------------------------------------------------------------------------
+   One line under each list heading, and the matching tiles on the dashboard.
+   The total is the figure; the breakdown beside it is quieter, because the
+   question is usually "how many" and only sometimes "how many of each".
+   -------------------------------------------------------------------------- */
+.countline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+    margin: var(--space-1) 0 0;
+    font-size: 0.88rem;
+    color: var(--ink-faint);
+}
+.count-total { color: var(--ink-soft); font-weight: 600; }
+.count-part { white-space: nowrap; }
+.count-part + .count-part::before {
+    content: "·";
+    margin-inline-end: var(--space-3);
+    color: var(--rule-strong);
+}
+.count-part b { color: var(--ink-soft); font-weight: 600; }
+
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: var(--space-4);
+    margin-block-end: var(--space-5);
+}
+.kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    color: inherit;
+}
+.kpi:hover {
+    text-decoration: none;
+    border-color: var(--rule-strong);
+    box-shadow: var(--shadow-raised);
+}
+.kpi-figure {
+    font-size: 1.8rem;
+    font-weight: 600;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.kpi-label { color: var(--ink-soft); font-size: 0.9rem; }
+.kpi-parts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--space-3);
+    margin-block-start: var(--space-2);
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--rule);
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+}
+/* A state with nothing in it still holds its place, so the tile does not
+   change shape as the week goes on -- but it recedes, so the eye lands on
+   the states that have something in them. */
+.kpi-parts .is-zero { opacity: 0.45; }
+.section-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin: var(--space-6) 0 var(--space-3);
+}
+
+/* --------------------------------------------------------------------------
+   The margins: a watermark, and the marques along the bottom
+   --------------------------------------------------------------------------
+   Both are decoration, and decoration in a ledger has one duty: to stay out
+   of the way of the figures. So the watermark only appears on screens wide
+   enough to have genuinely empty margins, it never sits under text, and it
+   is faint enough to read as paper rather than as content.
+   -------------------------------------------------------------------------- */
+@media (min-width: 1500px) {
+    body::before,
+    body::after {
+        content: "";
+        position: fixed;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 190px;
+        height: 190px;
+        background-image: var(--watermark);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        opacity: 0.05;
+        pointer-events: none;   /* never in the way of a click */
+        z-index: 0;
+        /* Without a logo the property is unset and these draw nothing. */
+    }
+    body::before { inset-inline-start: 2.2rem; }
+    body::after  { inset-inline-end: 2.2rem; }
+    /* The dark theme needs a touch more, or the mark disappears entirely
+       into the charcoal. */
+    [data-theme="dark"] body::before,
+    [data-theme="dark"] body::after { opacity: 0.08; }
+}
+
+/* The content sits above the watermark, always. */
+/* Above the watermark, and the part of the column that takes up the slack
+   so the ribbon can sit at the bottom of a short page. */
+main.container {
+    position: relative;
+    z-index: 1;
+    flex: 1 0 auto;
+    /* A flex child will not shrink below its content by default, but it will
+       refuse to let a long table scroll properly without this. */
+    min-width: 0;
+    width: 100%;
+}
+
+.pagefoot {
+    margin-block-start: var(--space-7);
+    border-block-start: 1px solid var(--rule);
+    background: var(--surface);
+    /* Never squashed when the content is tall. */
+    flex: none;
+}
+.pagefoot-inner {
+    max-width: 1540px;
+    margin-inline: auto;
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-4);
+}
+.foot-label {
+    font-size: 0.76rem;
+    color: var(--ink-faint);
+    text-transform: none;
+}
+.marques {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.marques li {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+}
+/* A hairline between names rather than a middle dot: at this size a dot
+   reads as a full stop in the middle of the line. */
+.marques li + li { border-inline-start: 1px solid var(--rule); padding-inline-start: var(--space-4); }
+
+/* --------------------------------------------------------------------------
+   Colour on the dashboard tiles
+   --------------------------------------------------------------------------
+   One rule across the top of each tile, keyed to the stage of the work:
+   looking at the car, quoting for it, doing it, being paid for it. It is a
+   visual index, not decoration -- which is why the colours run in that order
+   and why the last one is the amber that means money everywhere else.
+   -------------------------------------------------------------------------- */
+.kpi { border-block-start: 3px solid var(--rule-strong); }
+.kpi-inspections { border-block-start-color: var(--info); }
+.kpi-estimates   { border-block-start-color: var(--plum); }
+.kpi-contracts   { border-block-start-color: var(--teal); }
+.kpi-invoices    { border-block-start-color: var(--amber); }
+.kpi-customers,
+.kpi-vehicles,
+.kpi-catalog,
+.kpi-issues      { border-block-start-color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   Warnings on a customer's file
+   --------------------------------------------------------------------------
+   These say "do not accept this car". Everything else in this stylesheet is
+   built to stay quiet; this is the one thing that is allowed to shout, and
+   it only works because nothing else does.
+
+   The three levels look different on purpose. If a note about a driver's
+   name looked the same as a refusal, people would learn to dismiss both.
+   -------------------------------------------------------------------------- */
+.alert-chip {
+    display: inline-block;
+    padding: 2px var(--space-3);
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* The panel on a customer's own page. */
+.alert-panel {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    margin-block-end: var(--space-5);
+    border: 1px solid;
+}
+.alert-panel-body { min-width: 0; }
+.alert-panel-note { margin: 0; font-weight: 600; }
+.alert-panel-when { margin: var(--space-1) 0 0; font-size: 0.82rem; opacity: 0.75; }
+
+.alert-refuse {
+    background: var(--void-soft);
+    border-color: var(--void);
+    color: var(--void-ink);
+}
+.alert-refuse .alert-chip { background: var(--void); color: var(--surface); }
+/* A bar down the leading edge: the one that means "stop" is also the one
+   that has to be recognisable before it is read. */
+.alert-panel.alert-refuse { border-inline-start-width: 6px; }
+
+.alert-check {
+    background: var(--amber-soft);
+    border-color: var(--amber);
+    color: var(--ink);
+}
+.alert-check .alert-chip { background: var(--amber); color: var(--on-amber); }
+
+.alert-note {
+    background: var(--info-soft);
+    border-color: var(--info);
+    color: var(--ink);
+}
+.alert-note .alert-chip { background: var(--info); color: var(--surface); }
+
+/* The banner beside the customer field. Stays as long as that customer is
+   selected -- a dismissed dialog is gone, and whoever walks up to the desk
+   ten minutes later would otherwise see nothing. */
+.alert-banner {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    flex-wrap: wrap;
+    margin-block-start: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+    border: 1px solid;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+.alert-banner[hidden] { display: none; }
+
+/* The dialog. Modal, so the form cannot be filled in behind it. */
+.alert-dialog {
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: 0;
+    max-width: 30rem;
+    width: calc(100% - 2rem);
+    color: var(--ink);
+    background: var(--surface);
+    box-shadow: 0 10px 40px -8px rgba(0, 0, 0, 0.45);
+}
+.alert-dialog::backdrop { background: rgba(10, 14, 20, 0.55); }
+.alert-dialog .alert-dialog-body { padding: var(--space-5); }
+.alert-dialog-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-block-end: var(--space-3);
+}
+.alert-dialog-note {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+.alert-dialog-when { margin: var(--space-2) 0 0; font-size: 0.82rem; color: var(--ink-faint); }
+/* A coloured edge rather than a coloured panel: the words stay on the normal
+   paper, where they are easiest to read. */
+.alert-dialog.alert-refuse { border-block-start: 6px solid var(--void); }
+.alert-dialog.alert-check  { border-block-start: 6px solid var(--amber); }
+.alert-dialog.alert-refuse .alert-chip { background: var(--void); color: var(--surface); }
+.alert-dialog.alert-check .alert-chip { background: var(--amber); color: var(--on-amber); }
+
+/* In a list, a flagged customer carries a dot. Small, because a list of
+   four hundred names should not look like an emergency. */
+.alert-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    margin-inline-end: 6px;
+    vertical-align: baseline;
+}
+.alert-dot-refuse { background: var(--void); }
+.alert-dot-check  { background: var(--amber); }
+.alert-dot-note   { background: var(--info); }
+
+/* The KPI tile for flagged customers. */
+.kpi-flagged { border-block-start-color: var(--void); }
+/* The chip used on its own, in the warning list, where there is no
+   surrounding panel to colour it. */
+.alert-chip.alert-refuse { background: var(--void); color: var(--surface); border: 0; }
+.alert-chip.alert-check  { background: var(--amber); color: var(--on-amber); border: 0; }
+.alert-chip.alert-note   { background: var(--info); color: var(--surface); border: 0; }
+
+/* --------------------------------------------------------------------------
+   Charts
+   --------------------------------------------------------------------------
+   The bars are HTML rather than SVG, which is why the text here is ordinary
+   text at an ordinary size: an SVG scaled into a narrow column shrinks its
+   labels with it, and these were arriving at nine pixels.
+   -------------------------------------------------------------------------- */
+.meter {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.meter-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+}
+.meter-name {
+    flex: 0 0 var(--meter-label, 150px);
+    min-width: 0;
+    font-size: 0.86rem;
+    color: var(--ink);
+    /* Wraps rather than truncating: an ellipsis loses the half of a fault
+       description that says which fault it was. */
+    overflow-wrap: anywhere;
+}
+.meter-track {
+    flex: 1 1 auto;
+    min-width: 40px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--chart-track);
+    overflow: hidden;
+}
+.meter-bar {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--chart-bar);
+    /* A real value never renders as nothing: the minimum width is set in
+       the markup, this just keeps the rounding from eating it. */
+    min-width: 2px;
+}
+/* The largest row, which is the answer to the question the chart was asked. */
+.meter-row.is-top .meter-bar { background: var(--chart-top); }
+.meter-row.is-top .meter-name { font-weight: 600; }
+.meter-row.is-top .meter-figure { color: var(--ink); font-weight: 600; }
+.meter-figure {
+    flex: 0 0 auto;
+    min-width: 4.5rem;
+    text-align: end;
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- The donut ---------------------------------------------------------- */
+.donut-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+}
+.donut { flex: 0 0 auto; width: 130px; height: 130px; }
+.donut-centre {
+    font-size: 17px;
+    font-weight: 600;
+    fill: var(--ink);
+    font-family: var(--font);
+}
+.donut-legend {
+    flex: 1 1 220px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+/* Every slice names itself and gives its figure. Three of the light slice
+   colours sit under 3:1 against the card, so nothing is allowed to depend
+   on telling the colours apart. */
+.donut-legend-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: 0.84rem;
+    min-width: 0;
+}
+.donut-swatch {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    align-self: center;
+}
+.donut-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+.donut-figure {
+    flex: 0 0 auto;
+    color: var(--ink);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.donut-share {
+    flex: 0 0 3.2rem;
+    text-align: end;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* The old SVG bars set a fixed height attribute next to width="100%", which
+   letterboxed them inside a band of blank card. Anything still drawn as SVG
+   here sizes from its own viewBox. */
+svg.chart { width: 100%; height: auto; display: block; }
+
+@media print {
+    /* Browsers drop background colours when printing unless told not to, and
+       a bar chart whose bars are backgrounds prints as a row of empty
+       tracks. */
+    .meter-bar, .meter-track, .donut-swatch {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Sortable column headings
+   --------------------------------------------------------------------------
+   Plain links, so they work with the keyboard, open in a new tab on a
+   middle click, and survive JavaScript being turned off. The sort lives in
+   the query string, so a sorted list can be bookmarked or sent to somebody
+   and arrives sorted the same way.
+   -------------------------------------------------------------------------- */
+.sort-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: inherit;
+    white-space: nowrap;
+}
+.sort-link:hover { color: var(--ink); text-decoration: none; }
+.sort-link:hover span:first-child { text-decoration: underline; }
+th.num .sort-link { justify-content: flex-end; }
+/* Only the column actually in use carries an arrow. One on every heading is
+   noise and says nothing about which is doing the sorting. */
+.sort-arrow { font-size: 0.8em; color: var(--accent); }
+th.is-sorted .sort-link { color: var(--ink); font-weight: 700; }
+
+/* --------------------------------------------------------------------------
+   The chart grid in Advanced analytics
+   --------------------------------------------------------------------------
+   One flowing grid rather than a stack of fixed two-column rows. With rows
+   of two and an odd number of charts, the last one in each row sat beside a
+   hole the height of a chart -- and the section has eight charts in groups
+   of three, two and three, so there were several.
+
+   auto-fit means the row holds as many as the width allows, and
+   align-items: start stops a short chart being stretched to match a tall
+   neighbour, which was the other half of the empty space.
+   -------------------------------------------------------------------------- */
+.chartgrid {
+    /* Columns rather than a grid, because a grid aligns rows and these
+       panels are wildly different heights: a chart of ten makes beside an
+       empty "not enough history yet" left a gap the height of the taller
+       one. Columns let each panel start where the one above it ended, so
+       the section packs with no holes.
+
+       The trade is reading order -- down a column, then across -- which is
+       the right trade for a page of independent charts nobody reads in
+       sequence. */
+    columns: 3 330px;
+    column-gap: var(--space-5);
+}
+.chartgrid > * {
+    /* A panel must not be split down the middle by a column break. */
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-block-end: var(--space-5);
+    /* Columns do not establish a block formatting context the way grid
+       items do; without this a panel can overflow its column. */
+    display: block;
+    width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Filter bars
+   --------------------------------------------------------------------------
+   One row above whatever is being filtered, on every page that has filters:
+   the search box, the status, the "show inactive" tick and the buttons all
+   on one line. They are plain forms with a submit button, so they work
+   without JavaScript and a filtered view has an address that can be
+   bookmarked or sent to somebody.
+   -------------------------------------------------------------------------- */
+.filterbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    margin-block-end: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+}
+.filterbar label {
+    font-size: 0.84rem;
+    color: var(--ink-soft);
+    margin: 0;
+    white-space: nowrap;
+}
+.filterbar select,
+.filterbar input[type="text"],
+.filterbar input[type="search"],
+.filterbar input[type="date"] { margin: 0; }
+.filterbar input[type="search"],
+.filterbar input[type="text"] { min-width: 12rem; flex: 1 1 12rem; max-width: 22rem; }
+/* Without a cap a select stretches to the whole bar and pushes the button
+   onto a line of its own. */
+.filterbar select { flex: 0 1 auto; min-width: 10rem; max-width: 18rem; width: auto; }
+/* The checkbox and its words travel together, so the label never wraps
+   away from the box it belongs to. */
+.filterbar .check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+.filter-note { font-size: 0.84rem; color: var(--ink-faint); }
+.filter-note b { color: var(--ink); }
+/* "Clear" is an escape hatch, not an action anybody is aiming for. */
+.btn.link {
+    background: none;
+    border: none;
+    color: var(--accent-ink);
+    padding-inline: var(--space-2);
+    text-decoration: underline;
+}
+.btn.link:hover { background: none; color: var(--ink); }

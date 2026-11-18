@@ -1,49 +1,28 @@
-"""Where a part came from, and who made it.
+"""Whether a part was bought in for this job, and therefore carries a markup.
 
-The two questions are different -- a genuine BMW part can be bought from the
-agency, found on the used market, or shipped from Germany -- but the same
-names answer both, so one list serves both fields.
+The names a source can be called by are not here -- they are rows in the
+`list_options` table, edited in Settings. What is here is the one thing
+about a source that is a rule rather than a label: a part the workshop did
+not already own was bought in for this customer, and the contract's handling
+percentage applies to it.
 
-Nothing here is enforced by the database. These are suggestions offered as
-you type, and anything typed instead is kept as written. A workshop finds a
-new supplier far more often than anyone edits a constraint, and an origin
-recorded in unexpected words is still worth more than one recorded wrongly
-because the list had no room for the truth.
+Nothing is enforced against the column. The list offers suggestions, and an
+origin typed in unexpected words is kept as written -- it is worth more than
+one recorded wrongly because the list had no room for the truth. But however
+it is written, it still has to answer the markup question, which is what
+`normalise` exists to settle.
 """
 
 from __future__ import annotations
 
-#: ``(stored value, English, Arabic)``.
-#:
-#: The stored value is what lands in the database. For the suggestions it is
-#: the English name, so what the person picked is what the column holds and a
-#: spreadsheet of this data reads without a lookup table. Only the two
-#: original answers keep short codes, because rows written before this list
-#: existed already hold them.
-SOURCES: list[tuple[str, str, str]] = [
-    ("own_stock", "Own stock", "مخزوننا"),
-    ("BMW", "BMW agency", "وكالة BMW"),
-    ("Mercedes-Benz", "Mercedes-Benz agency", "وكالة مرسيدس"),
-    ("Audi", "Audi agency", "وكالة أودي"),
-    ("Volkswagen", "Volkswagen agency", "وكالة فولكس واجن"),
-    ("Rolls-Royce", "Rolls-Royce agency", "وكالة رولز رويس"),
-    ("Used market", "Used market", "السوق المستعمل"),
-    ("Germany", "Imported from Germany", "مستورد من ألمانيا"),
-    ("outside", "Other supplier", "مورد آخر"),
-]
-
-#: Who made the part, for the price list. Same names, without the word
-#: "agency": a part is made by BMW whoever you bought it from.
-MANUFACTURERS: list[tuple[str, str, str]] = [
-    ("BMW", "BMW", "BMW"),
-    ("Mercedes-Benz", "Mercedes-Benz", "مرسيدس بنز"),
-    ("Audi", "Audi", "أودي"),
-    ("Volkswagen", "Volkswagen", "فولكس واجن"),
-    ("Rolls-Royce", "Rolls-Royce", "رولز رويس"),
-    ("Used market", "Used market", "السوق المستعمل"),
-    ("Germany", "Imported from Germany", "مستورد من ألمانيا"),
-    ("Other", "Other", "أخرى"),
-]
+# The lists of sources and manufacturers used to live here as constants.
+# They are rows in the `list_options` table now (migration 009) and are
+# edited in Settings, because a workshop finds a new supplier far more often
+# than anyone edits Python. Keeping a second copy here would be a trap: it
+# would look authoritative and change nothing.
+#
+# What stays is the part that is not a list of names but a rule about
+# money -- below.
 
 #: A part we did not already own was bought in for this customer, and the
 #: contract's handling percentage applies to it. That is the only thing the
@@ -89,32 +68,3 @@ def is_external(source: str) -> bool:
     (True, True, True)
     """
     return normalise(source) != OWN_STOCK
-
-
-def label(value: str, lang: str = "en", *, table: list[tuple[str, str, str]] | None = None) -> str:
-    """The name to show for a stored value, falling back to the value itself.
-
-    >>> label("own_stock"), label("own_stock", "ar")
-    ('Own stock', 'مخزوننا')
-    >>> label("Germany")
-    'Imported from Germany'
-    >>> label("Al-Jazeera Spare Parts")      # typed by hand, kept as written
-    'Al-Jazeera Spare Parts'
-    >>> label("")
-    ''
-    """
-    for stored, english, arabic in (table if table is not None else SOURCES):
-        if stored == value:
-            return arabic if lang == "ar" else english
-    return value
-
-
-def manufacturer_label(value: str, lang: str = "en") -> str:
-    """As :func:`label`, against the manufacturer list.
-
-    >>> manufacturer_label("Mercedes-Benz", "ar")
-    'مرسيدس بنز'
-    >>> manufacturer_label("Bosch")
-    'Bosch'
-    """
-    return label(value, lang, table=MANUFACTURERS)

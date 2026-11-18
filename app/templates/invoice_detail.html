@@ -151,7 +151,7 @@
             <tr>
               <td class="tight">{{ p['paid_on'] }}</td>
               <td>
-                {{ t('pay.method_' ~ p['method']) }}
+                {{ opt_label('payment_methods', p['method']) }}
                 {% if p['reference'] %}<div class="secondary">{{ p['reference'] }}</div>{% endif %}
               </td>
               <td class="num">{{ m(p['amount_minor']) }}</td>
@@ -193,8 +193,8 @@
           <div class="field">
             <label for="f_method">{{ t('pay.method') }}</label>
             <select id="f_method" name="method">
-              {% for mth in ['cash', 'card', 'transfer', 'cheque', 'other'] %}
-              <option value="{{ mth }}">{{ t('pay.method_' ~ mth) }}</option>
+              {% for o in options.payment_methods %}
+              <option value="{{ o['value'] }}">{{ loc(o, 'label_en') }}</option>
               {% endfor %}
             </select>
           </div>

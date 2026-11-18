@@ -16,6 +16,7 @@ database step.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -133,6 +134,12 @@ def pending_migrations(conn: sqlite3.Connection) -> list[Path]:
     return [f for f in files if f.name not in done]
 
 
+#: A migration that must run its own transaction says so on a line of its
+#: own. Spelled as a comment so the file is still valid SQL, and matched
+#: exactly so that merely mentioning the words in prose does not trigger it.
+SELF_MANAGED = re.compile(r"^--\s*runner:\s*self-managed\s*$", re.MULTILINE)
+
+
 def migrate(conn: sqlite3.Connection, *, verbose: bool = False) -> list[str]:
     """Apply every pending migration. Returns the filenames that ran.
 
@@ -141,10 +148,22 @@ def migrate(conn: sqlite3.Connection, *, verbose: bool = False) -> list[str]:
     ran: list[str] = []
     for sql_file in pending_migrations(conn):
         script = sql_file.read_text(encoding="utf-8")
-        # Each migration is one transaction: if statement 9 of 10 fails, the
-        # database is left exactly as it was rather than half-upgraded.
         try:
-            conn.executescript(f"BEGIN;\n{script}\nCOMMIT;")
+            if SELF_MANAGED.search(script):
+                # A few migrations have to run PRAGMA statements that SQLite
+                # ignores inside a transaction -- rebuilding a table to drop
+                # a CHECK constraint needs foreign keys off, and asking for
+                # that between BEGIN and COMMIT does nothing at all, silently.
+                #
+                # Such a migration declares itself and takes responsibility
+                # for its own BEGIN and COMMIT. The data-moving part is still
+                # inside a transaction; only the pragmas sit outside it.
+                conn.executescript(script)
+            else:
+                # Everything else is one transaction: if statement 9 of 10
+                # fails, the database is left exactly as it was rather than
+                # half-upgraded.
+                conn.executescript(f"BEGIN;\n{script}\nCOMMIT;")
         except Exception:
             conn.rollback()
             raise RuntimeError(f"Migration failed: {sql_file.name}") from None

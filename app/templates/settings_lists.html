@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}{{ t('lists.title') }}{% endblock %}
+
+{#
+  One screen for every dropdown in the application.
+
+  The stored value is shown but never editable. Renaming it would leave every
+  invoice, part and payment that already records the old one pointing at
+  nothing -- the label can say anything, but the value is what the documents
+  are written in. To retire a choice, switch it off: it stops being offered
+  on new work and the documents that already use it keep their words.
+#}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ t('lists.title') }}</h1>
+    <p class="hint" style="max-width:66ch">{{ t('lists.intro') }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/settings">{{ t('lists.back') }}</a>
+  </div>
+</div>
+
+<nav class="listtabs" aria-label="{{ t('lists.title') }}">
+  {% for name, label in lists.items() %}
+    <a href="/settings/lists?list_name={{ name }}"
+       class="{{ 'active' if name == list_name else '' }}">{{ t('lists.' ~ name) }}</a>
+  {% endfor %}
+</nav>
+
+<form method="post" action="/settings/lists/save">
+  <section class="panel">
+  <input type="hidden" name="list_name" value="{{ list_name }}">
+  {#
+    This invisible button exists to be the first one in the form.
+
+    Each row's Delete is a submit button too (it overrides the action with
+    formaction), and pressing Enter in a text field fires whichever submit
+    button comes first in the document. Without this, editing a label and
+    pressing Enter -- the most natural thing in the world to do -- would
+    delete a value instead of saving one.
+  #}
+  <button type="submit" class="default-submit" tabindex="-1" aria-hidden="true">{{ t('action.save') }}</button>
+  <table class="ledger">
+    <thead>
+      <tr>
+        <th>{{ t('lists.stored') }}</th>
+        <th>{{ t('lists.label_en') }}</th>
+        <th>{{ t('lists.label_ar') }}</th>
+        <th class="num">{{ t('lists.order') }}</th>
+        <th>{{ t('lists.shown') }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="{{ 'is-off' if not row['is_active'] else '' }}">
+        <td>
+          <input type="hidden" name="option_id" value="{{ row['id'] }}">
+          <code class="stored">{{ row['value'] }}</code>
+        </td>
+        <td><input type="text" name="label_en" value="{{ row['label_en'] }}"></td>
+        <td><input type="text" name="label_ar" value="{{ row['label_ar'] }}" dir="rtl"></td>
+        <td class="num"><input type="number" name="sort_order" value="{{ row['sort_order'] }}" step="10" style="width:5rem"></td>
+        <td>
+          {# A select, not a checkbox: an unticked checkbox is not submitted,
+             which would shift these parallel rows and switch off the wrong
+             value. #}
+          <select name="active">
+            <option value="1" {% if row['is_active'] %}selected{% endif %}>{{ t('lists.yes') }}</option>
+            <option value="0" {% if not row['is_active'] %}selected{% endif %}>{{ t('lists.no') }}</option>
+          </select>
+        </td>
+        <td class="tight">
+          {% if not row['is_builtin'] %}
+            <button class="btn link" type="submit"
+                    formaction="/settings/lists/{{ row['id'] }}/delete"
+                    formmethod="post">{{ t('action.delete') }}</button>
+          {% else %}
+            <span class="hint">{{ t('lists.builtin') }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="panel-body">
+    <div class="formactions">
+      <button class="btn accent" type="submit">{{ t('action.save') }}</button>
+    </div>
+  </div>
+  </section>
+</form>
+
+<form method="post" action="/settings/lists/add">
+  <section class="panel">
+  <div class="panel-head"><h2>{{ t('lists.add') }}</h2></div>
+  <div class="panel-body">
+  <input type="hidden" name="list_name" value="{{ list_name }}">
+  <div class="grid-3">
+    <div class="field">
+      <label for="f_value">{{ t('lists.stored') }}</label>
+      <input type="text" id="f_value" name="value" required>
+      <p class="hint">{{ t('lists.stored_hint') }}</p>
+    </div>
+    <div class="field">
+      <label for="f_label_en">{{ t('lists.label_en') }}</label>
+      <input type="text" id="f_label_en" name="label_en">
+    </div>
+    <div class="field">
+      <label for="f_label_ar">{{ t('lists.label_ar') }}</label>
+      <input type="text" id="f_label_ar" name="label_ar" dir="rtl">
+    </div>
+  </div>
+  <div class="formactions">
+    <button class="btn" type="submit">{{ t('lists.add') }}</button>
+  </div>
+  </div>
+  </section>
+</form>
+{% endblock %}

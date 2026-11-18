@@ -365,3 +365,25 @@ def parse_inspection_items(
             }
         )
     return rows
+
+
+def truthy(value: Any) -> bool:
+    """Whether a query-string value means yes.
+
+    A browser sends an empty string for a box nobody filled in, and a link
+    that carries the current filters produces the same. Declaring such a
+    parameter as `int` makes the whole page answer 422 over a trailing
+    "&inactive=" -- a blank page instead of a list, from a link the
+    application generated itself.
+
+    >>> truthy("1"), truthy("on"), truthy("true"), truthy("yes")
+    (True, True, True, True)
+    >>> truthy(""), truthy("0"), truthy(None), truthy("off")
+    (False, False, False, False)
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    return text in {"1", "on", "true", "yes", "y"}

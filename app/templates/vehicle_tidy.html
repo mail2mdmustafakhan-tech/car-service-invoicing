@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ t('tidy.title') }}{% endblock %}
+
+{#
+  Colour and model written in each other's boxes.
+
+  Every row is shown with what it says now and what it would say instead,
+  because this is somebody's register and the decision is theirs. The rule
+  is deliberately narrow -- a value only moves when the box it is in cannot
+  be right and the box it belongs in is empty, or when the two are plainly
+  swapped -- so what is listed here is the part there is no real argument
+  about. Anything doubtful is left alone and is not on this page.
+#}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ t('tidy.title') }}</h1>
+    <p class="hint" style="max-width:68ch">{{ t('tidy.intro') }}</p>
+  </div>
+  <div class="actions"><a class="btn" href="/vehicles">{{ t('veh.title') }}</a></div>
+</div>
+
+{% if not fixes %}
+  <div class="panel"><div class="panel-body empty">
+    <p>{{ t('tidy.nothing') }}</p>
+  </div></div>
+{% else %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ fixes | length }} {{ t('tidy.cars') }}</h2>
+      <p class="hint">{{ swaps }} {{ t('tidy.swapped') }} · {{ moves }} {{ t('tidy.moved') }}</p>
+    </div>
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('veh.plate') }}</th>
+          <th>{{ t('veh.make') }}</th>
+          <th>{{ t('tidy.now') }}</th>
+          <th>{{ t('tidy.after') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in fixes %}
+        <tr>
+          <td>{{ f.plate_no }}</td>
+          <td>{{ f.make }}</td>
+          <td class="hint">
+            {{ t('veh.model') }}: <code class="stored">{{ f.model or '—' }}</code>
+            {{ t('veh.colour') }}: <code class="stored">{{ f.colour or '—' }}</code>
+          </td>
+          <td>
+            {{ t('veh.model') }}: <b>{{ f.new_model or '—' }}</b>
+            {{ t('veh.colour') }}: <b>{{ f.new_colour or '—' }}</b>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <form method="post" action="/vehicles/tidy">
+    <div class="formactions">
+      <button class="btn accent" type="submit">{{ t('tidy.apply') }}</button>
+      <a class="btn" href="/vehicles">{{ t('action.cancel') }}</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

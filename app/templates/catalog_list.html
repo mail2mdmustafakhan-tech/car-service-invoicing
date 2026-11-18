@@ -1,11 +1,15 @@
 {% extends "base.html" %}
+{% from "_sortable.html" import sort_th with context %}
+{% from "_counts.html" import countline with context %}
 {% from "_macros.html" import delete_form with context %}
+{% from "_pager.html" import pager with context %}
 {% block title %}{{ t('cat.title') }}{% endblock %}
 
 {% block content %}
 <div class="pagehead">
   <div>
     <h1>{{ t('cat.title') }}</h1>
+    {{ countline(counts_for('catalog'), 'count.catalog') }}
   </div>
   <div class="actions"><a class="btn accent" href="/catalog/new">{{ t('cat.new') }}</a></div>
 </div>
@@ -34,11 +38,12 @@
     <table class="ledger">
       <thead>
         <tr>
-          <th>{{ t('cat.name_en') }}</th>
-          <th>{{ t('cat.kind') }}</th>
+          {% set keep = {'q': q, 'kind': kind, 'inactive': inactive} %}
+          {{ sort_th('name', t('cat.name_en'), extra=keep) }}
+          {{ sort_th('kind', t('cat.kind'), extra=keep) }}
           <th>{{ t('cat.code') }}</th>
           <th>{{ t('cat.unit') }}</th>
-          <th class="num">{{ t('cat.unit_price') }}</th>
+          {{ sort_th('price', t('cat.unit_price'), numeric=True, extra=keep) }}
           <th></th>
         </tr>
       </thead>
@@ -65,6 +70,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(page, request) }}
   {% else %}
   <div class="empty">
     <p>{{ t('cat.none') if not q else t('msg.no_results') }}</p>

@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% from "_customer_alert.html" import customer_alert_dialog, customer_option_data with context %}
 {% from "_macros.html" import field with context %}
+{% from "_picker.html" import customer_search with context %}
 {% set editing = order is not none %}
 {% block title %}{{ t('con.edit') if editing else t('con.new') }}{% endblock %}
 
@@ -26,15 +28,17 @@
       <div class="grid-2">
         <div class="field">
           <label for="f_customer_id">{{ t('con.owner') }} *</label>
+          {{ customer_search('f_customer_id') }}
           <select id="f_customer_id" name="customer_id" required>
             <option value="">{{ t('inv.select_customer') }}</option>
             {% set chosen_customer = order['customer_id'] if editing else preset_customer_id %}
-            {% for c in customers %}
-            <option value="{{ c['id'] }}" {% if chosen_customer == c['id'] %}selected{% endif %}>
+            {% for c in picker_customers(chosen_customer) %}
+            <option value="{{ c['id'] }}"{{ customer_option_data(c) }} {% if chosen_customer == c['id'] %}selected{% endif %}>
               {{ loc(c, 'name') }}{% if c['phone'] %} — {{ c['phone'] }}{% endif %}
             </option>
             {% endfor %}
           </select>
+          {{ customer_alert_dialog() }}
           <p class="hint"><a href="/customers/new">{{ t('cust.new') }}</a></p>
         </div>
 
@@ -43,7 +47,7 @@
           {% set chosen_vehicle = order['vehicle_id'] if editing else preset_vehicle_id %}
           <select id="f_vehicle_id" name="vehicle_id" data-selected="{{ chosen_vehicle or '' }}">
             <option value="">{{ t('inv.no_vehicle') }}</option>
-            {% for v in vehicles %}
+            {% for v in cars_of(chosen_customer) %}
             <option value="{{ v['id'] }}" data-customer="{{ v['customer_id'] }}"
                     data-odometer="{{ v['odometer'] or '' }}"
                     {% if chosen_vehicle == v['id'] %}selected{% endif %}>
@@ -249,13 +253,15 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ static('js/customer-alert.js') }}"></script>
+<script src="{{ static('js/picker.js') }}"></script>
 {# The one list behind every description box on this page. A <datalist> is
    the browser's own combo box: the field still accepts anything typed, so a
    custom description needs no second field to live in. #}
 {# Where a part came from. Suggestions, not a fixed set -- a workshop finds
    a new supplier more often than anyone edits a list in the code. #}
 <datalist id="part-sources">
-  {% for value, en, ar in SOURCES %}<option value="{{ value }}" label="{{ ar if lang == 'ar' else en }}"></option>
+  {% for o in options.sources %}<option value="{{ o['value'] }}" label="{{ loc(o, 'label_en') }}"></option>
   {% endfor %}
 </datalist>
 

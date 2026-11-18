@@ -82,6 +82,162 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "nav.catalog": ("Services & Parts", "الخدمات وقطع الغيار"),
     "nav.settings": ("Settings", "الإعدادات"),
     "nav.language": ("Language", "اللغة"),
+    "nav.theme": ("Light or dark", "فاتح أو داكن"),
+
+    # Settings -> the dropdown lists
+    "lists.title": ("Dropdown lists", "قوائم الاختيار"),
+    "lists.intro": (
+        "The choices offered by every dropdown in the application. Switch one "
+        "off to stop offering it; documents that already use it keep their "
+        "wording.",
+        "الخيارات التي تظهر في قوائم البرنامج. أوقف أي خيار لإخفائه من القوائم، "
+        "وتبقى المستندات السابقة كما هي.",
+    ),
+    "lists.back": ("Back to settings", "رجوع للإعدادات"),
+    "lists.sources": ("Part sources", "مصادر القطع"),
+    "lists.manufacturers": ("Manufacturers", "الشركات المصنعة"),
+    "lists.units": ("Units", "الوحدات"),
+    "lists.payment_methods": ("Payment methods", "طرق الدفع"),
+    "lists.customer_types": ("Customer types", "أنواع العملاء"),
+    "lists.marques": ("Marques serviced", "الماركات التي نخدمها"),
+    "lists.stored": ("Stored as", "القيمة المخزنة"),
+    "lists.stored_hint": (
+        "What is written into the record. It cannot be changed later, because "
+        "documents already saved refer to it.",
+        "ما يُسجَّل في البيانات. لا يمكن تغييره لاحقاً لأن المستندات المحفوظة تشير إليه.",
+    ),
+    "lists.label_en": ("English", "الإنجليزية"),
+    "lists.label_ar": ("Arabic", "العربية"),
+    "lists.order": ("Order", "الترتيب"),
+    "lists.shown": ("Offered", "يظهر"),
+    "lists.builtin": ("Built in", "أساسي"),
+    "lists.add": ("Add a value", "إضافة قيمة"),
+    "lists.yes": ("Yes", "نعم"),
+    "lists.no": ("No", "لا"),
+
+    # The count line under each list heading, and the dashboard tiles.
+    # Plural nouns: these always follow a number, so the singular form is
+    # never needed -- "1 invoices" reads badly but is only ever seen for one
+    # second of a workshop's first day, and getting Arabic duals and plurals
+    # right for both languages is not worth that second.
+    "count.invoices": ("invoices", "فواتير"),
+    "count.estimates": ("estimates", "عروض سعر"),
+    "count.contracts": ("repair contracts", "عقود إصلاح"),
+    "count.inspections": ("inspections", "فحوصات"),
+    "count.customers": ("customers", "عملاء"),
+    "count.vehicles": ("vehicles", "مركبات"),
+    "count.catalog": ("services and parts", "خدمات وقطع"),
+    "count.issues": ("known faults", "أعطال معروفة"),
+    "count.active": ("active", "نشط"),
+    "count.retired": ("retired", "موقوف"),
+    "dash.whats_on": ("What is on the books", "ما لدينا"),
+    "foot.marques": ("We service", "نخدم"),
+    "dash.make_share": ("Share of the fleet", "نسبة كل ماركة"),
+    "dash.make_share_hint": (
+        "Every car on file, by make. Makes past the sixth are grouped.",
+        "كل السيارات المسجلة حسب الماركة. ما بعد السادسة يُجمع معاً.",
+    ),
+    "dash.other": ("Other makes", "ماركات أخرى"),
+    "dash.no_model_note": (
+        "more cars have no model recorded, so they are not counted above.",
+        "سيارة أخرى بدون موديل مسجل، لذلك لم تُحتسب أعلاه.",
+    ),
+    "dash.see_flagged": ("See the warning list", "عرض قائمة التنبيهات"),
+    "dash.by_age": ("Cars by age", "السيارات حسب سنة الصنع"),
+    "dash.by_age_hint": (
+        "Model year, in five-year bands. Cars with no year recorded are left out.",
+        "سنة الصنع ضمن فترات خمس سنوات. السيارات بدون سنة مسجلة غير محتسبة.",
+    ),
+    "dash.by_colour": ("Cars by colour", "السيارات حسب اللون"),
+    "dash.other_colours": ("Other colours", "ألوان أخرى"),
+    "dash.filter_make": ("Show", "عرض"),
+    "dash.all_makes": ("All makes", "كل الماركات"),
+    "dash.showing_only": ("Showing", "المعروض"),
+    "dash.odd_colours": (
+        "cars have something other than a colour recorded there — usually a "
+        "model code. Worth tidying up.",
+        "سيارة مسجّل في خانة اللون شيء آخر، غالباً رمز الموديل. يُستحسن تصحيحها.",
+    ),
+
+    # Warnings on a customer's file. The wording is the point: these are
+    # read at a counter with a customer standing there, so they say what to
+    # do rather than describing a state.
+    "alert.refuse": ("Do not accept", "لا تستقبل"),
+    "alert.check": ("Ask before accepting", "راجع قبل الاستلام"),
+    "alert.note": ("Note on file", "ملاحظة"),
+    "alert.understood": ("Understood", "مفهوم"),
+    "alert.set_on": ("Marked", "سُجّلت"),
+    "alert.no_reason": ("No reason was recorded.", "لم يُسجَّل سبب."),
+    "alert.title": ("Warning on this file", "تنبيه على الملف"),
+    "alert.none": ("No warning", "بدون تنبيه"),
+    "alert.reason": ("Reason", "السبب"),
+    "alert.reason_hint": (
+        "Shown to whoever books the car in. Say what to do, not just that "
+        "something is wrong.",
+        "تظهر لمن يستلم السيارة. اذكر ما يجب فعله، لا مجرد وجود مشكلة.",
+    ),
+    "alert.flagged": ("flagged customers", "عملاء بتنبيه"),
+    "alert.flagged_title": ("Flagged customers", "العملاء المنبّه عليهم"),
+
+    # Bringing a car register in from a spreadsheet.
+    "reg.title": ("Import a car register", "استيراد سجل السيارات"),
+    "reg.intro": (
+        "A spreadsheet with one row per car: make, plate, chassis number, "
+        "owner and mobile. Rows marked in red are read as warnings on the "
+        "owner's file. Nothing is saved until you have looked at what it found.",
+        "ملف فيه سطر لكل سيارة: النوع واللوحة والهيكل واسم المالك وجواله. "
+        "الأسطر المظللة بالأحمر تُقرأ كتنبيهات على ملف المالك. لا يُحفظ شيء "
+        "قبل أن تراجع النتيجة.",
+    ),
+    "reg.file": ("Spreadsheet", "الملف"),
+    "reg.file_hint": (".xlsx, with a heading row", "صيغة xlsx مع سطر عناوين"),
+    "reg.read": ("Read the file", "اقرأ الملف"),
+    "reg.what_it_found": ("What it found", "ما تم العثور عليه"),
+    "reg.rows": ("rows read", "سطر"),
+    "reg.unnamed": ("with no name", "بدون اسم"),
+    "reg.merged": ("merged", "مدمج"),
+    "reg.skipped": ("left out", "مستبعد"),
+    "reg.skipped_hint": ("no plate, or a repeat", "بدون لوحة أو مكرر"),
+    "reg.makes": ("Makes found", "الماركات"),
+    "reg.ignored": ("Columns not read", "أعمدة لم تُقرأ"),
+    "reg.will_flag": ("Customers this will flag", "عملاء سيوضع عليهم تنبيه"),
+    "reg.will_flag_hint": (
+        "Read these before continuing. They come from the rows marked in "
+        "red, and they are what the front desk will be shown.",
+        "راجع هذه القائمة قبل المتابعة. مصدرها الأسطر الحمراء، وهي ما سيظهر "
+        "عند الاستقبال.",
+    ),
+    "reg.left_out": ("Rows left out", "أسطر مستبعدة"),
+    "reg.why": ("Why", "السبب"),
+    "reg.line": ("Line", "السطر"),
+    "reg.first_rows": ("The first few cars", "أول السيارات"),
+    "reg.commit": ("Import it", "استيراد"),
+    "reg.template": ("Download a blank template", "تنزيل نموذج فارغ"),
+
+    # Colour and model written in each other's boxes.
+    "tidy.title": ("Tidy up colour and model", "ترتيب اللون والموديل"),
+    "tidy.intro": (
+        "Some cars have the model written where the colour goes, or the "
+        "colour where the model goes. Only the clear cases are listed: a "
+        "value is moved when the box it is in cannot be right and the box "
+        "it belongs in is empty, or when the two are plainly swapped. "
+        "Nothing changes until you say so.",
+        "بعض السيارات مسجَّل فيها الموديل مكان اللون أو العكس. تظهر هنا "
+        "الحالات الواضحة فقط، ولا يتغير شيء حتى توافق.",
+    ),
+    "tidy.nothing": ("Nothing needs moving.", "لا يوجد ما يحتاج تعديلاً."),
+    "tidy.cars": ("cars would change", "سيارة ستتغير"),
+    "tidy.now": ("Recorded now", "المسجَّل الآن"),
+    "tidy.after": ("Would become", "سيصبح"),
+    "tidy.apply": ("Move them", "نفّذ التعديل"),
+    "msg.nothing_to_do": ("Nothing needed changing.", "لا يوجد ما يحتاج تعديلاً."),
+    "tidy.swapped": ("swapped round", "متبادلة"),
+    "tidy.moved": ("moved across", "منقولة"),
+    "alert.none_flagged": (
+        "No customer carries a warning.",
+        "لا يوجد عميل عليه تنبيه.",
+    ),
+    "nav.sections": ("Sections", "الأقسام"),
 
     # -- Shared actions ----------------------------------------------------
     "action.new": ("New", "جديد"),
@@ -92,6 +248,26 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "action.search": ("Search", "بحث"),
     "action.clear": ("Clear", "مسح"),
     "action.back": ("Back", "رجوع"),
+
+    # The pager under a list. "Showing 51-100 of 4,312" is the important one:
+    # it is what distinguishes a page of fifty rows from a list of fifty rows.
+    "pager.nav": ("Pages", "الصفحات"),
+    "pager.showing": ("Showing", "المعروض"),
+    "pager.of": ("of", "من"),
+    "pager.page": ("Page", "صفحة"),
+    "pager.previous": ("Previous", "السابق"),
+    "pager.next": ("Next", "التالي"),
+    "pager.first": ("First page", "الصفحة الأولى"),
+    "pager.last": ("Last page", "الصفحة الأخيرة"),
+    "pager.per_page": ("Per page", "لكل صفحة"),
+
+    # The search box above a customer dropdown. The hint has to say plainly
+    # that the list is not everybody, or somebody will conclude a customer
+    # has been deleted when they are simply not in the recent fifty.
+    "pick.search_customer": ("Search customers by name or phone\u2026",
+                             "\u0627\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u062c\u0648\u0627\u0644\u2026"),
+    "pick.customer_hint": ("Recent customers are listed below \u2014 search here for anyone else.",
+                           "\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0623\u062f\u0646\u0627\u0647 \u062a\u0639\u0631\u0636 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0627\u0644\u0623\u062d\u062f\u062b \u2014 \u0627\u0628\u062d\u062b \u0647\u0646\u0627 \u0639\u0646 \u063a\u064a\u0631\u0647\u0645."),
     "action.print": ("Print", "طباعة"),
     "action.download_pdf": ("Download PDF", "تحميل PDF"),
     "action.remove": ("Remove", "إزالة"),
@@ -416,11 +592,15 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "nav.inspections": ("Inspections", "الفحوصات"),
     "ins.title": ("Inspections", "الفحوصات"),
     "ins.nav": ("Inspections", "الفحوصات"),
-    "ins.new": ("New check", "فحص جديد"),
-    "ins.number": ("Check no.", "رقم الفحص"),
+    "ins.new": ("New inspection", "فحص جديد"),
+    "ins.search_hint": (
+        "Search by sheet number, customer or car",
+        "ابحث برقم الفحص أو العميل أو السيارة",
+    ),
+    "ins.number": ("Inspection no.", "رقم الفحص"),
     "ins.date": ("Checked on", "تاريخ الفحص"),
-    "ins.details": ("Check details", "بيانات الفحص"),
-    "ins.checklist": ("What was checked", "البنود المفحوصة"),
+    "ins.details": ("Inspection details", "بيانات الفحص"),
+    "ins.checklist": ("What was inspected", "البنود المفحوصة"),
     "ins.checklist_hint": (
         "The standard walk-round is filled in for you. Change the condition "
         "where something is not right, and remove any row that does not apply.",
@@ -452,9 +632,9 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     ),
     "ins.make_estimate": ("Make an estimate", "إنشاء عرض سعر"),
     "ins.view_estimate": ("Estimate", "عرض السعر"),
-    "ins.none": ("No checks recorded yet.", "لا توجد فحوصات بعد."),
+    "ins.none": ("No inspections recorded yet.", "لا توجد فحوصات بعد."),
     "ins.none_hint": (
-        "A check records what you found before anyone talks about price.",
+        "An inspection records what you found before anyone talks about price.",
         "الفحص يسجل ما وجدته قبل الحديث عن السعر.",
     ),
     "status.checked": ("Checked", "تم الفحص"),

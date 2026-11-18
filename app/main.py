@@ -26,13 +26,14 @@ from pathlib import Path
 from sqlite3 import Connection, IntegrityError
 from tempfile import TemporaryDirectory
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import charts, exporting, forms, importing, messaging, sources
+from . import charts, exporting, forms, importing, messaging, register_import
 from . import repository as repo
 from .db import backup_archive, connect, db_path, migrate, session
 from .forms import FormError
@@ -102,12 +103,9 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.globals.update(
     static=static_url,
     meter_list=charts.meter_list,
+    donut=charts.donut,
     trend_chart=charts.trend,
     LANGUAGES=LANGUAGES,
-    SOURCES=sources.SOURCES,
-    MANUFACTURERS=sources.MANUFACTURERS,
-    source_label=sources.label,
-    manufacturer_label=sources.manufacturer_label,
     PDF_AVAILABLE=PDF_AVAILABLE,
     fmt_qty=format_qty,
     fmt_rate=format_rate,
@@ -125,7 +123,21 @@ templates.env.globals.update(
     payment_state=payment_state,
     balance_due=balance_due,
     today=lambda: date.today().isoformat(),
+    page_url=lambda request, n: page_url(request, n),
 )
+
+
+def page_url(request: Request, number: int) -> str:
+    """This page's address with ``page`` set to *number*.
+
+    Built from the request's own query string so that every filter and the
+    sort order survive the jump. Spelling out the parameters instead would
+    mean each list's pager knowing that list's filters, and a pager that
+    forgets one quietly sends people to page 2 of an unfiltered list.
+    """
+    params = [(k, v) for k, v in request.query_params.multi_items() if k != "page"]
+    params.append(("page", str(number)))
+    return f"{request.url.path}?{urlencode(params)}"
 
 
 # --------------------------------------------------------------------------
@@ -156,6 +168,101 @@ def ctx(
 
     logo = repo.logo_state(conn)
 
+    # Every dropdown's choices, in one query. Templates reach them as
+    # `options.units`, and `opt_label('payment_methods', 'cash')` turns a
+    # stored value back into words for display.
+    options, option_labels = repo.all_options(conn)
+
+    def opt_label(list_name: str, value: str) -> str:
+        """The words for a stored value, in the current language.
+
+        Falls back to the value itself. A payment recorded as "cheque"
+        before anyone edited the list, or a source typed in by hand, still
+        has to show as something -- an empty cell would read as missing
+        data rather than as an unlisted answer.
+        """
+        if not value:
+            return ""
+        row = option_labels.get((list_name, value))
+        if row is None:
+            return value
+        return localised(row, "label_en", lang) or value
+
+    def opt_label2(list_name: str, value: str) -> str:
+        """Both languages, for the printed documents.
+
+        The customer's copy labels everything in English and Arabic
+        regardless of the interface language, so a payment method has to
+        print as "Cash / نقداً". A value added by hand usually has only an
+        English label, in which case it prints once rather than twice with
+        the same words either side of a slash.
+        """
+        if not value:
+            return ""
+        row = option_labels.get((list_name, value))
+        if row is None:
+            return value
+        english = row["label_en"] or value
+        arabic = row["label_ar"]
+        return f"{english} / {arabic}" if arabic else english
+
+    def counts_for(section: str) -> dict[str, Any]:
+        """The count line for one section, asked for only where it is shown.
+
+        Deliberately a function rather than a value: computing every
+        section's count on every render would put eight queries behind every
+        page in the application, including the printed documents, to serve
+        one line that most of them never show.
+        """
+        if section in repo.COUNTED_STATUSES:
+            return repo.status_counts(conn, section)
+        return repo.simple_counts(conn)[section]
+
+    def _chosen_id(value: Any) -> int | None:
+        """A record id out of whatever a template hands over.
+
+        Templates pass an int on an edit form, ``None`` on a blank one, and
+        Jinja's Undefined where the variable is not set on that page.
+        ``forms.opt_int`` is for parsing what a person typed into a box and
+        calls ``.strip()``, which an int does not have -- using it here turned
+        "this invoice has no lines" into a 500 on the page that was supposed
+        to say so.
+        """
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            return int(value) or None
+        except (TypeError, ValueError):
+            return None
+
+    def picker_customers(chosen: Any = None) -> list[Any]:
+        """The customers to put in a form's dropdown.
+
+        Not all of them. Rendering every customer as an ``<option>`` was 4,000
+        of them on the real register and most of a megabyte on every form, for
+        a list nobody could find anybody in anyway. What the page needs is the
+        customer already chosen -- an edit form that loses its customer is a
+        far worse bug than a short list -- plus enough recent ones to cover
+        the ordinary case of adding somebody and immediately invoicing them.
+        Everyone else arrives through the search box, from /api/customers.
+
+        A function rather than a value, like the counts above: the forms that
+        need it ask for it, and the forty-odd pages that do not pay nothing.
+        """
+        return repo.picker_customers(conn, _chosen_id(chosen))
+
+    def cars_of(customer_id: Any = None) -> list[Any]:
+        """One customer's cars, for the vehicle dropdown beside the picker.
+
+        The forms used to carry every vehicle in the database and hide the
+        ones that did not belong. Six thousand cars, to show the two that one
+        customer owns.
+        """
+        customer_id = _chosen_id(customer_id)
+        if not customer_id:
+            return []
+        return repo.list_vehicles(conn, customer_id=customer_id)
+
     base: dict[str, Any] = {
         "request": request,
         "settings": settings,
@@ -175,6 +282,13 @@ def ctx(
         "m": lambda minor: format_money(minor or 0, currency),
         "m_plain": lambda minor: format_money(minor or 0),
         "loc": lambda row, base_col: localised(row, base_col, lang),
+        "options": options,
+        "opt_label": opt_label,
+        "opt_label2": opt_label2,
+        "counts_for": counts_for,
+        "picker_customers": picker_customers,
+        "cars_of": cars_of,
+        "ALERT_LEVELS": repo.ALERT_LEVELS,
         "flash": request.query_params.get("msg", ""),
         "flash_error": request.query_params.get("err", ""),
     }
@@ -252,7 +366,11 @@ def set_language(code: str, request: Request) -> RedirectResponse:
 # --------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+def dashboard(
+    request: Request,
+    make: str = "",
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
     return render(
         request,
         conn,
@@ -266,11 +384,37 @@ def dashboard(request: Request, conn: Connection = Depends(get_conn)) -> HTMLRes
         # The deeper figures. Gathered on every load rather than behind their
         # own request: these are a few thousand rows on one PC, and a second
         # round trip to open a panel would cost more than the queries do.
-        analytics=_analytics(conn, current_lang(request, repo.get_settings(conn))),
+        analytics=_analytics(conn, current_lang(request, repo.get_settings(conn)), make=make),
+        # The same counts the list pages show, from the same function. Two
+        # counts of the same thing that disagree are worse than no count at
+        # all: one of them would be quietly wrong and nobody could tell
+        # which.
+        counts=repo.all_counts(conn),
+        alerts=repo.alert_counts(conn),
+        # The flagged customers themselves, not just the number. A count
+        # that cannot be opened is a number somebody has to go and look up,
+        # and these are the ones worth looking at.
+        flagged=repo.list_flagged_customers(conn),
     )
 
 
-def _analytics(conn: Connection, lang: str) -> dict[str, Any]:
+def _sort_state(listing: str, sort: str, direction: str) -> dict[str, Any]:
+    """What the template needs to draw the column headings.
+
+    The values come back from the repository rather than being echoed from
+    the query string, so the arrow on a heading always shows what the list
+    is really sorted by -- not what somebody asked for in a URL and did not
+    get.
+    """
+    _, sort, direction = repo.order_clause(listing, sort, direction)
+    # Deliberately not "dir": the templates already have a `dir` -- the
+    # page's text direction, rtl or ltr -- and shadowing it rendered every
+    # Arabic page as <html dir="asc">. The query parameter stays short;
+    # only the template name is spelled out.
+    return {"sort": sort, "sort_dir": direction}
+
+
+def _analytics(conn: Connection, lang: str, make: str = "") -> dict[str, Any]:
     """Everything the advanced panel draws, worked out from the records.
 
     The rows arrive as plain ``(label, value)`` pairs. Shaping them here
@@ -278,18 +422,42 @@ def _analytics(conn: Connection, lang: str) -> dict[str, Any]:
     page, and keeps the template to laying things out.
     """
     money = repo.monthly_money(conn, months=12)
+    _, option_labels = repo.all_options(conn)
+    # One query, two uses: the chart shows the common makes, the filter
+    # offers all of them. Asking twice with different limits read every
+    # vehicle row twice -- 16ms of the dashboard for one list of makes.
+    makes = repo.cars_by_make(conn, limit=40)
+    labels = {
+        key: (row["label_ar"] or row["label_en"]) if lang == "ar" else (row["label_en"] or row["value"])
+        for key, row in option_labels.items()
+    }
 
     def pairs(rows, label_key, value_key):
         return [(row[label_key], row[value_key]) for row in rows]
 
     return {
         "activity": repo.customer_activity(conn),
-        "by_make": pairs(repo.cars_by_make(conn), "label", "cars"),
-        "by_model": pairs(repo.cars_by_model(conn), "label", "cars"),
+        "by_make": pairs(makes[:8], "label", "cars"),
+        "by_model": pairs(repo.cars_by_model(conn, make=make), "label", "cars"),
+        # Labelled from the configured list rather than a translation key.
+        # The types became editable in Settings, so a type added there had
+        # no key and would have shown as "cust.cat_insurance" on the chart.
         "by_category": [
-            (t(f"cust.cat_{row['label']}", lang), row["customers"])
+            (labels.get(("customer_types", row["label"]), row["label"]), row["customers"])
             for row in repo.customer_categories(conn)
         ],
+        "without_model": repo.cars_without_model(conn, make=make),
+        "by_colour": pairs(repo.cars_by_colour(conn, make=make), "label", "cars"),
+        "by_age": [
+            (f"{row['band']}\u2013{row['band'] + 4}", row["cars"])
+            for row in repo.cars_by_decade(conn, make=make)
+        ],
+        "make": make,
+        "makes": [row["label"] for row in makes],
+        "odd_colours": repo.colour_values_that_are_not_colours(conn, make=make),
+        # The donut's centre: how many cars the slices add up to, which is
+        # not the whole fleet -- a car with no colour recorded is in neither.
+        "coloured_cars": repo.cars_with_a_colour(conn, make=make),
         "faults": [
             (
                 f"{row['make']} — "
@@ -312,14 +480,23 @@ def _analytics(conn: Connection, lang: str) -> dict[str, Any]:
 def customers_list(
     request: Request,
     q: str = "",
-    inactive: int = 0,
+    inactive: str = "",
+    sort: str = "",
+    dir: str = "asc",
+    page: int = 1,
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
+    customers = repo.page_customers(
+        conn, search=q, include_inactive=forms.truthy(inactive),
+        sort=sort, direction=dir, page=page,
+    )
     return render(
         request,
         conn,
         "customers_list.html",
-        customers=repo.list_customers(conn, search=q, include_inactive=bool(inactive)),
+        customers=customers,
+        page=customers,
+        **_sort_state("customers", sort, dir),
         q=q,
         inactive=inactive,
     )
@@ -328,6 +505,15 @@ def customers_list(
 @app.get("/customers/new", response_class=HTMLResponse)
 def customer_new(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
     return render(request, conn, "customer_form.html", customer=None, error="")
+
+
+def _customer_type_values(conn: Connection) -> tuple[str, ...]:
+    """The customer types currently offered, for validating a posted one.
+
+    Read from the configured list rather than written out here, so a type
+    added in Settings is accepted by the form that offers it.
+    """
+    return tuple(row["value"] for row in repo.list_options(conn, "customer_types"))
 
 
 @app.post("/customers/new")
@@ -341,6 +527,8 @@ def customer_create(
     vat_number: str = Form(""),
     notes: str = Form(""),
     category: str = Form("regular"),
+    alert_level: str = Form(""),
+    alert_note: str = Form(""),
     conn: Connection = Depends(get_conn),
 ):
     try:
@@ -352,11 +540,23 @@ def customer_create(
             "address": forms.text(address),
             "vat_number": forms.text(vat_number),
             "notes": forms.text(notes),
+            # The form has always offered this and the handler has always
+            # thrown it away, so a customer added as VIP came back as
+            # regular. Checked against the configured list rather than a
+            # tuple written here, or a type added in Settings would be
+            # silently refused by the one screen that offers it.
+            "category": forms.one_of(
+                category, _customer_type_values(conn), default="regular"
+            ),
         }
     except FormError as exc:
         return render(request, conn, "customer_form.html", customer=None, error=str(exc))
 
     customer_id = repo.create_customer(conn, data)
+    if forms.text(alert_level):
+        repo.set_customer_alert(
+            conn, customer_id, level=forms.text(alert_level), note=forms.text(alert_note)
+        )
     return go(f"/customers/{customer_id}", msg="msg.created")
 
 
@@ -366,6 +566,142 @@ def customer_create(
 # These are declared before /customers/{customer_id}: routes are matched in
 # the order they appear, and "import" is not a number, so the other way round
 # every one of these would be rejected before it was reached.
+
+# --------------------------------------------------------------------------
+# Bringing a car register in from a spreadsheet
+# --------------------------------------------------------------------------
+# Different from the customer import above: there, one row is one customer.
+# A register has one row per *car*, with the owner repeated down the sheet --
+# and the red somebody marked a row with is a warning, not formatting, so it
+# has to be read along with the values.
+
+@app.get("/vehicles/tidy", response_class=HTMLResponse)
+def vehicle_tidy(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+    """What a tidy-up would change, before anything is changed.
+
+    Above /vehicles/{vehicle_id}: "tidy" is not a number.
+    """
+    fixes = repo.colour_model_mixups(conn)
+    return render(
+        request, conn, "vehicle_tidy.html",
+        fixes=fixes,
+        swaps=sum(1 for f in fixes if f["action"] == "swap"),
+        moves=sum(1 for f in fixes if f["action"] != "swap"),
+    )
+
+
+@app.post("/vehicles/tidy")
+def vehicle_tidy_apply(conn: Connection = Depends(get_conn)):
+    changed = repo.apply_colour_model_fixes(conn)
+    return go("/vehicles", msg="msg.saved" if changed else "msg.nothing_to_do")
+
+
+@app.get("/vehicles/import/template")
+def register_template() -> Response:
+    """An empty register with the right headings and three example rows.
+
+    Declared above /vehicles/import/{batch_id} -- "template" is not a
+    number, and routes are matched in the order they appear.
+    """
+    return Response(
+        content=register_import.template_xlsx(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="car-register-template.xlsx"'
+        },
+    )
+
+
+@app.get("/vehicles/import", response_class=HTMLResponse)
+def register_start(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
+    return render(request, conn, "register_import.html",
+                  batch=None, prepared=None, error="")
+
+
+@app.post("/vehicles/import")
+async def register_upload(
+    request: Request,
+    spreadsheet: UploadFile = File(...),
+    conn: Connection = Depends(get_conn),
+):
+    """Read the file and stage what it would do. Nothing is written yet.
+
+    Loading a few thousand records is not something anybody wants to undo by
+    hand, so the preview comes first and is built by the same pass that the
+    import will use. A preview assembled separately is a preview of
+    something else.
+    """
+    data = await spreadsheet.read()
+    try:
+        rows, marked = register_import.read_xlsx(data)
+        prepared = register_import.prepare(rows, marked)
+    except register_import.RegisterImportError as exc:
+        return render(request, conn, "register_import.html",
+                      batch=None, prepared=None, error=str(exc))
+
+    payload = {
+        "customers": [vars(c) for c in prepared["customers"]],
+        "vehicles": [vars(v) for v in prepared["vehicles"]],
+        "summary": prepared["summary"],
+        "ignored_columns": prepared["ignored_columns"],
+    }
+    batch_id = repo.create_import_batch(
+        conn, spreadsheet.filename or "register", [payload]
+    )
+    return go(f"/vehicles/import/{batch_id}")
+
+
+@app.get("/vehicles/import/{batch_id}", response_class=HTMLResponse)
+def register_preview(
+    batch_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    batch, rows = repo.get_import_batch(conn, batch_id)
+    return render(request, conn, "register_import.html",
+                  batch=batch, prepared=rows[0] if rows else None, error="")
+
+
+@app.post("/vehicles/import/{batch_id}/confirm")
+def register_confirm(batch_id: int, conn: Connection = Depends(get_conn)):
+    batch, rows = repo.get_import_batch(conn, batch_id)
+    if batch["status"] != "pending" or not rows:
+        return go("/vehicles", err="This import has already been dealt with.")
+    payload = rows[0]
+    result = repo.commit_register_import(conn, payload["customers"], payload["vehicles"])
+    repo.mark_import_batch_done(
+        conn, batch_id,
+        imported=result['vehicles'], skipped=result['skipped'],
+    )
+    return go(
+        "/vehicles",
+        msg="msg.imported" if result["vehicles"] else "msg.nothing_imported",
+    )
+
+
+@app.post("/vehicles/import/{batch_id}/cancel")
+def register_cancel(batch_id: int, conn: Connection = Depends(get_conn)):
+    repo.cancel_import_batch(conn, batch_id)
+    return go("/vehicles")
+
+
+@app.get("/customers/flagged", response_class=HTMLResponse)
+def customers_flagged(
+    request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    """Everyone carrying a warning, worst first.
+
+    Declared above /customers/{customer_id} with the import routes, for the
+    same reason: "flagged" is not a number.
+    """
+    return render(
+        request,
+        conn,
+        "customers_flagged.html",
+        flagged=repo.list_flagged_customers(conn),
+        alerts=repo.alert_counts(conn),
+    )
+
 
 @app.get("/customers/import", response_class=HTMLResponse)
 def import_start(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
@@ -628,6 +964,8 @@ def customer_update(
     vat_number: str = Form(""),
     notes: str = Form(""),
     category: str = Form("regular"),
+    alert_level: str = Form(""),
+    alert_note: str = Form(""),
     is_active: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
@@ -643,7 +981,7 @@ def customer_update(
             # Not "active": that is a question about when they last came in,
             # and a stored flag would be wrong the moment nobody updates it.
             "category": forms.one_of(
-                category, ("regular", "vip", "family", "fleet"), default="regular"
+                category, _customer_type_values(conn), default="regular"
             ),
             "is_active": forms.checkbox(is_active),
         }
@@ -657,6 +995,11 @@ def customer_update(
         )
 
     repo.update_customer(conn, customer_id, data)
+    repo.set_customer_alert(
+        conn, customer_id,
+        level=forms.text(alert_level),
+        note=forms.text(alert_note),
+    )
     return go(f"/customers/{customer_id}", msg="msg.saved")
 
 
@@ -677,14 +1020,26 @@ def customer_delete(customer_id: int, conn: Connection = Depends(get_conn)):
 def vehicles_list(
     request: Request,
     q: str = "",
-    inactive: int = 0,
+    inactive: str = "",
+    sort: str = "",
+    dir: str = "asc",
+    make: str = "",
+    page: int = 1,
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
+    vehicles = repo.page_vehicles(
+        conn, search=q, include_inactive=forms.truthy(inactive),
+        make=make, sort=sort, direction=dir, page=page,
+    )
     return render(
         request,
         conn,
         "vehicles_list.html",
-        vehicles=repo.list_vehicles(conn, search=q, include_inactive=bool(inactive)),
+        vehicles=vehicles,
+        page=vehicles,
+        makes=[r["label"] for r in repo.cars_by_make(conn)],
+        make=make,
+        **_sort_state("vehicles", sort, dir),
         q=q,
         inactive=inactive,
     )
@@ -851,16 +1206,23 @@ def catalog_list(
     request: Request,
     q: str = "",
     kind: str = "",
-    inactive: int = 0,
+    sort: str = "",
+    dir: str = "asc",
+    inactive: str = "",
+    page: int = 1,
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
+    items = repo.page_catalog(
+        conn, search=q, kind=kind, include_inactive=forms.truthy(inactive),
+        sort=sort, direction=dir, page=page,
+    )
     return render(
         request,
         conn,
         "catalog_list.html",
-        items=repo.list_catalog(
-            conn, search=q, kind=kind, include_inactive=bool(inactive)
-        ),
+        **_sort_state("catalog", sort, dir),
+        items=items,
+        page=items,
         q=q,
         kind=kind,
         inactive=inactive,
@@ -994,20 +1356,24 @@ def invoices_list(
     state: str = "",
     date_from: str = "",
     date_to: str = "",
+    page: int = 1,
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
+    invoices = repo.page_invoices(
+        conn,
+        search=q,
+        status=status,
+        payment_state=state,
+        date_from=date_from,
+        date_to=date_to,
+        page=page,
+    )
     return render(
         request,
         conn,
         "invoices_list.html",
-        invoices=repo.list_invoices(
-            conn,
-            search=q,
-            status=status,
-            payment_state=state,
-            date_from=date_from,
-            date_to=date_to,
-        ),
+        invoices=invoices,
+        page=invoices,
         q=q,
         status=status,
         state=state,
@@ -1587,13 +1953,16 @@ def estimates_list(
     request: Request,
     q: str = "",
     status: str = "",
+    page: int = 1,
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
+    estimates = repo.page_estimates(conn, search=q, status=status, page=page)
     return render(
         request,
         conn,
         "estimates_list.html",
-        estimates=repo.list_estimates(conn, search=q, status=status),
+        estimates=estimates,
+        page=estimates,
         q=q,
         status=status,
     )
@@ -2016,13 +2385,16 @@ def contracts_list(
     request: Request,
     q: str = "",
     status: str = "",
+    page: int = 1,
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
+    contracts = repo.page_repair_orders(conn, search=q, status=status, page=page)
     return render(
         request,
         conn,
         "contracts_list.html",
-        contracts=repo.list_repair_orders(conn, search=q, status=status),
+        contracts=contracts,
+        page=contracts,
         q=q,
         status=status,
     )
@@ -2439,14 +2811,18 @@ def issues_list(
     make: str = Query(""),
     q: str = Query(""),
     inactive: str = Query(""),
+    sort: str = Query(""),
+    dir: str = Query("asc"),
     conn: Connection = Depends(get_conn),
 ) -> HTMLResponse:
     return render(
         request,
         conn,
         "issues_list.html",
+        **_sort_state("issues", sort, dir),
         issues=repo.list_known_issues(
-            conn, make=make, search=q, include_inactive=bool(inactive)
+            conn, make=make, search=q, include_inactive=forms.truthy(inactive),
+            sort=sort, direction=dir
         ),
         makes=repo.known_issue_makes(conn),
         make=make,
@@ -2564,6 +2940,89 @@ def contract_detach_issue(link_id: int, conn: Connection = Depends(get_conn)):
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
     return render(request, conn, "settings.html", error="")
+
+
+# NOTE: these sit above /settings/{...} style paths for the same reason the
+# quick invoice sits above /invoices/{invoice_id} -- FastAPI matches routes in
+# the order they are declared.
+@app.get("/settings/lists", response_class=HTMLResponse)
+def lists_page(
+    request: Request,
+    list_name: str = "sources",
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    if list_name not in repo.OPTION_LISTS:
+        list_name = "sources"
+    return render(
+        request,
+        conn,
+        "settings_lists.html",
+        list_name=list_name,
+        # Switched-off values are shown here, greyed, because this is the one
+        # screen where their existence matters: it explains why re-adding
+        # something says it is already there.
+        rows=repo.list_options(conn, list_name, include_inactive=True),
+        lists=repo.OPTION_LISTS,
+    )
+
+
+@app.post("/settings/lists/add")
+def lists_add(
+    list_name: str = Form(...),
+    value: str = Form(""),
+    label_en: str = Form(""),
+    label_ar: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    try:
+        repo.create_option(
+            conn,
+            list_name=list_name,
+            value=value,
+            label_en=label_en,
+            label_ar=label_ar,
+        )
+    except ValueError as exc:
+        return go(f"/settings/lists?list_name={list_name}", err=str(exc))
+    return go(f"/settings/lists?list_name={list_name}", msg="msg.saved")
+
+
+@app.post("/settings/lists/save")
+def lists_save(
+    list_name: str = Form(...),
+    option_id: list[int] = Form(default=[]),
+    label_en: list[str] = Form(default=[]),
+    label_ar: list[str] = Form(default=[]),
+    sort_order: list[str] = Form(default=[]),
+    active: list[str] = Form(default=[]),
+    conn: Connection = Depends(get_conn),
+):
+    """Save every row of one list at once.
+
+    `active` is a select rather than a checkbox on purpose: an unticked
+    checkbox is not submitted at all, which would shift these parallel lists
+    out of step with each other and switch off the wrong value.
+    """
+    for i, option_id_value in enumerate(option_id):
+        repo.update_option(
+            conn,
+            option_id_value,
+            label_en=label_en[i] if i < len(label_en) else None,
+            label_ar=label_ar[i] if i < len(label_ar) else None,
+            sort_order=int(sort_order[i]) if i < len(sort_order) and sort_order[i].strip() else None,
+            is_active=(active[i] == "1") if i < len(active) else None,
+        )
+    return go(f"/settings/lists?list_name={list_name}", msg="msg.saved")
+
+
+@app.post("/settings/lists/{option_id}/delete")
+def lists_delete(
+    option_id: int,
+    list_name: str = Form(...),
+    conn: Connection = Depends(get_conn),
+):
+    repo.delete_option(conn, option_id)
+    return go(f"/settings/lists?list_name={list_name}", msg="msg.deleted")
 
 
 @app.post("/settings")
@@ -2806,6 +3265,47 @@ def _cleanup(tmp: TemporaryDirectory):
 # Small JSON endpoints used by the invoice form
 # --------------------------------------------------------------------------
 
+@app.get("/api/customers")
+def api_customers(
+    request: Request,
+    q: str = "",
+    limit: int = 50,
+    conn: Connection = Depends(get_conn),
+) -> JSONResponse:
+    """Customers matching what somebody has typed, for the picker on the forms.
+
+    The forms used to render every customer as an ``<option>``: four thousand
+    of them, 1.7 MB of HTML on a page with two fields worth filling in, and a
+    dropdown nobody could find anybody in. Now the page carries the fifty most
+    recent and asks here for the rest as the name is typed.
+
+    The alert fields come along so that choosing a flagged customer still
+    raises the warning dialog immediately, with no second request at the one
+    moment it matters.
+    """
+    lang = current_lang(request, repo.get_settings(conn))
+    rows = repo.list_customers(conn, search=q.strip(), limit=max(1, min(limit, 200)))
+    return JSONResponse(
+        [
+            {
+                "id": c["id"],
+                "label": _customer_label(c),
+                "alert_level": c["alert_level"] or "",
+                "alert_label": t(f"alert.{c['alert_level']}", lang) if c["alert_level"] else "",
+                "alert_note": c["alert_note"] or "",
+                "alert_when": c["alert_set_on"] or "",
+            }
+            for c in rows
+        ]
+    )
+
+
+def _customer_label(c: Any) -> str:
+    """"Name — phone", the same shape the template writes into an option."""
+    name = c["name"] or ""
+    return f"{name} — {c['phone']}" if c["phone"] else name
+
+
 @app.get("/api/customers/{customer_id}/vehicles")
 def api_customer_vehicles(
     customer_id: int, conn: Connection = Depends(get_conn)
@@ -2962,9 +3462,20 @@ def _inspection_payload(
 
 
 @app.get("/inspections", response_class=HTMLResponse)
-def inspections_list(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
-    return render(request, conn, "inspections_list.html",
-                  inspections=repo.list_inspections(conn))
+def inspections_list(
+    request: Request,
+    q: str = "",
+    status: str = "",
+    page: int = 1,
+    conn: Connection = Depends(get_conn),
+) -> HTMLResponse:
+    inspections = repo.page_inspections(conn, search=q, status=status, page=page)
+    return render(
+        request, conn, "inspections_list.html",
+        inspections=inspections,
+        page=inspections,
+        q=q, status=status,
+    )
 
 
 @app.get("/inspections/new", response_class=HTMLResponse)

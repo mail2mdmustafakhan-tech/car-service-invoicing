@@ -1,9 +1,12 @@
 {% extends "base.html" %}
+{% from "_customer_alert.html" import customer_alert_panel with context %}
 {% from "_macros.html" import pill, delete_form, vehicle_label with context %}
 {% block title %}{{ loc(customer, 'name') }}{% endblock %}
 
 {% block content %}
 <div class="breadcrumb"><a href="/customers">{{ t('cust.title') }}</a></div>
+
+{{ customer_alert_panel(customer) }}
 
 <div class="pagehead">
   <div>

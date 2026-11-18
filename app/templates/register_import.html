@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}{{ t('reg.title') }}{% endblock %}
+
+{#
+  Bringing a car register in.
+
+  The preview is the point of this screen. Loading a few thousand records is
+  not something anybody wants to undo by hand, so everything the import is
+  about to decide is shown first -- how many owners it worked out, how many
+  it could not name, which rows it is leaving behind and why, and above all
+  which customers it is about to put a warning on. That last list is read
+  one name at a time by somebody who knows these people, which is why it is
+  shown in full and not as a number.
+#}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ t('reg.title') }}</h1>
+    <p class="hint" style="max-width:68ch">{{ t('reg.intro') }}</p>
+  </div>
+  <div class="actions"><a class="btn" href="/vehicles">{{ t('veh.title') }}</a></div>
+</div>
+
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+{% if not prepared %}
+  <form method="post" action="/vehicles/import" enctype="multipart/form-data">
+    <section class="panel">
+      <div class="panel-body">
+        <div class="field">
+          <label for="f_file">{{ t('reg.file') }}</label>
+          <input type="file" id="f_file" name="spreadsheet" accept=".xlsx" required>
+          <p class="hint">{{ t('reg.file_hint') }}</p>
+          <p class="hint">
+            {# Easier to fill in the right shape than to guess at it, and the
+               third row shows what a flagged car looks like. #}
+            <a href="/vehicles/import/template">{{ t('reg.template') }}</a>
+          </p>
+        </div>
+        <div class="formactions">
+          <button class="btn accent" type="submit">{{ t('reg.read') }}</button>
+        </div>
+      </div>
+    </section>
+  </form>
+{% else %}
+  {% set s = prepared.summary %}
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('reg.what_it_found') }}</h2></div>
+    <div class="panel-body">
+      <div class="kpi-row">
+        <div class="kpi">
+          <span class="kpi-figure">{{ s.customers }}</span>
+          <span class="kpi-label">{{ t('count.customers') }}</span>
+          <span class="kpi-parts">
+            <span>{{ s.placeholders }} {{ t('reg.unnamed') }}</span>
+            {% if s.merged %}<span>{{ s.merged }} {{ t('reg.merged') }}</span>{% endif %}
+          </span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-figure">{{ s.vehicles }}</span>
+          <span class="kpi-label">{{ t('count.vehicles') }}</span>
+          <span class="kpi-parts"><span>{{ s.rows }} {{ t('reg.rows') }}</span></span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-figure">{{ s.skipped }}</span>
+          <span class="kpi-label">{{ t('reg.skipped') }}</span>
+          <span class="kpi-parts"><span>{{ t('reg.skipped_hint') }}</span></span>
+        </div>
+        {% if s.flagged %}
+        <div class="kpi kpi-flagged">
+          <span class="kpi-figure">{{ s.flagged }}</span>
+          <span class="kpi-label">{{ t('alert.flagged') }}</span>
+          <span class="kpi-parts">
+            {% if s.refuse %}<span>{{ s.refuse }} {{ t('alert.refuse') }}</span>{% endif %}
+            {% if s.check %}<span>{{ s.check }} {{ t('alert.check') }}</span>{% endif %}
+            {% if s.note %}<span>{{ s.note }} {{ t('alert.note') }}</span>{% endif %}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if s.makes %}
+        <p class="hint">{{ t('reg.makes') }}: {{ s.makes | join(', ') }}</p>
+      {% endif %}
+      {% if prepared.ignored_columns %}
+        <p class="hint">{{ t('reg.ignored') }}: {{ prepared.ignored_columns | join(', ') }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% set flagged = prepared.customers | selectattr('alert_level') | list %}
+  {% if flagged %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>{{ t('reg.will_flag') }}</h2>
+        <p class="hint">{{ t('reg.will_flag_hint') }}</p>
+      </div>
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>{{ t('alert.title') }}</th>
+            <th>{{ t('cust.name') }}</th>
+            <th>{{ t('cust.phone') }}</th>
+            <th>{{ t('alert.reason') }}</th>
+            <th class="num">{{ t('reg.line') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in flagged | sort(attribute='alert_level') %}
+          <tr>
+            <td><span class="alert-chip alert-{{ c.alert_level }}">{{ t('alert.' ~ c.alert_level) }}</span></td>
+            <td>{{ c.name }}</td>
+            <td>{{ c.phone }}</td>
+            <td>{{ c.alert_note or t('alert.no_reason') }}</td>
+            <td class="num hint">{{ c.lines | join(', ') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
+  {% set left_out = prepared.vehicles | selectattr('skipped') | list %}
+  {% if left_out %}
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('reg.left_out') }}</h2></div>
+      <table class="ledger">
+        <thead>
+          <tr><th class="num">{{ t('reg.line') }}</th><th>{{ t('veh.plate') }}</th><th>{{ t('reg.why') }}</th></tr>
+        </thead>
+        <tbody>
+          {% for v in left_out %}
+          <tr><td class="num">{{ v.line }}</td><td>{{ v.plate }}</td><td>{{ v.skipped }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('reg.first_rows') }}</h2></div>
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('veh.plate') }}</th><th>{{ t('veh.make') }}</th>
+          <th>{{ t('veh.year') }}</th><th>{{ t('veh.vin') }}</th>
+          <th>{{ t('veh.colour') }}</th><th>{{ t('veh.owner') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in prepared.vehicles[:15] %}
+        <tr>
+          <td>{{ v.plate }}</td>
+          <td>{{ v.make }}</td>
+          <td>{{ v.model_year or '' }}</td>
+          <td>{{ v.vin }}</td>
+          <td>{{ v.colour }}</td>
+          <td>{{ prepared.customers[v.customer_index].name if v.customer_index >= 0 else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if batch and batch['status'] == 'pending' %}
+  <div class="formactions">
+    <form method="post" action="/vehicles/import/{{ batch['id'] }}/confirm">
+      <button class="btn accent" type="submit">{{ t('reg.commit') }}</button>
+    </form>
+    <form method="post" action="/vehicles/import/{{ batch['id'] }}/cancel">
+      <button class="btn" type="submit">{{ t('action.cancel') }}</button>
+    </form>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% from "_customer_alert.html" import customer_alert_dialog, customer_option_data with context %}
 {% from "_macros.html" import field with context %}
+{% from "_picker.html" import customer_search with context %}
 {% set editing = inspection is not none %}
 {% block title %}{{ inspection['inspection_no'] if editing else t('ins.new') }}{% endblock %}
 
@@ -15,23 +17,29 @@
   <section class="panel">
     <div class="panel-body">
       <div class="grid-2">
+        {# Named once, so the picker and the car list below agree on who is
+           chosen -- the two were spelled out separately and inline before. #}
+        {% set chosen_customer = inspection['customer_id'] if editing else preset_customer_id %}
+        {% set chosen_vehicle = inspection['vehicle_id'] if editing else preset_vehicle_id %}
         <div class="field">
           <label for="f_customer">{{ t('inv.customer') }}</label>
+          {{ customer_search('f_customer') }}
           <select id="f_customer" name="customer_id" required>
             <option value="">—</option>
-            {% for c in customers %}
-            <option value="{{ c['id'] }}"
+            {% for c in picker_customers(chosen_customer) %}
+            <option value="{{ c['id'] }}"{{ customer_option_data(c) }}
               {% if (editing and inspection['customer_id'] == c['id']) or (not editing and preset_customer_id == c['id']) %}selected{% endif %}>
               {{ loc(c, 'name') }}
             </option>
             {% endfor %}
           </select>
+          {{ customer_alert_dialog() }}
         </div>
         <div class="field">
           <label for="f_vehicle">{{ t('inv.vehicle') }}</label>
           <select id="f_vehicle" name="vehicle_id">
             <option value="">—</option>
-            {% for v in vehicles %}
+            {% for v in cars_of(chosen_customer) %}
             <option value="{{ v['id'] }}" data-customer="{{ v['customer_id'] }}"
               {% if (editing and inspection['vehicle_id'] == v['id']) or (not editing and preset_vehicle_id == v['id']) %}selected{% endif %}>
               {{ v['plate_no'] }} — {{ v['make'] }} {{ v['model'] }}
@@ -219,6 +227,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ static('js/customer-alert.js') }}"></script>
+<script src="{{ static('js/picker.js') }}"></script>
 <script src="{{ static('js/money.js') }}"></script>
 <script>
   /* Rows in and out, and the customer's own cars in the vehicle list. The

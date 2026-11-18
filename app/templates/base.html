@@ -5,53 +5,98 @@
   what mirrors the entire interface for Arabic -- the stylesheet uses logical
   properties throughout, so nothing else has to change.
 #}
+{% from "_icons.html" import icon with context %}
 <!doctype html>
 <html lang="{{ lang }}" dir="{{ dir }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ t('app.name') }}{% endblock %} — {{ loc(settings, 'business_name_en') or t('app.name') }}</title>
+  {#
+    The theme is set before the stylesheet loads, not after the page does.
+    Run from the bottom of the page, this would show a white screen first and
+    then repaint to dark -- a flash in the eyes every single navigation. It
+    is small enough to sit inline; a separate file would be a second request
+    standing between the user and the first paint.
+  #}
+  <script>
+    (function () {
+        try {
+            var saved = localStorage.getItem("cs-theme");
+            if (saved === "dark" || saved === "light") {
+                document.documentElement.setAttribute("data-theme", saved);
+            }
+        } catch (e) {
+            /* Private browsing, or storage turned off. Light is the default
+               and the page is perfectly usable; nothing to recover from. */
+        }
+    })();
+  </script>
   <link rel="stylesheet" href="{{ static('css/app.css') }}">
   <link rel="icon" href="data:,">
 </head>
-<body>
+{#
+  The watermark in the margins is the workshop's own roundel. It is passed in
+  as a custom property rather than written into the stylesheet, because the
+  logo lives in the database and changes when the workshop changes it.
+#}
+<body {% if has_logo %}style="--watermark: url('{{ logo_url }}')"{% endif %}>
 {% set path = request.url.path %}
+{#
+  Two rows, not one.
+
+  The name and the ten sections were competing for a single line, and the
+  name was losing -- it truncated on every laptop in the workshop. Given a
+  row of its own it is simply shown in full, at any width, and the sections
+  get the whole width of the screen to themselves. The bar is taller for it,
+  which is the trade that was asked for.
+#}
 <header class="topbar">
-  <div class="topbar-inner">
-    {# One line, and it truncates rather than wrapping. A long business name
-       used to push the navigation onto a second row, which doubled the
-       height of the bar on every screen in the workshop. #}
-    <a class="brandmark" href="/" title="{{ loc(settings, 'business_name_en') or t('app.name') }}">
+  <div class="topbar-brand">
+    <a class="brandmark" href="/">
       {% if has_logo %}
         {# Sits on a white chip: most logos are dark ink, which would vanish
            against the dark bar. #}
         <img src="{{ logo_url }}" alt="">
       {% endif %}
-      <span class="wordmark">{{ loc(settings, 'business_name_en') or t('app.name') }}</span>
+      <span class="brandtext">
+        <span class="wordmark">{{ loc(settings, 'business_name_en') or t('app.name') }}</span>
+        {% if loc(settings, 'business_tagline_en') %}
+          <span class="tagline">{{ loc(settings, 'business_tagline_en') }}</span>
+        {% endif %}
+      </span>
     </a>
 
-    <nav class="topnav">
-      <a href="/"          {% if path == '/' %}aria-current="page"{% endif %}>{{ t('nav.dashboard') }}</a>
-      {# Inspection sits before Estimates because that is the order the work
-         happens in: look at the car, then quote for it. #}
-      <a href="/inspections" {% if path.startswith('/inspections') %}aria-current="page"{% endif %}>{{ t('nav.inspections') }}</a>
-      <a href="/estimates" {% if path.startswith('/estimates') %}aria-current="page"{% endif %}>{{ t('nav.estimates') }}</a>
-      <a href="/contracts" {% if path.startswith('/contracts') %}aria-current="page"{% endif %}>{{ t('nav.contracts') }}</a>
-      <a href="/invoices"  {% if path.startswith('/invoices') %}aria-current="page"{% endif %}>{{ t('nav.invoices') }}</a>
-      <a href="/customers" {% if path.startswith('/customers') %}aria-current="page"{% endif %}>{{ t('nav.customers') }}</a>
-      <a href="/vehicles"  {% if path.startswith('/vehicles') %}aria-current="page"{% endif %}>{{ t('nav.vehicles') }}</a>
-      <a href="/catalog"   {% if path.startswith('/catalog') %}aria-current="page"{% endif %}>{{ t('nav.catalog') }}</a>
-      <a href="/issues"    {% if path.startswith('/issues') %}aria-current="page"{% endif %}>{{ t('nav.issues') }}</a>
-      <a href="/settings"  {% if path.startswith('/settings') %}aria-current="page"{% endif %}>{{ t('nav.settings') }}</a>
-    </nav>
+    <div class="topbar-tools">
+      <button type="button" class="themetoggle" id="themetoggle"
+              aria-label="{{ t('nav.theme') }}" title="{{ t('nav.theme') }}">
+        <span class="theme-ico theme-ico-sun">{{ icon('sun') }}</span>
+        <span class="theme-ico theme-ico-moon">{{ icon('moon') }}</span>
+      </button>
 
-    <div class="langswitch" role="group" aria-label="{{ t('nav.language') }}">
-      {% for code, name in LANGUAGES.items() %}
-        <a href="/lang/{{ code }}" class="{{ 'active' if code == lang else '' }}"
-           hreflang="{{ code }}">{{ name }}</a>
-      {% endfor %}
+      <div class="langswitch" role="group" aria-label="{{ t('nav.language') }}">
+        {% for code, name in LANGUAGES.items() %}
+          <a href="/lang/{{ code }}" class="{{ 'active' if code == lang else '' }}"
+             hreflang="{{ code }}">{{ name }}</a>
+        {% endfor %}
+      </div>
     </div>
   </div>
+
+  <nav class="topnav" aria-label="{{ t('nav.sections') }}">
+    <a href="/"            {% if path == '/' %}aria-current="page"{% endif %}>{{ icon('dashboard') }}<span>{{ t('nav.dashboard') }}</span></a>
+    {# Inspection sits before Estimates because that is the order the work
+       happens in: look at the car, then quote for it. #}
+    <a href="/inspections" {% if path.startswith('/inspections') %}aria-current="page"{% endif %}>{{ icon('inspections') }}<span>{{ t('nav.inspections') }}</span></a>
+    <a href="/estimates"   {% if path.startswith('/estimates') %}aria-current="page"{% endif %}>{{ icon('estimates') }}<span>{{ t('nav.estimates') }}</span></a>
+    <a href="/contracts"   {% if path.startswith('/contracts') %}aria-current="page"{% endif %}>{{ icon('contracts') }}<span>{{ t('nav.contracts') }}</span></a>
+    <a href="/invoices"    {% if path.startswith('/invoices') %}aria-current="page"{% endif %}>{{ icon('invoices') }}<span>{{ t('nav.invoices') }}</span></a>
+    <a href="/customers"   {% if path.startswith('/customers') %}aria-current="page"{% endif %}>{{ icon('customers') }}<span>{{ t('nav.customers') }}</span></a>
+    <a href="/vehicles"    {% if path.startswith('/vehicles') %}aria-current="page"{% endif %}>{{ icon('vehicles') }}<span>{{ t('nav.vehicles') }}</span></a>
+    <a href="/catalog"     {% if path.startswith('/catalog') %}aria-current="page"{% endif %}>{{ icon('catalog') }}<span>{{ t('nav.catalog') }}</span></a>
+    <a href="/issues"      {% if path.startswith('/issues') %}aria-current="page"{% endif %}>{{ icon('issues') }}<span>{{ t('nav.issues') }}</span></a>
+    <a href="/settings"    {% if path.startswith('/settings') %}aria-current="page"{% endif %}>{{ icon('settings') }}<span>{{ t('nav.settings') }}</span></a>
+  </nav>
 </header>
 
 <main class="container">
@@ -62,6 +107,30 @@
   {% block content %}{% endblock %}
 </main>
 
+{#
+  The marques the workshop works on, along the bottom.
+
+  Names, set in the application's own typeface. The manufacturers' badges are
+  their trademarks and are not drawn here -- and a workshop that is not an
+  authorised dealer has its own reason to prefer names to badges.
+
+  The list is editable in Settings, so this is whatever the workshop says it
+  works on rather than whatever was true the day it was written.
+#}
+{% if options.marques %}
+<footer class="pagefoot" aria-label="{{ t('foot.marques') }}">
+  <div class="pagefoot-inner">
+    <span class="foot-label">{{ t('foot.marques') }}</span>
+    <ul class="marques">
+      {% for o in options.marques %}
+        <li>{{ loc(o, 'label_en') }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</footer>
+{% endif %}
+
+<script src="{{ static('js/theme.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

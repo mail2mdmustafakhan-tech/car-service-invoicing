@@ -56,11 +56,25 @@ window.CSMoney = (function () {
         return Math.round((qtyMilli * priceMinor) / MILLI);
     }
 
-    /* Narrows a vehicle <select> to the cars belonging to the chosen customer,
-       and copies that car's last odometer reading across when the field is
-       still empty. Used by both editors.  */
+    /* Fills a vehicle <select> with the chosen customer's cars, and copies
+       that car's last odometer reading across when the field is still empty.
+       Used by every editor that names a car.
+
+       This used to work the other way round: the page carried every vehicle
+       in the database as a hidden <option> and this function un-hid the ones
+       belonging to the chosen customer. That is 6,000 options on the real
+       register -- most of a megabyte, on every form, to show the two cars one
+       customer owns. Now the server sends only the cars that are already
+       chosen and the rest are fetched when the customer changes.
+
+       The behaviour is deliberately unchanged, including the part that saves
+       a click on nearly every job: when the customer owns exactly one car it
+       is selected for them. */
     function linkCustomerToVehicle(customerSelect, vehicleSelect, odometerInput) {
         if (!customerSelect || !vehicleSelect) { return function () {}; }
+
+        var blank = vehicleSelect.options[0];
+        var inFlight = 0;
 
         function copyOdometer() {
             if (!odometerInput || odometerInput.value) { return; }
@@ -71,37 +85,59 @@ window.CSMoney = (function () {
             }
         }
 
-        function filter(keepSelection) {
-            var customerId = customerSelect.value;
-            var current = keepSelection ? vehicleSelect.value : "";
-            var stillValid = false;
+        function fill(cars, keep) {
+            vehicleSelect.textContent = "";
+            if (blank) { vehicleSelect.appendChild(blank); }
 
-            Array.prototype.forEach.call(vehicleSelect.options, function (option) {
-                if (!option.value) { return; }          // the "no vehicle" entry
-                var belongs = option.getAttribute("data-customer") === customerId;
-                option.hidden = !belongs;
-                option.disabled = !belongs;
-                if (belongs && option.value === current) { stillValid = true; }
+            cars.forEach(function (car) {
+                var option = document.createElement("option");
+                option.value = String(car.id);
+                option.textContent = car.label;
+                if (car.odometer) {
+                    option.setAttribute("data-odometer", String(car.odometer));
+                }
+                vehicleSelect.appendChild(option);
             });
 
-            vehicleSelect.value = stillValid ? current : "";
-
+            var wanted = keep && cars.some(function (c) {
+                return String(c.id) === String(keep);
+            }) ? keep : "";
             // One car is the common case at a service centre, so pick it and
             // save a click on every job.
-            if (!vehicleSelect.value) {
-                var visible = Array.prototype.filter.call(
-                    vehicleSelect.options,
-                    function (o) { return o.value && !o.hidden; }
-                );
-                if (visible.length === 1) { vehicleSelect.value = visible[0].value; }
-            }
+            if (!wanted && cars.length === 1) { wanted = String(cars[0].id); }
+            vehicleSelect.value = wanted;
             copyOdometer();
         }
 
-        customerSelect.addEventListener("change", function () { filter(false); });
+        function load(keepSelection) {
+            var customerId = customerSelect.value;
+            var keep = keepSelection ? vehicleSelect.value : "";
+
+            if (!customerId) { fill([], ""); return; }
+
+            var mine = ++inFlight;
+            fetch("/api/customers/" + encodeURIComponent(customerId) + "/vehicles",
+                  { headers: { "Accept": "application/json" } })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (cars) {
+                    if (mine !== inFlight) { return; }   // a newer change won
+                    fill(cars, keep);
+                })
+                .catch(function () {
+                    /* Leave whatever is there. Emptying the list would look
+                       like "this customer has no cars", which is a lie told
+                       by a dropped connection. */
+                });
+        }
+
+        customerSelect.addEventListener("change", function () { load(false); });
         vehicleSelect.addEventListener("change", copyOdometer);
-        filter(true);
-        return filter;
+
+        /* On arrival the server has already rendered the right cars, if any:
+           on an edit form that includes the one on the invoice. Fetching here
+           as well would be a second request for a list we already have, and
+           would briefly blank a field somebody can already see. */
+        return load;
     }
 
     /* Reads the catalogue embedded in the page by the template. */
