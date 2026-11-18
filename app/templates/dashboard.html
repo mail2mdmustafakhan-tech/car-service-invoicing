@@ -297,7 +297,7 @@
    apart to read any of this. #}
 {# Open on arrival when a filter is in force: a filtered section that is
    still folded away looks as though the filter did nothing. #}
-<details class="analytics"{% if analytics['make'] %} open{% endif %}>
+<details class="analytics" id="analytics"{% if analytics['make'] %} open{% endif %}>
   <summary>
     <span class="analytics-title">{{ t('dash.advanced') }}</span>
     <span class="hint">{{ t('dash.advanced_hint') }}</span>
@@ -326,8 +326,15 @@
 
       A plain form with a submit button, so it works without JavaScript and
       the filtered view has an address that can be bookmarked or sent on.
+
+      It submits to #analytics rather than to "/". Applying a filter reloads
+      the dashboard, and a reload starts at the top of the page -- so the
+      charts somebody was looking at when they pressed Apply ended up a
+      screen and a half below them, and the filter appeared to have done
+      nothing. A GET form keeps the fragment of its action and replaces only
+      the query, so the filtered page opens at the panel that was filtered.
     #}
-    <form method="get" class="filterbar" id="chart-filter">
+    <form method="get" action="/#analytics" class="filterbar" id="chart-filter">
       <label for="f_chart_make">{{ t('dash.filter_make') }}</label>
       <select id="f_chart_make" name="make">
         <option value="">{{ t('dash.all_makes') }}</option>
@@ -337,7 +344,7 @@
       </select>
       <button class="btn" type="submit">{{ t('action.apply') }}</button>
       {% if analytics['make'] %}
-        <a class="btn link" href="/">{{ t('action.clear') }}</a>
+        <a class="btn link" href="/#analytics">{{ t('action.clear') }}</a>
         <span class="filter-note">{{ t('dash.showing_only') }} <b>{{ analytics['make'] }}</b></span>
       {% endif %}
     </form>

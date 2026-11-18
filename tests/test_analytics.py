@@ -198,8 +198,11 @@ def test_active_means_seen_recently_not_a_ticked_box(shop, read_web_db):
 def test_the_panel_arrives_closed(shop):
     """It is extra depth, not the first thing anyone needs."""
     page = shop.get("/").text
-    assert "<details class=\"analytics\">" in page
-    assert "<details class=\"analytics\" open>" not in page
+    # Asserted on the `open` attribute alone rather than on the whole tag:
+    # the tag has since gained an id, and the first version of this test
+    # broke on that while the behaviour it describes was untouched.
+    assert 'class="analytics"' in page
+    assert "analytics\" id=\"analytics\" open" not in page
 
 
 # --- cars by model ---------------------------------------------------------
@@ -347,7 +350,7 @@ def test_filtering_opens_the_section(shop):
     """A filtered section still folded away looks as though the filter did
     nothing at all."""
     page = shop.get("/?make=BMW").text
-    assert 'class="analytics" open' in page
+    assert 'id="analytics" open' in page
 
 
 def test_the_fleet_charts_are_never_filtered(conn):

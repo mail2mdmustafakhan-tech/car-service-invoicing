@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
+from . import images
 from .db import transaction
 from .invoicing import compute_totals, line_total
 
@@ -174,10 +175,10 @@ def set_logo(
             """
             UPDATE branding
                SET logo_blob = ?, logo_mime = ?, logo_filename = ?,
-                   updated_at = datetime('now')
+                   logo_has_alpha = ?, updated_at = datetime('now')
              WHERE id = 1
             """,
-            (data, mime, filename[:120]),
+            (data, mime, filename[:120], int(images.has_transparency(data, mime))),
         )
     return mime
 
@@ -188,7 +189,7 @@ def clear_logo(conn: sqlite3.Connection) -> None:
             """
             UPDATE branding
                SET logo_blob = NULL, logo_mime = '', logo_filename = '',
-                   updated_at = datetime('now')
+                   logo_has_alpha = NULL, updated_at = datetime('now')
              WHERE id = 1
             """
         )
@@ -210,8 +211,39 @@ def logo_state(conn: sqlite3.Connection) -> Row:
     goes on the end of the image URL so a replaced logo appears immediately
     instead of the browser showing the cached old one.
     """
+    row = _require(
+        _one(
+            conn,
+            "SELECT logo_mime, logo_filename, updated_at, logo_has_alpha"
+            "  FROM branding WHERE id = 1",
+        ),
+        "Branding",
+    )
+    if row["logo_mime"] and row["logo_has_alpha"] is None:
+        # An install that had a logo before this column existed. Work the
+        # answer out once from the file itself and write it back, rather than
+        # asking somebody to re-upload a logo that is perfectly good.
+        return _record_logo_alpha(conn)
+    return row
+
+
+def _record_logo_alpha(conn: sqlite3.Connection) -> Row:
+    """Look at the stored logo once, and remember what was seen.
+
+    The only place this application reads the logo's bytes outside of serving
+    it. It happens once per install, not once per page: the answer is written
+    back to the row that is read on every render.
+    """
+    stored = get_logo(conn)
+    answer = int(images.has_transparency(*stored)) if stored else None
+    with transaction(conn):
+        conn.execute("UPDATE branding SET logo_has_alpha = ? WHERE id = 1", (answer,))
     return _require(
-        _one(conn, "SELECT logo_mime, logo_filename, updated_at FROM branding WHERE id = 1"),
+        _one(
+            conn,
+            "SELECT logo_mime, logo_filename, updated_at, logo_has_alpha"
+            "  FROM branding WHERE id = 1",
+        ),
         "Branding",
     )
 

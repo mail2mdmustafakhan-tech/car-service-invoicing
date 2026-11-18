@@ -214,6 +214,15 @@
               <input type="file" id="f_logo" name="logo"
                      accept="image/png,image/jpeg,image/gif,image/webp" required>
               {% if not has_logo %}<p class="hint">{{ t('set.logo_none') }}</p>{% endif %}
+              {#
+                A logo with a solid background cannot be used as the faint
+                mark behind the pages -- it comes out as a rectangle. Saying
+                so here is the difference between a setting that looks broken
+                and one that tells you what to do about it.
+              #}
+              {% if has_logo and not watermark_ok %}
+                <p class="hint warn">{{ t('set.logo_opaque') }}</p>
+              {% endif %}
             </div>
             <div style="display:flex;gap:var(--space-3);align-items:center">
               <button class="btn accent" type="submit">
@@ -250,6 +259,47 @@
         <p class="hint">{{ t('set.excel_hint') }}</p>
       </div>
     </div>
+
+    {#
+      The automatic side of it. A backup nobody can see the state of is a
+      backup nobody finds out has stopped -- which is the failure that
+      matters, because you discover it on the one day you needed it.
+    #}
+    <hr class="rule">
+    <h3 class="subhead">{{ t('set.auto_backup') }}</h3>
+
+    {% if backup.stale %}
+      <p class="hint warn">{{ t('set.backup_stale') }}</p>
+    {% endif %}
+
+    <p class="hint">{{ t('set.auto_backup_hint') }}</p>
+
+    <dl class="facts">
+      <dt>{{ t('set.backup_last') }}</dt>
+      <dd>
+        {% if backup.latest %}
+          {{ backup.latest.day }}
+          <span class="muted">({{ (backup.latest.bytes / 1000000) | round(1) }} MB)</span>
+          {% if backup.days_since == 0 %}&mdash; {{ t('set.backup_today') }}{% endif %}
+        {% else %}
+          {{ t('set.backup_none_yet') }}
+        {% endif %}
+      </dd>
+
+      <dt>{{ t('set.backup_kept') }}</dt>
+      <dd>{{ backup.count }} &mdash; {{ (backup.total_bytes / 1000000) | round(1) }} MB</dd>
+
+      <dt>{{ t('set.backup_folder') }}</dt>
+      <dd><code class="path">{{ backup.folder }}</code></dd>
+    </dl>
+
+    <form method="post" action="/settings/backup/now" class="inline-form">
+      <button class="btn" type="submit">{{ t('set.backup_now') }}</button>
+    </form>
+
+    {# Said plainly, because it is the part people get wrong: a copy on the
+       same disk dies with the disk. #}
+    <p class="hint warn">{{ t('set.backup_offsite') }}</p>
   </div>
 </section>
 {% endblock %}

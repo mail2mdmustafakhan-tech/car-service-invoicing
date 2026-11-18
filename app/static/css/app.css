@@ -22,7 +22,11 @@
        below reads as a deliberate signal and not as decoration. */
     --ink:          #16202b;
     --ink-soft:     #4a5a6a;
-    --ink-faint:    #7c8a98;
+    /* Raised from #7c8a98, which was 3.53:1 on white -- under AA for
+       normal text, and this token carries every hint, the secondary
+       column in every table and the whole footer. 5.63:1 now, which
+       also leaves the watermark room to pass over it. */
+    --ink-faint:    #5b6977;
     --paper:        #f6f7f9;
     --surface:      #ffffff;
     --rule:         #dce1e6;
@@ -137,7 +141,9 @@
 [data-theme="dark"] {
     --ink:          #e8edf2;
     --ink-soft:     #a8b5c2;
-    --ink-faint:    #7b8a99;
+    /* 4.55:1 before: it cleared AA by a hair and stopped clearing it
+       the moment anything was laid over it. 5.66:1 now. */
+    --ink-faint:    #8c9baa;
     --paper:        #11161c;
     --surface:      #1a212a;
     --rule:         #2b3642;
@@ -890,6 +896,39 @@ tr.muted td { opacity: 0.55; }
    Under every list. The count on the left is the part that matters: it is
    what tells somebody a fifty-row page is not a fifty-row list. */
 
+
+/* A hint that is telling you something is not working as expected, rather
+   than explaining something that is. Amber, not red: nothing is broken. */
+.hint.warn {
+  color: var(--ink-soft);
+  border-inline-start: 3px solid var(--amber);
+  padding-inline-start: var(--space-2);
+}
+
+
+/* --- The backup panel's status ------------------------------------------
+   Reuses `.facts`, which already lays out label-and-value pairs elsewhere.
+   The job of this block is to answer "is this actually happening" at a
+   glance: the backup failure that hurts is the silent one. */
+.subhead {
+  margin: 0 0 var(--space-2);
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+hr.rule {
+  border: 0;
+  border-block-start: 1px solid var(--rule);
+  margin: var(--space-5) 0 var(--space-4);
+}
+.facts .muted { color: var(--ink-faint); }
+code.path {
+  font-size: 0.85rem;
+  word-break: break-all;
+  color: var(--ink-soft);
+}
+.inline-form { display: inline-block; margin: 0; }
+
 /* --- Customer search box -------------------------------------------------
    Sits above the customer dropdown on the forms. The hint under it matters
    as much as the box: the list is recent customers, not all of them. */
@@ -1028,7 +1067,7 @@ tr.muted td { opacity: 0.55; }
     [data-theme="dark"] {
         --ink:          #16202b;
         --ink-soft:     #4a5a6a;
-        --ink-faint:    #7c8a98;
+        --ink-faint:    #5b6977;
         --paper:        #ffffff;
         --surface:      #ffffff;
         --rule:         #dce1e6;
@@ -1051,8 +1090,8 @@ tr.muted td { opacity: 0.55; }
         --accent-soft:  #eef1fb;
     }
     body { background: #fff; }
-    /* The watermark is behind a min-width query that paper never matches,
-       but saying so explicitly costs one line and removes the question. */
+    /* The customer's copy carries the logo in its letterhead already; a
+       second faint one in the margins is ink spent on nothing. */
     body::before, body::after { display: none; }
     /* Navigation, the theme switch and the language switch are controls, and
        a control on paper is a smudge of ink that cannot be pressed. */
@@ -1198,30 +1237,83 @@ tr.is-off .stored { text-decoration: line-through; }
    enough to have genuinely empty margins, it never sits under text, and it
    is faint enough to read as paper rather than as content.
    -------------------------------------------------------------------------- */
-@media (min-width: 1500px) {
+body::before,
+body::after {
+    content: "";
+    position: fixed;
+    top: 50%;
+
+    /* Centred in the empty space beside the form, not pinned near the
+       window's edge.
+
+       `--edge` is where the form actually starts: the content column is
+       1140px wide and centred, and the panel inside it is inset by the
+       column's own padding. Measuring to the column instead of to the panel
+       leaves the mark a consistent half-a-padding off centre -- 12px, which
+       is small enough to look like carelessness rather than a bug, which is
+       exactly why it is worth getting right.
+
+       The old rule put the mark a flat 2.2rem from the window edge. That is
+       roughly centred at 1500px and drifts into the corner the wider the
+       screen gets: 65px off at 1920px and worse beyond. Deriving both the
+       position and the size from the same 1140px the container uses means
+       the two cannot drift apart. */
+    --edge: calc(50% - 570px + var(--space-5));
+    width: min(200px, calc(var(--edge) * 0.75));
+    /* Square, via the ratio rather than a height.
+
+       `--edge` holds a percentage, and a percentage resolves against
+       whichever property consumes it: against the viewport's width in
+       `width`, and against its *height* in `height`. Used for both, the
+       width came out at 200px and the height at 50% of the window's height
+       minus 546px -- negative, so zero. The mark had the right position and
+       no size at all, and the measurement that checked its width and its
+       centre said everything was fine. A screenshot found it. */
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+
+    /* Masked, not drawn. The logo decides the shape; the page decides the
+       colour. Painting the picture itself meant painting whatever the file
+       happened to contain -- and the white variant of the ARC roundel is an
+       RGB PNG with no alpha at all, so its background was part of the
+       picture: a grey rectangle with hard edges in each margin.
+
+       It also means one logo file serves both themes. Drawn as an image, a
+       dark logo vanishes into the dark theme and a white one glares in the
+       light theme; as a mask it is always the page's own ink. */
+    background-color: var(--ink);
+    -webkit-mask-image: var(--watermark);
+    mask-image: var(--watermark);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+
+    /* Faint enough to read as paper rather than as content, and behind the
+       content in any case: decoration in a ledger has one duty, which is to
+       stay out of the way of the figures. It sits in the margins and never
+       over text, so it costs nothing in contrast. */
+    opacity: 0.07;
+    pointer-events: none;      /* never in the way of a click */
+    z-index: 0;
+    /* Without a logo `--watermark` is unset, the mask is empty, and these
+       paint nothing. */
+}
+body::before { left: calc(var(--edge) / 2); }
+body::after  { left: calc(100% - var(--edge) / 2); }
+
+/* Charcoal swallows a pale mark, so the dark theme gets a little more. */
+[data-theme="dark"] body::before,
+[data-theme="dark"] body::after { opacity: 0.1; }
+
+/* Below this there is no empty column to centre anything in: the margins
+   are narrower than the mark, and it would sit under the form instead of
+   beside it. */
+@media (max-width: 1460px) {
     body::before,
-    body::after {
-        content: "";
-        position: fixed;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 190px;
-        height: 190px;
-        background-image: var(--watermark);
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: contain;
-        opacity: 0.05;
-        pointer-events: none;   /* never in the way of a click */
-        z-index: 0;
-        /* Without a logo the property is unset and these draw nothing. */
-    }
-    body::before { inset-inline-start: 2.2rem; }
-    body::after  { inset-inline-end: 2.2rem; }
-    /* The dark theme needs a touch more, or the mark disappears entirely
-       into the charcoal. */
-    [data-theme="dark"] body::before,
-    [data-theme="dark"] body::after { opacity: 0.08; }
+    body::after { display: none; }
 }
 
 /* The content sits above the watermark, always. */
@@ -1251,6 +1343,9 @@ main.container {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
+    /* Centred: the ribbon is a mark of what the workshop works on, not a
+       column of data to line up with the figures above it. */
+    justify-content: center;
     gap: var(--space-2) var(--space-4);
 }
 .foot-label {
@@ -1261,6 +1356,7 @@ main.container {
 .marques {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--space-2) var(--space-4);
     margin: 0;
     padding: 0;

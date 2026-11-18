@@ -19,6 +19,7 @@ the Settings page.
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -33,7 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import charts, exporting, forms, importing, messaging, register_import
+from . import backups, charts, exporting, forms, importing, messaging, register_import
 from . import repository as repo
 from .db import backup_archive, connect, db_path, migrate, session
 from .forms import FormError
@@ -60,7 +61,19 @@ async def lifespan(app: FastAPI):
         print(f"Database ready at {db_path().resolve()}")
     finally:
         conn.close()
+
+    # Takes today's backup if the day has none, then checks hourly. On a
+    # background thread: a backup of a large register takes a second or two,
+    # and whoever started the application is usually at the counter with a
+    # customer waiting.
+    stop = threading.Event()
+    watcher = backups.start(stop)
+    if watcher:
+        print(f"Daily backups in {backups.backups_dir().resolve()}")
+
     yield
+
+    stop.set()
 
 
 app = FastAPI(
@@ -267,6 +280,12 @@ def ctx(
         "request": request,
         "settings": settings,
         "has_logo": bool(logo["logo_mime"]),
+        # The margin watermark paints the logo's shape in a flat colour, so
+        # it needs a logo whose background is transparent. One with a solid
+        # background cannot be masked -- the mask is the whole rectangle,
+        # which is how the dark theme ended up with a grey box in each
+        # margin. Settings explains it rather than leaving it a mystery.
+        "watermark_ok": bool(logo["logo_mime"]) and bool(logo["logo_has_alpha"]),
         # The timestamp makes the URL change when the logo does, so a
         # replaced logo is not served from the browser's cache.
         "logo_url": f"/logo?v={logo['updated_at'].replace(' ', '')}",
@@ -2939,7 +2958,7 @@ def contract_detach_issue(link_id: int, conn: Connection = Depends(get_conn)):
 
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, conn: Connection = Depends(get_conn)) -> HTMLResponse:
-    return render(request, conn, "settings.html", error="")
+    return render(request, conn, "settings.html", error="", backup=backups.status())
 
 
 # NOTE: these sit above /settings/{...} style paths for the same reason the
@@ -3149,7 +3168,8 @@ def settings_save(
                 raise FormError("The next estimate number must be 1 or higher.")
             data["next_estimate_seq"] = estimate_seq
     except FormError as exc:
-        return render(request, conn, "settings.html", error=str(exc))
+        return render(request, conn, "settings.html", error=str(exc),
+                      backup=backups.status())
 
     repo.update_settings(conn, data)
     return go("/settings", msg="set.saved")
@@ -3199,6 +3219,22 @@ async def logo_upload(
 def logo_remove(conn: Connection = Depends(get_conn)):
     repo.clear_logo(conn)
     return go("/settings", msg="msg.deleted")
+
+
+@app.post("/settings/backup/now")
+def settings_backup_now():
+    """Take a backup right now, whether or not the day already has one.
+
+    Here because somebody about to do something they are nervous about --
+    importing a file, deleting a batch, letting a new member of staff loose
+    on it -- wants a copy from *this minute*, not from whenever the program
+    happened to start.
+    """
+    try:
+        backups.run(force=True)
+    except OSError as exc:
+        return go("/settings", err=f"{exc}")
+    return go("/settings", msg="set.backup_done")
 
 
 @app.get("/settings/backup")

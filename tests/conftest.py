@@ -19,7 +19,12 @@ import pytest
 _TMP = tempfile.TemporaryDirectory()
 os.environ.setdefault("CARSERVICE_DB", str(Path(_TMP.name) / "test.db"))
 
-from app.db import init_db  # noqa: E402  (import after the env var is set)
+# The automatic daily backup must not run during the tests either: it would
+# write zip files into whatever directory the suite happens to start in. The
+# tests that cover it switch it back on for themselves.
+os.environ.setdefault("CARSERVICE_NO_AUTOBACKUP", "1")
+
+from app.db import init_db  # noqa: E402  (import after the env vars are set)
 
 
 @pytest.fixture()

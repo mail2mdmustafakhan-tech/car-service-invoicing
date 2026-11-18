@@ -266,6 +266,46 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     # has been deleted when they are simply not in the recent fifty.
     "pick.search_customer": ("Search customers by name or phone\u2026",
                              "\u0627\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u062c\u0648\u0627\u0644\u2026"),
+    # The automatic daily backup.
+    "set.auto_backup": ("Automatic daily backup", "\u0646\u0633\u062e \u0627\u062d\u062a\u064a\u0627\u0637\u064a \u064a\u0648\u0645\u064a \u062a\u0644\u0642\u0627\u0626\u064a"),
+    "set.auto_backup_hint": (
+        "A backup is taken when this program starts, if the day does not "
+        "already have one, and once an hour while it is open. The last "
+        "fourteen days are kept, then one a month for a year.",
+        "\u062a\u064f\u0624\u062e\u0630 \u0646\u0633\u062e\u0629 \u0639\u0646\u062f \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u0625\u0630\u0627 \u0644\u0645 \u062a\u0648\u062c\u062f \u0646\u0633\u062e\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u064a\u0648\u0645\u060c "
+        "\u0648\u0645\u0631\u0629 \u0643\u0644 \u0633\u0627\u0639\u0629 \u0623\u062b\u0646\u0627\u0621 \u0641\u062a\u062d\u0647. \u064a\u064f\u062d\u062a\u0641\u0638 \u0628\u0622\u062e\u0631 \u0623\u0631\u0628\u0639\u0629 \u0639\u0634\u0631 \u064a\u0648\u0645\u0627\u064b\u060c \u062b\u0645 \u0646\u0633\u062e\u0629 \u0634\u0647\u0631\u064a\u0629 \u0644\u0645\u062f\u0629 \u0633\u0646\u0629.",
+    ),
+    "set.backup_last": ("Last backup", "\u0622\u062e\u0631 \u0646\u0633\u062e\u0629"),
+    "set.backup_today": ("taken today", "\u0623\u064f\u062e\u0630\u062a \u0627\u0644\u064a\u0648\u0645"),
+    "set.backup_none_yet": ("None yet", "\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u0639\u062f"),
+    "set.backup_kept": ("Backups kept", "\u0627\u0644\u0646\u0633\u062e \u0627\u0644\u0645\u062d\u0641\u0648\u0638\u0629"),
+    "set.backup_folder": ("Folder", "\u0627\u0644\u0645\u062c\u0644\u062f"),
+    "set.backup_now": ("Back up now", "\u0627\u0646\u0633\u062e \u0627\u0644\u0622\u0646"),
+    "set.backup_done": ("Backup saved to the backups folder.",
+                        "\u062a\u0645 \u062d\u0641\u0638 \u0627\u0644\u0646\u0633\u062e\u0629 \u0641\u064a \u0645\u062c\u0644\u062f \u0627\u0644\u0646\u0633\u062e \u0627\u0644\u0627\u062d\u062a\u064a\u0627\u0637\u064a\u0629."),
+    "set.backup_stale": (
+        "No backup has been taken for more than two days. If this program "
+        "has not been opened, that is why \u2014 otherwise check the folder "
+        "below is writable.",
+        "\u0644\u0645 \u062a\u064f\u0624\u062e\u0630 \u0646\u0633\u062e\u0629 \u0645\u0646\u0630 \u0623\u0643\u062b\u0631 \u0645\u0646 \u064a\u0648\u0645\u064a\u0646. \u0625\u0646 \u0644\u0645 \u064a\u064f\u0641\u062a\u062d \u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062c \u0641\u0647\u0630\u0627 \u0627\u0644\u0633\u0628\u0628\u060c "
+        "\u0648\u0625\u0644\u0627 \u0641\u062a\u0623\u0643\u062f \u0645\u0646 \u0625\u0645\u0643\u0627\u0646\u064a\u0629 \u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0641\u064a \u0627\u0644\u0645\u062c\u0644\u062f \u0623\u062f\u0646\u0627\u0647.",
+    ),
+    "set.backup_offsite": (
+        "These sit on the same disk as your data \u2014 if the disk fails it "
+        "takes both. Copy this folder to a USB stick or cloud drive now and "
+        "then.",
+        "\u0647\u0630\u0647 \u0627\u0644\u0646\u0633\u062e \u0639\u0644\u0649 \u0646\u0641\u0633 \u0627\u0644\u0642\u0631\u0635 \u0645\u0639 \u0628\u064a\u0627\u0646\u0627\u062a\u0643 \u2014 \u0648\u0625\u0646 \u062a\u0639\u0637\u0651\u0644 \u0627\u0644\u0642\u0631\u0635 \u0636\u0627\u0639 \u0627\u0644\u0627\u062b\u0646\u0627\u0646. "
+        "\u0627\u0646\u0633\u062e \u0647\u0630\u0627 \u0627\u0644\u0645\u062c\u0644\u062f \u0625\u0644\u0649 \u0630\u0627\u0643\u0631\u0629 USB \u0623\u0648 \u0633\u062d\u0627\u0628\u0629 \u0645\u0646 \u062d\u064a\u0646 \u0644\u0622\u062e\u0631.",
+    ),
+    "set.logo_opaque": (
+        "This logo has a solid background, so it is not used as the faint "
+        "watermark behind the pages \u2014 only in the top bar and on printed "
+        "documents. For the watermark as well, upload a version with a "
+        "transparent background (a PNG saved without a background colour).",
+        "\u0647\u0630\u0627 \u0627\u0644\u0634\u0639\u0627\u0631 \u0628\u062e\u0644\u0641\u064a\u0629 \u0645\u0635\u0645\u062a\u0629\u060c \u0644\u0630\u0644\u0643 \u0644\u0627 \u064a\u064f\u0633\u062a\u062e\u062f\u0645 \u0643\u0639\u0644\u0627\u0645\u0629 \u0645\u0627\u0626\u064a\u0629 "
+        "\u062e\u0644\u0641 \u0627\u0644\u0635\u0641\u062d\u0627\u062a \u2014 \u0641\u0642\u0637 \u0641\u064a \u0627\u0644\u0634\u0631\u064a\u0637 \u0627\u0644\u0639\u0644\u0648\u064a \u0648\u0639\u0644\u0649 \u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a \u0627\u0644\u0645\u0637\u0628\u0648\u0639\u0629. "
+        "\u0644\u0627\u0633\u062a\u062e\u062f\u0627\u0645\u0647 \u0643\u0639\u0644\u0627\u0645\u0629 \u0645\u0627\u0626\u064a\u0629 \u0623\u064a\u0636\u0627\u064b\u060c \u0627\u0631\u0641\u0639 \u0646\u0633\u062e\u0629 \u0628\u062e\u0644\u0641\u064a\u0629 \u0634\u0641\u0627\u0641\u0629.",
+    ),
     "pick.customer_hint": ("Recent customers are listed below \u2014 search here for anyone else.",
                            "\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0623\u062f\u0646\u0627\u0647 \u062a\u0639\u0631\u0636 \u0627\u0644\u0639\u0645\u0644\u0627\u0621 \u0627\u0644\u0623\u062d\u062f\u062b \u2014 \u0627\u0628\u062d\u062b \u0647\u0646\u0627 \u0639\u0646 \u063a\u064a\u0631\u0647\u0645."),
     "action.print": ("Print", "طباعة"),
@@ -826,9 +866,10 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "set.logo": ("Logo", "الشعار"),
     "set.logo_hint": (
         "Printed on contracts and invoices. PNG, JPEG, GIF or WebP, under 1 MB. "
-        "A square image with a transparent or white background works best.",
+        "A square image with a transparent background works best \u2014 that is "
+        "what lets it be used as the faint watermark behind the pages too.",
         "يُطبع على العقود والفواتير. صيغة PNG أو JPEG أو GIF أو WebP وبحجم أقل من ١ ميجابايت. "
-        "يُفضل صورة مربعة بخلفية شفافة أو بيضاء.",
+        "يُفضل صورة مربعة بخلفية شفافة — فهي ما يُتيح استخدامه كعلامة مائية خلف الصفحات أيضاً.",
     ),
     "set.logo_choose": ("Choose an image", "اختر صورة"),
     "set.logo_upload": ("Upload logo", "رفع الشعار"),

@@ -36,11 +36,16 @@
   <link rel="icon" href="data:,">
 </head>
 {#
-  The watermark in the margins is the workshop's own roundel. It is passed in
+  The watermark behind the page is the workshop's own roundel. It is passed in
   as a custom property rather than written into the stylesheet, because the
   logo lives in the database and changes when the workshop changes it.
+
+  Only when the logo has a transparent background: the stylesheet paints its
+  shape in a flat colour rather than drawing the picture, and a logo with a
+  solid background has no shape to paint -- it is a rectangle, and it looked
+  like one.
 #}
-<body {% if has_logo %}style="--watermark: url('{{ logo_url }}')"{% endif %}>
+<body {% if watermark_ok %}style="--watermark: url('{{ logo_url }}')"{% endif %}>
 {% set path = request.url.path %}
 {#
   Two rows, not one.

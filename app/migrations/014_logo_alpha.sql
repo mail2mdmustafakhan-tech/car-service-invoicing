@@ -1,0 +1,12 @@
+-- Does the stored logo have a transparent background?
+--
+-- The watermark in the page margins is the logo, and it is now painted as a
+-- mask -- its shape in one flat colour -- rather than as a picture. A logo
+-- whose background is solid white cannot be masked: the mask would be the
+-- whole rectangle, which is what produced a grey box in dark mode.
+--
+-- NULL means "not looked at yet". The answer is worked out from the file's
+-- own bytes the first time the application needs it and written back here,
+-- so an install that already has a logo does not have to re-upload it. It
+-- cannot be worked out in SQL, which is why this column arrives empty.
+ALTER TABLE branding ADD COLUMN logo_has_alpha INTEGER;

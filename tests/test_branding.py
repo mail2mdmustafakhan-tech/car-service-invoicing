@@ -75,13 +75,15 @@ def test_the_ribbon_stays_off_the_customer_documents(shop):
 
 def test_the_watermark_is_the_workshops_own_logo(shop, read_web_db):
     """Not a manufacturer's badge. Their marks are theirs."""
+    from app import repository as repo
+
+    # A real file, because the watermark now depends on what is inside one:
+    # it is painted as a mask, so a logo with a solid background has no shape
+    # to paint and is refused. The forty bytes of nonsense this used to
+    # insert were refused for exactly that reason, and rightly.
     with read_web_db() as c:
-        c.execute("DELETE FROM branding")
-        c.execute(
-            "INSERT INTO branding (id, logo_blob, logo_mime, logo_filename)"
-            " VALUES (1, ?, 'image/png', 'logo.png')",
-            (b"\x89PNG\r\n\x1a\n" + b"0" * 40,),
-        )
+        repo.set_logo(c, Path("branding/arc-logo-512.png").read_bytes(),
+                      filename="arc-logo-512.png")
         c.commit()
     page = shop.get("/").text
     assert "--watermark: url('/logo" in page
@@ -96,8 +98,8 @@ def test_there_is_no_watermark_without_a_logo(shop):
 def test_the_watermark_cannot_swallow_a_click(shop):
     css = Path("app/static/css/app.css").read_text()
     # The block that actually draws it -- not the one-line print override,
-    # which also starts "body::before, body::after".
-    start = css.index("background-image: var(--watermark)")
+    # which also starts "body::before".
+    start = css.index("mask-image: var(--watermark)")
     block = css[css.rindex("body::before", 0, start):css.index("}", start)]
     assert "pointer-events: none" in block
 
