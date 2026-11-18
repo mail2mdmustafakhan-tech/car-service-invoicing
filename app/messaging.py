@@ -124,11 +124,42 @@ def render_template(template: str, values: dict[str, str]) -> str:
     'Hi Ahmed, ref {unknown}.'
     >>> render_template("100% { not a placeholder }", {})
     '100% { not a placeholder }'
+
+    A line whose placeholders all come back empty is dropped whole, label and
+    all. This is what lets a template carry a line that is not always wanted:
+
+    >>> print(render_template("Total: {total}\\nDiscount: {discount}",
+    ...                       {"total": "250.00", "discount": ""}))
+    Total: 250.00
+
+    >>> print(render_template("Total: {total}\\nDiscount: {discount}",
+    ...                       {"total": "250.00", "discount": "20.00"}))
+    Total: 250.00
+    Discount: 20.00
+
+    Without that rule the only way to offer an optional line would be to
+    leave "Discount:" sitting there with nothing after it, which reads as a
+    fault in the software rather than as an absent discount. A line with no
+    placeholders at all is never dropped, however empty it looks:
+
+    >>> render_template("", {"total": "1"})
+    ''
     """
-    result = template
-    for key, value in values.items():
-        result = result.replace("{" + key + "}", str(value))
-    return result
+    kept = []
+    for line in template.split("\n"):
+        used = [key for key in values if "{" + key + "}" in line]
+        filled = line
+        for key in used:
+            filled = filled.replace("{" + key + "}", str(values[key]))
+        # Anything still unresolved is left alone by the loop above and
+        # counts as content, so an unknown placeholder cannot silently
+        # delete the line it sits on.
+        if used and all(str(values[key]) == "" for key in used):
+            # The label goes with it. "Discount:" with nothing after it reads
+            # as a fault in the software rather than as an absent discount.
+            continue
+        kept.append(filled)
+    return "\n".join(kept)
 
 
 def summarise_items(descriptions: list[str], limit: int = 6) -> str:

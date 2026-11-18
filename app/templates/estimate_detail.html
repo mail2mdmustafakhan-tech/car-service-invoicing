@@ -18,6 +18,16 @@
   </div>
   <div class="actions">
     <a class="btn" href="/estimates/{{ estimate['id'] }}/print" target="_blank">{{ t('action.print') }}</a>
+    {# Beside Print, at every stage -- a quote is discussed with the customer
+       long before it is approved, and walking down the page to the send panel
+       to do that was a step for nothing. The label names WhatsApp rather than
+       saying "send", because pressing it opens WhatsApp and a button should
+       say what it will do. The panel below still has SMS, copy, and the
+       choice of language. #}
+    {% if has_phone %}
+      <a class="btn" href="{{ whatsapp_urls[message_lang] }}"
+         target="_blank" rel="noopener">{{ t('est.whatsapp') }}</a>
+    {% endif %}
     {% if PDF_AVAILABLE %}
       <a class="btn" href="/estimates/{{ estimate['id'] }}/pdf" target="_blank">{{ t('action.download_pdf') }}</a>
     {% endif %}
@@ -25,8 +35,14 @@
       <a class="btn" href="/estimates/{{ estimate['id'] }}/edit">{{ t('action.edit') }}</a>
     {% endif %}
     {% if estimate['status'] == 'approved' %}
+      {#
+        No `doc_type` here on purpose. It used to be pinned to "tax", which
+        was right when an estimate had no way of saying otherwise and is
+        wrong now that it has: a quote given without VAT became a tax
+        invoice, so the customer was shown one figure and billed another.
+        Left out, the estimate's own answer decides.
+      #}
       <form method="post" action="/estimates/{{ estimate['id'] }}/invoice">
-        <input type="hidden" name="doc_type" value="tax">
         <button class="btn accent" type="submit">{{ t('est.to_invoice') }}</button>
       </form>
     {% endif %}
@@ -101,7 +117,7 @@
     <div class="totals">
       <div class="line"><span>{{ t('inv.subtotal') }}</span><span>{{ m(estimate['subtotal_minor']) }}</span></div>
       {% if estimate['discount_minor'] %}
-        <div class="line"><span>{{ t('inv.discount') }}</span><span>-{{ m(estimate['discount_minor']) }}</span></div>
+        <div class="line"><span>{{ discount_label(estimate) }}</span><span>-{{ m(estimate['discount_minor']) }}</span></div>
       {% endif %}
       {% if estimate['vat_rate_bp'] %}
         <div class="line"><span>{{ t('inv.taxable') }}</span><span>{{ m(estimate['taxable_minor']) }}</span></div>

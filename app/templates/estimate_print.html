@@ -141,7 +141,8 @@
         <td>{{ m(estimate['subtotal_minor']) }}</td>
       </tr>
       {% if estimate['discount_minor'] %}
-      <tr><td>Discount / الخصم</td><td>-{{ m(estimate['discount_minor']) }}</td></tr>
+      <tr><td>Discount / الخصم{% if estimate['discount_mode'] == 'percent' and estimate['discount_rate_bp'] %}
+          ({{ fmt_rate(estimate['discount_rate_bp']) }}%){% endif %}</td><td>-{{ m(estimate['discount_minor']) }}</td></tr>
       {% endif %}
       {% if estimate['vat_rate_bp'] %}
       <tr class="rule">

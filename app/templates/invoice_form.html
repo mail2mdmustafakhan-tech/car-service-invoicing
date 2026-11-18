@@ -61,13 +61,21 @@
         </div>
       </div>
 
+      {#
+        Asked as a tick-box rather than a two-item dropdown, because that is
+        how somebody at the counter thinks about it: this one is without VAT.
+        The hidden field keeps `doc_type` as what gets stored and submitted,
+        so nothing downstream had to change and anything still posting the
+        old field keeps working.
+      #}
       <div class="field">
-        <label for="f_doc_type">{{ t('inv.doc_type') }}</label>
-        <select id="f_doc_type" name="doc_type" style="max-width:340px">
-          <option value="tax"   {% if not editing or invoice['doc_type'] == 'tax' %}selected{% endif %}>{{ t('inv.doc_tax') }}</option>
-          <option value="plain" {% if editing and invoice['doc_type'] == 'plain' %}selected{% endif %}>{{ t('inv.doc_plain') }}</option>
-        </select>
-        <p class="hint">{{ t('inv.doc_type_hint') }}</p>
+        <input type="hidden" name="doc_type" value="tax">
+        <div class="check">
+          <input type="checkbox" id="f_exclude_vat" name="exclude_vat" value="1"
+                 {% if editing and invoice['doc_type'] == 'plain' %}checked{% endif %}>
+          <label for="f_exclude_vat">{{ t('inv.exclude_vat') }}</label>
+        </div>
+        <p class="hint">{{ t('inv.exclude_vat_hint') }}</p>
       </div>
 
       <div class="grid-3">

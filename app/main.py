@@ -248,6 +248,25 @@ def ctx(
         except (TypeError, ValueError):
             return None
 
+    def discount_label(record: Any) -> str:
+        """"Discount" on its own, or "Discount (10%)" when a rate was agreed.
+
+        What was agreed and what it came to are two different facts, and only
+        the second was ever shown. A customer who was promised ten percent
+        reads "Discount  -150.00" and has to work out whether that is what
+        they were promised; the workshop, looking at it six months later, has
+        to do the same. Both numbers are stored -- this shows both.
+        """
+        label = t("inv.discount", lang)
+        try:
+            mode = record["discount_mode"]
+            rate = record["discount_rate_bp"]
+        except (KeyError, IndexError, TypeError):
+            return label
+        if mode == "percent" and rate:
+            return f"{label} ({format_rate(rate)}%)"
+        return label
+
     def picker_customers(chosen: Any = None) -> list[Any]:
         """The customers to put in a form's dropdown.
 
@@ -305,6 +324,7 @@ def ctx(
         "opt_label": opt_label,
         "opt_label2": opt_label2,
         "counts_for": counts_for,
+        "discount_label": discount_label,
         "picker_customers": picker_customers,
         "cars_of": cars_of,
         "ALERT_LEVELS": repo.ALERT_LEVELS,
@@ -500,6 +520,8 @@ def customers_list(
     request: Request,
     q: str = "",
     inactive: str = "",
+    category: str = "",
+    alert: str = "",
     sort: str = "",
     dir: str = "asc",
     page: int = 1,
@@ -507,6 +529,7 @@ def customers_list(
 ) -> HTMLResponse:
     customers = repo.page_customers(
         conn, search=q, include_inactive=forms.truthy(inactive),
+        category=category, alert=alert,
         sort=sort, direction=dir, page=page,
     )
     return render(
@@ -518,6 +541,8 @@ def customers_list(
         **_sort_state("customers", sort, dir),
         q=q,
         inactive=inactive,
+        category=category,
+        alert=alert,
     )
 
 
@@ -1461,11 +1486,18 @@ def _invoice_payload(
     vat_rate: str,
     prices_include_vat: str | None,
     doc_type: str = "tax",
+    exclude_vat: str | None = None,
     status: str | None = None,
     lines: list[dict[str, Any]] | None = None,
     discount_mode: str = "amount",
 ) -> dict[str, Any]:
+    # The form asks this as a tick-box -- "excluding VAT" -- which is how
+    # somebody at the counter thinks about it. `doc_type` is what gets
+    # stored, and is still accepted directly so that anything posting the
+    # older field keeps working.
     kind = forms.one_of(doc_type, ("tax", "plain"), default="tax")
+    if forms.checkbox(exclude_vat):
+        kind = "plain"
     # A percentage only becomes money once the lines are known, so the
     # discount is settled here rather than alongside the simpler fields.
     subtotal = sum(
@@ -1518,6 +1550,7 @@ def invoice_create(
     discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
+    exclude_vat: str = Form(None),
     doc_type: str = Form("tax"),
     status: str = Form("draft"),
     item_catalog_id: list[str] = Form([]),
@@ -1551,6 +1584,7 @@ def invoice_create(
             discount=discount,
             vat_rate=vat_rate,
             prices_include_vat=prices_include_vat,
+            exclude_vat=exclude_vat,
             doc_type=doc_type,
             status=status,
             lines=lines,
@@ -1768,6 +1802,7 @@ def invoice_update(
     discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
+    exclude_vat: str = Form(None),
     doc_type: str = Form("tax"),
     status: str = Form("draft"),
     item_catalog_id: list[str] = Form([]),
@@ -1801,6 +1836,7 @@ def invoice_update(
             discount=discount,
             vat_rate=vat_rate,
             prices_include_vat=prices_include_vat,
+            exclude_vat=exclude_vat,
             doc_type=doc_type,
             status=status,
             lines=lines,
@@ -2044,6 +2080,7 @@ def _estimate_payload(
     discount: str,
     vat_rate: str,
     prices_include_vat: str | None,
+    exclude_vat: str | None = None,
     lines: list[dict[str, Any]] | None = None,
     discount_mode: str = "amount",
 ) -> dict[str, Any]:
@@ -2072,8 +2109,17 @@ def _estimate_payload(
             ),
             strict=True,
         )),
-        "vat_rate_bp": forms.vat_rate(vat_rate, default=settings["vat_rate_bp"]),
-        "prices_include_vat": forms.checkbox(prices_include_vat),
+        # Ticking "excluding VAT" settles the rate at zero here rather than
+        # leaving the form to send a zero, so the quote and its arithmetic
+        # cannot disagree about whether tax was quoted -- the same rule a
+        # plain invoice follows.
+        "vat_rate_bp": (
+            0 if forms.checkbox(exclude_vat)
+            else forms.vat_rate(vat_rate, default=settings["vat_rate_bp"])
+        ),
+        "prices_include_vat": (
+            0 if forms.checkbox(exclude_vat) else forms.checkbox(prices_include_vat)
+        ),
         "currency_code": settings["currency_code"],
     }
     if data["customer_id"] is None:
@@ -2093,6 +2139,7 @@ def estimate_create(
     discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
+    exclude_vat: str = Form(None),
     item_catalog_id: list[str] = Form([]),
     item_description: list[str] = Form([]),
     item_description_ar: list[str] = Form([]),
@@ -2118,6 +2165,7 @@ def estimate_create(
             issue_date=issue_date, valid_until=valid_until, notes=notes,
             discount=discount, vat_rate=vat_rate,
             prices_include_vat=prices_include_vat,
+            exclude_vat=exclude_vat,
             lines=lines, discount_mode=discount_mode,
         )
     except FormError as exc:
@@ -2165,7 +2213,29 @@ def _estimate_message(conn: Connection, estimate: Any, items: Any, lang: str) ->
             "business": localised(settings, "business_name_en", lang),
             "number": estimate["estimate_no"],
             "subtotal": format_money(estimate["subtotal_minor"], currency),
-            "vat": format_money(estimate["vat_minor"], currency),
+            # Empty when there is no discount, so a template can carry the
+            # line unconditionally and it simply does not appear. A customer
+            # who was promised ten percent should see it in the message that
+            # quotes them a price, not only on the printed copy they may
+            # never ask for.
+            "discount": (
+                format_money(estimate["discount_minor"], currency)
+                if estimate["discount_minor"] else ""
+            ),
+            "discount_rate": (
+                f"{format_rate(estimate['discount_rate_bp'])}%"
+                if estimate["discount_mode"] == "percent"
+                and estimate["discount_rate_bp"] else ""
+            ),
+            # Empty when there is none, so the line goes with it. "VAT:
+            # 0.00" on a quote given without VAT is noise at best, and at
+            # worst reads as though tax was considered and came to nothing.
+            # The printed document still states it, which is where it
+            # matters.
+            "vat": (
+                format_money(estimate["vat_minor"], currency)
+                if estimate["vat_minor"] else ""
+            ),
             "total": format_money(estimate["total_minor"], currency),
             "valid_until": estimate["valid_until"] or "",
             "items": messaging.itemise(lines, more=more),
@@ -2245,6 +2315,7 @@ def estimate_update(
     discount_mode: str = Form("amount"),
     vat_rate: str = Form(""),
     prices_include_vat: str = Form(None),
+    exclude_vat: str = Form(None),
     item_catalog_id: list[str] = Form([]),
     item_description: list[str] = Form([]),
     item_description_ar: list[str] = Form([]),
@@ -2270,6 +2341,7 @@ def estimate_update(
             issue_date=issue_date, valid_until=valid_until, notes=notes,
             discount=discount, vat_rate=vat_rate,
             prices_include_vat=prices_include_vat,
+            exclude_vat=exclude_vat,
             lines=lines, discount_mode=discount_mode,
         )
         repo.update_estimate(conn, estimate_id, header, lines)
@@ -2326,7 +2398,7 @@ def estimate_delete(estimate_id: int, conn: Connection = Depends(get_conn)):
 @app.post("/estimates/{estimate_id}/invoice")
 def estimate_to_invoice(
     estimate_id: int,
-    doc_type: str = Form("tax"),
+    doc_type: str = Form(""),
     conn: Connection = Depends(get_conn),
 ):
     """Turn an approved estimate into a draft invoice."""
@@ -2334,7 +2406,13 @@ def estimate_to_invoice(
         invoice_id = repo.convert_estimate_to_invoice(
             conn,
             estimate_id,
-            doc_type=forms.one_of(doc_type, ("tax", "plain"), default="tax"),
+            # Unset unless the button said so, which lets the estimate's own
+            # answer carry through rather than silently taxing a quote that
+            # was given without VAT.
+            doc_type=(
+                forms.one_of(doc_type, ("tax", "plain"), default="tax")
+                if doc_type else None
+            ),
         )
     except repo.InUse as exc:
         return go(f"/estimates/{estimate_id}", err=str(exc))

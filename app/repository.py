@@ -523,6 +523,74 @@ def _paginate(
 # Customers
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# Searching
+# --------------------------------------------------------------------------
+#
+# Three things were wrong with it, all found by typing into the real register
+# rather than by reading the query:
+#
+#   * A phone stored as 0559081935 could not be found by typing 055 908 1935,
+#     and one stored with spaces could not be found by typing it without. In a
+#     register written up by hand over years, the same number appears both
+#     ways, so this is not an edge case -- it is most of the phone book.
+#   * A name pasted in from somewhere else carries spaces around it, and
+#     `LIKE '%  Al-Harbi  %'` matches nothing at all.
+#   * `%` and `_` are LIKE's own wildcards. Typed into a search box they
+#     quietly mean "anything", so searching for `50%` returned the whole list.
+#
+# And one thing was missing rather than wrong: at a service centre the thing
+# in front of you is a car, so the plate is what gets typed. It now finds the
+# owner.
+
+#: How many digits make a search worth comparing against phone numbers.
+#: Fewer than this and it matches most of the register by accident.
+PHONE_DIGITS = 4
+
+#: Characters people put in phone numbers that carry no meaning.
+_PHONE_NOISE = (" ", "-", "(", ")", ".", "+", "\u00a0")
+
+
+def _digits(value: str) -> str:
+    """Just the digits, for comparing one written phone number with another."""
+    return "".join(ch for ch in value if ch.isdigit())
+
+
+def _digits_sql(column: str) -> str:
+    """SQL that strips the same noise out of a stored number.
+
+    A chain of REPLACE rather than anything cleverer because SQLite has no
+    regular expressions, and adding an extension to a program that has to
+    install on a workshop PC without a compiler is a poor trade for a
+    full-table scan of four thousand short strings.
+    """
+    expression = f"COALESCE({column}, '')"
+    for ch in _PHONE_NOISE:
+        expression = f"REPLACE({expression}, '{ch}', '')"
+    return expression
+
+
+def _like(term: str) -> str:
+    """A pattern matching *term* anywhere, with LIKE's wildcards made literal.
+
+    Paired with ``ESCAPE '\\'`` at every use.
+    """
+    for ch in ("\\", "%", "_"):
+        term = term.replace(ch, "\\" + ch)
+    return f"%{term}%"
+
+
+def clean_search(term: str) -> str:
+    """What somebody typed, with the accidents taken out.
+
+    >>> clean_search("  Al-Harbi  ")
+    'Al-Harbi'
+    >>> clean_search("055   908  1935")
+    '055 908 1935'
+    """
+    return " ".join(str(term or "").split())
+
+
 def _customers_query(
     *,
     search: str = "",
@@ -533,10 +601,48 @@ def _customers_query(
     where, params = ["1 = 1"], []
     if not include_inactive:
         where.append("c.is_active = 1")
+
+    search = clean_search(search)
     if search:
-        where.append("(c.name LIKE ? OR c.name_ar LIKE ? OR c.phone LIKE ?)")
-        like = f"%{search}%"
+        like = _like(search)
+        # The name, in either language, and the phone as it happens to be
+        # written.
+        clauses = [
+            r"c.name LIKE ? ESCAPE '\'",
+            r"c.name_ar LIKE ? ESCAPE '\'",
+            r"c.phone LIKE ? ESCAPE '\'",
+        ]
         params += [like, like, like]
+
+        # ...and the phone compared digit to digit, so that 0559081935 and
+        # 055 908 1935 find each other.
+        #
+        # Only once there are enough digits to be a piece of a phone number.
+        # Two or three match far too much: searching "G12" for a model, or
+        # "50%" for a company name, turned up every customer whose number
+        # happens to contain 12 or 50, which is most of them.
+        digits = _digits(search)
+        if len(digits) >= PHONE_DIGITS:
+            clauses.append(f"{_digits_sql('c.phone')} LIKE ?")
+            params.append(f"%{digits}%")
+
+        # ...and the cars, because the thing in front of you at the counter
+        # is the car. One pass over the vehicles rather than a correlated
+        # subquery per customer.
+        clauses.append(
+            "c.id IN (SELECT v.customer_id FROM vehicles v"
+            r"          WHERE v.plate_no LIKE ? ESCAPE '\'"
+            r"             OR v.make     LIKE ? ESCAPE '\'"
+            r"             OR v.model    LIKE ? ESCAPE '\'"
+            r"             OR v.vin      LIKE ? ESCAPE '\'"
+            f"             OR {_digits_sql('v.plate_no')} LIKE ?)"
+        )
+        # The last pattern is the search with its spaces taken out, matched
+        # against the stored plate with its spaces taken out: "4616UAR" and
+        # "4616 UAR" are the same car, written up by two different people.
+        params += [like, like, like, like, _like(search.replace(" ", ""))]
+
+        where.append("(" + " OR ".join(clauses) + ")")
     if category:
         where.append("c.category = ?")
         params.append(category)
@@ -1911,7 +2017,7 @@ def delete_estimate(conn: sqlite3.Connection, estimate_id: int) -> None:
 
 
 def convert_estimate_to_invoice(
-    conn: sqlite3.Connection, estimate_id: int, *, doc_type: str = "tax"
+    conn: sqlite3.Connection, estimate_id: int, *, doc_type: str | None = None
 ) -> int:
     """Raise an invoice from an approved estimate.
 
@@ -1922,6 +2028,14 @@ def convert_estimate_to_invoice(
     estimate = get_estimate(conn, estimate_id)
     if estimate["invoice_id"] is not None:
         raise InUse(f"Already invoiced as {estimate['invoice_no']}.")
+
+    # An estimate quoted without VAT becomes an invoice without VAT, unless
+    # the caller says otherwise. Quoting a customer one figure and then
+    # invoicing them a taxed one is the kind of surprise that ends in an
+    # argument at the counter, and the default should not be the surprising
+    # one.
+    if doc_type is None:
+        doc_type = "tax" if estimate["vat_rate_bp"] else "plain"
     if estimate["status"] != "approved":
         raise InUse(
             "Only an approved estimate can be invoiced. "

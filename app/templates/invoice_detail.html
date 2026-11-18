@@ -112,7 +112,7 @@
     <div class="totals">
       <div class="line"><span>{{ t('inv.subtotal') }}</span><span>{{ m(invoice['subtotal_minor']) }}</span></div>
       {% if invoice['discount_minor'] %}
-        <div class="line"><span>{{ t('inv.discount') }}</span><span>-{{ m(invoice['discount_minor']) }}</span></div>
+        <div class="line"><span>{{ discount_label(invoice) }}</span><span>-{{ m(invoice['discount_minor']) }}</span></div>
       {% endif %}
       {% if invoice['doc_type'] == 'tax' %}
         <div class="line"><span>{{ t('inv.taxable') }}</span><span>{{ m(invoice['taxable_minor']) }}</span></div>

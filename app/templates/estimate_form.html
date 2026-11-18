@@ -175,6 +175,19 @@
             </div>
           </div>
           <div class="field">
+            {#
+              The same tick-box the invoice has, so a quote and the invoice
+              raised from it are described to the customer in the same words.
+              Ticked, the rate above is ignored and settled at zero in the
+              route -- the quote and its arithmetic must not be able to
+              disagree about whether tax was quoted.
+            #}
+            <div class="check">
+              <input type="checkbox" id="f_exclude_vat" name="exclude_vat" value="1"
+                     data-vat-off
+                     {% if editing and not estimate['vat_rate_bp'] %}checked{% endif %}>
+              <label for="f_exclude_vat">{{ t('inv.exclude_vat') }}</label>
+            </div>
             <div class="check">
               <input type="checkbox" id="f_include_vat" name="prices_include_vat" value="1"
                      {% if (editing and estimate['prices_include_vat']) or (not editing and default_include_vat) %}checked{% endif %}>

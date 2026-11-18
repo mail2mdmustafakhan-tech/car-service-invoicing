@@ -409,11 +409,18 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "cust.cat_fleet": ("Fleet or business", "أسطول أو منشأة"),
     "cust.active": ("Active", "نشط"),
     "cust.inactive": ("Inactive", "غير نشط"),
+    "cust.type": ("Customer type", "\u0646\u0648\u0639 \u0627\u0644\u0639\u0645\u064a\u0644"),
+    "cust.any_type": ("Any type", "\u0643\u0644 \u0627\u0644\u0623\u0646\u0648\u0627\u0639"),
+    "cust.alert": ("Warning", "\u062a\u0646\u0628\u064a\u0647"),
+    "cust.any_alert": ("Any warning", "\u0643\u0644 \u0627\u0644\u062a\u0646\u0628\u064a\u0647\u0627\u062a"),
     "cust.show_inactive": ("Show inactive", "إظهار غير النشطين"),
     "cust.vehicles": ("Vehicles", "المركبات"),
     "cust.balance": ("Balance due", "الرصيد المستحق"),
     "cust.none": ("No customers yet.", "لا يوجد عملاء بعد."),
-    "cust.search_hint": ("Search by name or phone", "ابحث بالاسم أو الهاتف"),
+    "cust.search_hint": (
+        "Search by name, phone, or plate",
+        "ابحث بالاسم أو الهاتف أو رقم اللوحة",
+    ),
     "cust.history": ("Invoice history", "سجل الفواتير"),
 
     # -- Vehicles ----------------------------------------------------------
@@ -561,6 +568,14 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
         "بدون ضريبة — بيع نقدي، ليست فاتورة ضريبية",
     ),
     "inv.plain_invoice": ("INVOICE", "فاتورة"),
+    "inv.exclude_vat": ("Excluding VAT \u2014 do not charge tax on this",
+                        "\u0628\u062f\u0648\u0646 \u0636\u0631\u064a\u0628\u0629 \u0627\u0644\u0642\u064a\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629 \u2014 \u0644\u0627 \u062a\u064f\u062d\u062a\u0633\u0628 \u0627\u0644\u0636\u0631\u064a\u0628\u0629"),
+    "inv.exclude_vat_hint": (
+        "Leave this unticked for a normal tax invoice. Ticked, no VAT is "
+        "added and the document does not carry the tax wording.",
+        "\u0627\u062a\u0631\u0643\u0647 \u062f\u0648\u0646 \u062a\u062d\u062f\u064a\u062f \u0644\u0641\u0627\u062a\u0648\u0631\u0629 \u0636\u0631\u064a\u0628\u064a\u0629 \u0639\u0627\u062f\u064a\u0629. \u0639\u0646\u062f \u062a\u062d\u062f\u064a\u062f\u0647 \u0644\u0627 \u062a\u064f\u0636\u0627\u0641 \u0627\u0644\u0636\u0631\u064a\u0628\u0629 "
+        "\u0648\u0644\u0627 \u062a\u062d\u0645\u0644 \u0627\u0644\u0648\u062b\u064a\u0642\u0629 \u0635\u064a\u0627\u063a\u0629 \u0627\u0644\u0641\u0627\u062a\u0648\u0631\u0629 \u0627\u0644\u0636\u0631\u064a\u0628\u064a\u0629.",
+    ),
     "inv.doc_type_hint": (
         "A tax invoice charges VAT and prints the tax-invoice wording. "
         "The no-VAT option adds no tax at all and prints as a plain bill — "
@@ -897,11 +912,16 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "set.message_ar": ("Message template (Arabic)", "نص الرسالة بالعربية"),
     "set.message_hint": (
         "Filled in when you send an estimate. Available placeholders: "
-        "{customer} {business} {number} {items} {subtotal} {vat} {total} "
-        "{valid_until}. {items} lists each item with its price.",
+        "{customer} {business} {number} {items} {subtotal} {discount} "
+        "{discount_rate} {vat} {total} {valid_until}. {items} lists each "
+        "item with its price. A line whose placeholders are all empty is "
+        "left out entirely, so a discount line only appears when there is "
+        "a discount.",
         "تُعبأ عند إرسال عرض السعر. العناصر المتاحة: "
-        "{customer} {business} {number} {items} {subtotal} {vat} {total} "
-        "{valid_until}. العنصر {items} يعرض كل بند مع سعره.",
+        "{customer} {business} {number} {items} {subtotal} {discount} "
+        "{discount_rate} {vat} {total} {valid_until}. العنصر {items} يعرض "
+        "كل بند مع سعره. ويُحذف السطر بالكامل إذا كانت عناصره فارغة، "
+        "فلا يظهر سطر الخصم إلا عند وجود خصم.",
     ),
     "set.contract": ("Repair contract", "عقد الإصلاح"),
     "set.tagline_en": ("Services line (English)", "سطر الخدمات بالإنجليزية"),

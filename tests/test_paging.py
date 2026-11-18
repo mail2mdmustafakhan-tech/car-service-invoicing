@@ -290,3 +290,88 @@ def test_the_vehicle_list_holds_one_customers_cars_and_nobody_elses(shop, web_db
     page = shop.get(f"/invoices/new?customer_id={mine}").text
     assert "MINE 1" in page
     assert "THEIRS 1" not in page
+
+
+# ---------------------------------------------------------------------------
+# Searching for a customer
+# ---------------------------------------------------------------------------
+#
+# Reported as "the filter for customers is not working properly". Four
+# separate faults were behind it, every one found by typing into the real
+# register rather than by reading the query.
+
+@pytest.fixture()
+def register(conn):
+    """A handful of customers written up the way a real register is."""
+    repo.create_customer(conn, {"name": "Ahmed Al-Harbi", "phone": "0559081935"})
+    repo.create_customer(conn, {"name": "Faisal Al-Otaibi", "phone": "050 123 4567"})
+    repo.create_customer(conn, {"name": "Discount Motors 50%", "phone": ""})
+    repo.create_vehicle(conn, {"customer_id": 1, "plate_no": "4616 UAR",
+                               "make": "BMW", "model": "G12"})
+    conn.commit()
+    return conn
+
+
+def test_a_phone_is_found_however_it_was_written(register):
+    """The big one. In a register written up by hand over years the same
+    number appears spaced, hyphenated and run together, so this is not an
+    edge case -- it is most of the phone book."""
+    assert repo.page_customers(register, search="0559081935").total == 1
+    assert repo.page_customers(register, search="055 908 1935").total == 1
+    assert repo.page_customers(register, search="055-908-1935").total == 1
+
+    # ...and the other way round: stored with spaces, typed without.
+    assert repo.page_customers(register, search="0501234567").total == 1
+
+
+def test_a_pasted_name_still_finds_its_customer(register):
+    """Copying a name out of a message brings its spaces along."""
+    assert repo.page_customers(register, search="  Al-Harbi  ").total == 1
+
+
+def test_a_plate_finds_the_owner(register):
+    """At a service centre the thing in front of you is the car."""
+    assert repo.page_customers(register, search="4616 UAR").total == 1
+    assert repo.page_customers(register, search="4616UAR").total == 1
+    assert repo.page_customers(register, search="G12").total == 1
+
+
+def test_the_wildcards_in_like_are_not_wildcards_in_the_search_box(register):
+    """`%` typed into a search box means a per-cent sign. It used to mean
+    "anything", so searching for `50%` returned the whole register."""
+    assert repo.page_customers(register, search="50%").total == 1
+    # A lone per-cent sign now finds the one customer whose name contains
+    # one, rather than every customer in the register.
+    assert repo.page_customers(register, search="%").total == 1
+    assert repo.page_customers(register, search="_").total == 0
+
+
+def test_an_empty_search_is_not_a_filter(register):
+    assert repo.page_customers(register, search="   ").total == 3
+
+
+def test_the_search_cannot_be_injected(register):
+    repo.page_customers(register, search="' OR 1=1 --")
+    assert register.execute("SELECT COUNT(*) AS n FROM customers").fetchone()["n"] == 3
+
+
+@pytest.mark.parametrize("name,value", [("category", "vip"), ("alert", "refuse")])
+def test_the_filters_the_page_never_offered(shop, web_db, name, value):
+    """The data layer could always narrow by customer type and by warning;
+    the page had no control for either, so the only way to use them was to
+    edit the address bar."""
+    page = shop.get("/customers").text
+    assert f'name="{name}"' in page, f"no control for {name}"
+    assert shop.get(f"/customers?{name}={value}").status_code == 200
+
+
+def test_filtering_by_type_actually_narrows(shop, web_db):
+    from app import db
+
+    with db.session(web_db) as conn:
+        repo.create_customer(conn, {"name": "A Company", "category": "company"})
+        repo.create_customer(conn, {"name": "A Walk-in", "category": "individual"})
+
+    page = shop.get("/customers?category=company").text
+    assert "A Company" in page
+    assert "A Walk-in" not in page

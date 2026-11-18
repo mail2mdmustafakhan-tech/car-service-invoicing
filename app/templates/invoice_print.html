@@ -169,7 +169,8 @@
       </tr>
       {% if invoice['discount_minor'] %}
       <tr>
-        <td>Discount / الخصم</td>
+        <td>Discount / الخصم{% if invoice['discount_mode'] == 'percent' and invoice['discount_rate_bp'] %}
+            ({{ fmt_rate(invoice['discount_rate_bp']) }}%){% endif %}</td>
         <td>-{{ m(invoice['discount_minor']) }}</td>
       </tr>
       {% endif %}
