@@ -929,6 +929,18 @@ code.path {
 }
 .inline-form { display: inline-block; margin: 0; }
 
+
+/* Why the "excluding VAT" box is already ticked. Marked off from the hint
+   above it, because it is not general advice -- it is a fact about the
+   customer on this document, and a tick-box that appears to have moved by
+   itself needs to say who moved it. */
+.vat-note {
+  margin-top: var(--space-2);
+  padding-inline-start: var(--space-2);
+  border-inline-start: 3px solid var(--accent);
+  color: var(--ink-soft);
+}
+
 /* --- Customer search box -------------------------------------------------
    Sits above the customer dropdown on the forms. The hint under it matters
    as much as the box: the list is recent customers, not all of them. */

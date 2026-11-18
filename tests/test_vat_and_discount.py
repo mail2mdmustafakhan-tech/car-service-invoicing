@@ -267,3 +267,113 @@ def test_the_shipped_template_offers_the_discount_line(shop, read_web_db, langua
         ).fetchone()[0]
 
     assert "{discount}" in template
+
+
+# ---------------------------------------------------------------------------
+# Customers who are never charged VAT
+# ---------------------------------------------------------------------------
+#
+# The tick-box above answers "is *this* document without VAT". For some
+# customers the answer is always yes, and ticking it by hand every time is
+# both tedious and a thing to forget -- and forgetting means billing somebody
+# tax they do not owe, which they notice.
+
+def _exempt(read_web_db, customer_id=1, exempt=True):
+    with read_web_db() as conn:
+        conn.execute("UPDATE customers SET no_vat = ? WHERE id = ?",
+                     (1 if exempt else 0, customer_id))
+        conn.commit()
+
+
+def test_the_standing_arrangement_is_saved_on_the_customer(shop, read_web_db):
+    shop.post("/customers/new", data={"name": "Exempt Co", "no_vat": "1"},
+              follow_redirects=True)
+
+    assert _latest(read_web_db, "customers")["no_vat"] == 1
+
+
+def test_it_can_be_taken_off_again(shop, read_web_db):
+    _exempt(read_web_db)
+    shop.post("/customers/1/edit", data={"name": "Back to normal", "is_active": "1"},
+              follow_redirects=True)
+
+    with read_web_db() as conn:
+        assert conn.execute("SELECT no_vat FROM customers WHERE id = 1").fetchone()[0] == 0
+
+
+def test_a_new_invoice_for_them_starts_without_vat(shop, read_web_db):
+    """Answered on the server as well as in the browser. The direction of the
+    failure decides it: a script that does not run must not mean billing
+    somebody tax they do not owe."""
+    _exempt(read_web_db)
+
+    page = shop.get("/invoices/new?customer_id=1").text
+    marker = page[page.index('name="exclude_vat"'):]
+    assert "checked" in marker[:marker.index(">")]
+
+
+def test_and_a_new_estimate_too(shop, read_web_db):
+    _exempt(read_web_db)
+
+    page = shop.get("/estimates/new?customer_id=1").text
+    marker = page[page.index('name="exclude_vat"'):]
+    assert "checked" in marker[:marker.index(">")]
+
+
+def test_an_ordinary_customer_is_unaffected(shop, read_web_db):
+    _exempt(read_web_db, exempt=False)
+
+    page = shop.get("/invoices/new?customer_id=1").text
+    marker = page[page.index('name="exclude_vat"'):]
+    assert "checked" not in marker[:marker.index(">")]
+
+
+def test_the_reason_travels_with_the_customer_for_the_picker(shop, read_web_db):
+    """So that choosing them ticks the box at the moment of choosing, rather
+    than after a second trip to the server."""
+    _exempt(read_web_db)
+
+    assert 'data-no-vat="1"' in shop.get("/invoices/new").text
+    assert shop.get("/api/customers?q=").json()[-1]["no_vat"] in (True, False)
+
+
+def test_it_is_a_default_and_not_a_lock(shop, read_web_db):
+    """A standing arrangement should save somebody from remembering it, not
+    stop them departing from it on the one job where it does not apply."""
+    _exempt(read_web_db)
+
+    _invoice(shop, exclude_vat=None, doc_type="tax")
+    invoice = _latest(read_web_db, "invoices")
+
+    assert invoice["doc_type"] == "tax", "the form could not override the customer"
+    assert invoice["vat_minor"] > 0
+
+
+def test_marking_a_customer_exempt_does_not_rewrite_their_old_invoices(shop, read_web_db):
+    """The one that would be unforgivable. An invoice records the tax
+    decision made when it was raised; a box ticked today says nothing about
+    what was charged last March, and must not be able to restate it.
+    """
+    _invoice(shop)                       # a normal, taxed invoice
+    before = _latest(read_web_db, "invoices")
+    assert before["vat_minor"] > 0
+
+    _exempt(read_web_db)
+
+    after = _latest(read_web_db, "invoices")
+    assert after["doc_type"] == "tax"
+    assert after["vat_minor"] == before["vat_minor"]
+
+    # ...and reopening it still shows what it was raised as, not what the
+    # customer's arrangement says today.
+    page = shop.get(f"/invoices/{before['id']}/edit").text
+    marker = page[page.index('name="exclude_vat"'):]
+    assert "checked" not in marker[:marker.index(">")]
+
+
+def test_the_customers_own_page_says_so(shop, read_web_db):
+    """An invoice arriving without VAT should have a visible reason sitting
+    one click away."""
+    _exempt(read_web_db)
+
+    assert "never charged VAT" in shop.get("/customers/1").text

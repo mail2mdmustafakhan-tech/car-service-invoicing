@@ -19,6 +19,8 @@
 </div>
 
 <form method="post" id="invoice-form"
+      data-vat-aware data-vat-note="{{ t('cust.no_vat_applied') }}"
+      {% if editing %}data-editing{% endif %}
       action="{{ '/invoices/' ~ invoice['id'] ~ '/edit' if editing else '/invoices/new' }}">
 
   {# ---- Who, which car, when ------------------------------------------- #}
@@ -72,7 +74,8 @@
         <input type="hidden" name="doc_type" value="tax">
         <div class="check">
           <input type="checkbox" id="f_exclude_vat" name="exclude_vat" value="1"
-                 {% if editing and invoice['doc_type'] == 'plain' %}checked{% endif %}>
+                 {% if editing %}{% if invoice['doc_type'] == 'plain' %}checked{% endif %}
+                 {%- elif is_vat_exempt(chosen_customer) %}checked{% endif %}>
           <label for="f_exclude_vat">{{ t('inv.exclude_vat') }}</label>
         </div>
         <p class="hint">{{ t('inv.exclude_vat_hint') }}</p>
@@ -233,6 +236,7 @@
 {% block scripts %}
 <script src="{{ static('js/customer-alert.js') }}"></script>
 <script src="{{ static('js/picker.js') }}"></script>
+<script src="{{ static('js/customer-vat.js') }}"></script>
 {# The one list behind every description box on this page. A <datalist> is
    the browser's own combo box: the field still accepts anything typed, so a
    custom description needs no second field to live in. #}

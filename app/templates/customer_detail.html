@@ -30,6 +30,9 @@
         {% if customer['phone'] %}<dt>{{ t('cust.phone') }}</dt><dd>{{ customer['phone'] }}</dd>{% endif %}
         {% if customer['email'] %}<dt>{{ t('cust.email') }}</dt><dd>{{ customer['email'] }}</dd>{% endif %}
         {% if customer['vat_number'] %}<dt>{{ t('cust.vat_number') }}</dt><dd>{{ customer['vat_number'] }}</dd>{% endif %}
+        {# Shown on their own record, so that an invoice arriving without VAT
+           has a visible reason sitting one click away. #}
+        {% if customer['no_vat'] %}<dt>{{ t('cust.vat') }}</dt><dd>{{ t('cust.no_vat_applied') }}</dd>{% endif %}
         {% if customer['address'] %}<dt>{{ t('cust.address') }}</dt><dd>{{ customer['address'] }}</dd>{% endif %}
         {% if customer['notes'] %}<dt>{{ t('cust.notes') }}</dt><dd>{{ customer['notes'] }}</dd>{% endif %}
       </dl>

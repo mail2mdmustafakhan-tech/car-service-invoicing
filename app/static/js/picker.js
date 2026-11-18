@@ -27,6 +27,9 @@
         var option = document.createElement("option");
         option.value = String(item.id);
         option.textContent = item.label;
+        if (item.no_vat) {
+            option.setAttribute("data-no-vat", "1");
+        }
         if (item.alert_level) {
             option.setAttribute("data-alert-level", item.alert_level);
             option.setAttribute("data-alert-label", item.alert_label || "");

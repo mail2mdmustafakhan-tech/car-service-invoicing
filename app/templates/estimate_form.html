@@ -21,6 +21,8 @@
 {# Same element ids as the invoice editor on purpose: both are driven by
    static/js/invoice-form.js, so the running totals cannot drift apart. #}
 <form method="post" id="estimate-form"
+      data-vat-aware data-vat-note="{{ t('cust.no_vat_applied') }}"
+      {% if editing %}data-editing{% endif %}
       action="{{ '/estimates/' ~ estimate['id'] ~ '/edit' if editing else '/estimates/new' }}">
 
   <section class="panel">
@@ -184,8 +186,8 @@
             #}
             <div class="check">
               <input type="checkbox" id="f_exclude_vat" name="exclude_vat" value="1"
-                     data-vat-off
-                     {% if editing and not estimate['vat_rate_bp'] %}checked{% endif %}>
+                     {% if editing %}{% if not estimate['vat_rate_bp'] %}checked{% endif %}
+                     {%- elif is_vat_exempt(chosen_customer) %}checked{% endif %}>
               <label for="f_exclude_vat">{{ t('inv.exclude_vat') }}</label>
             </div>
             <div class="check">
@@ -221,6 +223,7 @@
 {% block scripts %}
 <script src="{{ static('js/customer-alert.js') }}"></script>
 <script src="{{ static('js/picker.js') }}"></script>
+<script src="{{ static('js/customer-vat.js') }}"></script>
 {# The one list behind every description box on this page. A <datalist> is
    the browser's own combo box: the field still accepts anything typed, so a
    custom description needs no second field to live in. #}

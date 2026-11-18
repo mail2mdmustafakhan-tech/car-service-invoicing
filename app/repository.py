@@ -289,6 +289,9 @@ def reserve_contract_no(conn: sqlite3.Connection) -> str:
 CUSTOMER_FIELDS = (
     "name", "name_ar", "phone", "email", "address", "vat_number", "notes",
     "category", "is_active",
+    # Whether this customer is ever charged VAT. A default for the documents
+    # raised for them, not a lock on those documents -- see migration 016.
+    "no_vat",
     # The warning on their file. See migration 011: a level and a reason,
     # where the level decides how hard the application interrupts.
     "alert_level", "alert_note", "alert_set_on",

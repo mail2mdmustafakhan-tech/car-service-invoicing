@@ -61,6 +61,11 @@
 #}
 {% macro customer_option_data(c) -%}
 {%- if c['alert_level'] %} data-alert-level="{{ c['alert_level'] }}" data-alert-label="{{ t('alert.' ~ c['alert_level']) }}" data-alert-note="{{ c['alert_note'] }}" data-alert-when="{{ c['alert_set_on'] }}"{% endif %}
+{#- Travels with the option so that choosing a customer who is never charged
+    VAT ticks the box on the document straight away, with the reason shown.
+    It rides here rather than being fetched separately because the moment it
+    matters is the moment of choosing. -#}
+{%- if c['no_vat'] %} data-no-vat="1"{% endif %}
 {%- endmacro %}
 
 {#

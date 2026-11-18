@@ -409,6 +409,21 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     "cust.cat_fleet": ("Fleet or business", "أسطول أو منشأة"),
     "cust.active": ("Active", "نشط"),
     "cust.inactive": ("Inactive", "غير نشط"),
+    "cust.vat": ("VAT", "\u0627\u0644\u0636\u0631\u064a\u0628\u0629"),
+    "cust.no_vat": ("Never charge VAT to this customer",
+                    "\u0644\u0627 \u062a\u064f\u062d\u062a\u0633\u0628 \u0636\u0631\u064a\u0628\u0629 \u0627\u0644\u0642\u064a\u0645\u0629 \u0627\u0644\u0645\u0636\u0627\u0641\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u0639\u0645\u064a\u0644"),
+    "cust.no_vat_hint": (
+        "Their invoices and estimates will start with \u201cexcluding VAT\u201d "
+        "already ticked. You can still change it on any one of them, and "
+        "nothing already issued is affected.",
+        "\u0633\u062a\u0628\u062f\u0623 \u0641\u0648\u0627\u062a\u064a\u0631\u0647 \u0648\u0639\u0631\u0648\u0636 \u0627\u0644\u0623\u0633\u0639\u0627\u0631 \u0648\u062e\u064a\u0627\u0631 \u00ab\u0628\u062f\u0648\u0646 \u0636\u0631\u064a\u0628\u0629\u00bb \u0645\u062d\u062f\u062f\u0627\u064b. "
+        "\u0648\u064a\u0645\u0643\u0646\u0643 \u062a\u063a\u064a\u064a\u0631\u0647 \u0641\u064a \u0623\u064a \u0645\u0646\u0647\u0627\u060c \u0648\u0644\u0627 \u064a\u062a\u0623\u062b\u0631 \u0645\u0627 \u0635\u062f\u0631 \u0645\u0646 \u0642\u0628\u0644.",
+    ),
+    "cust.no_vat_applied": (
+        "This customer is never charged VAT.",
+        "\u0647\u0630\u0627 \u0627\u0644\u0639\u0645\u064a\u0644 \u0644\u0627 \u062a\u064f\u062d\u062a\u0633\u0628 \u0639\u0644\u064a\u0647 \u0627\u0644\u0636\u0631\u064a\u0628\u0629.",
+    ),
+    "cust.no_vat_badge": ("No VAT", "\u0628\u062f\u0648\u0646 \u0636\u0631\u064a\u0628\u0629"),
     "cust.type": ("Customer type", "\u0646\u0648\u0639 \u0627\u0644\u0639\u0645\u064a\u0644"),
     "cust.any_type": ("Any type", "\u0643\u0644 \u0627\u0644\u0623\u0646\u0648\u0627\u0639"),
     "cust.alert": ("Warning", "\u062a\u0646\u0628\u064a\u0647"),

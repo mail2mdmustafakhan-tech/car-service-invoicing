@@ -267,6 +267,22 @@ def ctx(
             return f"{label} ({format_rate(rate)}%)"
         return label
 
+    def is_vat_exempt(customer_id: Any = None) -> bool:
+        """Whether this customer is never charged VAT.
+
+        Answered on the server as well as in the browser, so that a new
+        document for an exempt customer starts out right even if the script
+        never runs. The direction of the failure is what decides this: the
+        browser failing should not mean billing somebody tax they do not owe.
+        """
+        customer_id = _chosen_id(customer_id)
+        if not customer_id:
+            return False
+        try:
+            return bool(repo.get_customer(conn, customer_id)["no_vat"])
+        except repo.NotFound:
+            return False
+
     def picker_customers(chosen: Any = None) -> list[Any]:
         """The customers to put in a form's dropdown.
 
@@ -325,6 +341,7 @@ def ctx(
         "opt_label2": opt_label2,
         "counts_for": counts_for,
         "discount_label": discount_label,
+        "is_vat_exempt": is_vat_exempt,
         "picker_customers": picker_customers,
         "cars_of": cars_of,
         "ALERT_LEVELS": repo.ALERT_LEVELS,
@@ -573,6 +590,7 @@ def customer_create(
     category: str = Form("regular"),
     alert_level: str = Form(""),
     alert_note: str = Form(""),
+    no_vat: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
     try:
@@ -592,6 +610,7 @@ def customer_create(
             "category": forms.one_of(
                 category, _customer_type_values(conn), default="regular"
             ),
+            "no_vat": forms.checkbox(no_vat),
         }
     except FormError as exc:
         return render(request, conn, "customer_form.html", customer=None, error=str(exc))
@@ -1011,6 +1030,7 @@ def customer_update(
     alert_level: str = Form(""),
     alert_note: str = Form(""),
     is_active: str = Form(None),
+    no_vat: str = Form(None),
     conn: Connection = Depends(get_conn),
 ):
     try:
@@ -1027,6 +1047,7 @@ def customer_update(
             "category": forms.one_of(
                 category, _customer_type_values(conn), default="regular"
             ),
+            "no_vat": forms.checkbox(no_vat),
             "is_active": forms.checkbox(is_active),
         }
     except FormError as exc:
@@ -3404,6 +3425,7 @@ def api_customers(
             {
                 "id": c["id"],
                 "label": _customer_label(c),
+                "no_vat": bool(c["no_vat"]),
                 "alert_level": c["alert_level"] or "",
                 "alert_label": t(f"alert.{c['alert_level']}", lang) if c["alert_level"] else "",
                 "alert_note": c["alert_note"] or "",

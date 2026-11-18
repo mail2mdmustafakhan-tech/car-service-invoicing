@@ -1,0 +1,17 @@
+-- Customers who are never charged VAT.
+--
+-- The tick-box added in the last change answers "is *this* invoice without
+-- VAT". For some customers the answer is always yes, and ticking it by hand
+-- on every document is both tedious and a thing to forget -- and forgetting
+-- it means billing somebody tax they do not pay, which they notice.
+--
+-- So the answer can live on the customer instead. It is a *default*, not a
+-- lock: the tick-box on each invoice and estimate still decides that
+-- document, and still shows what it is going to do before it is saved. A
+-- customer's standing arrangement should save somebody from remembering it,
+-- not stop them departing from it on the one job where it does not apply.
+--
+-- What it deliberately does not do is change anything already issued. An
+-- invoice records the tax decision that was made when it was raised; ticking
+-- this box today says nothing about what was charged last March.
+ALTER TABLE customers ADD COLUMN no_vat INTEGER NOT NULL DEFAULT 0;
