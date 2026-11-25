@@ -279,7 +279,7 @@
       <dd>
         {% if backup.latest %}
           {{ backup.latest.day }}
-          <span class="muted">({{ (backup.latest.bytes / 1000000) | round(1) }} MB)</span>
+          <span class="muted">({{ fmt_mb(backup.latest.bytes) }})</span>
           {% if backup.days_since == 0 %}&mdash; {{ t('set.backup_today') }}{% endif %}
         {% else %}
           {{ t('set.backup_none_yet') }}
@@ -287,7 +287,7 @@
       </dd>
 
       <dt>{{ t('set.backup_kept') }}</dt>
-      <dd>{{ backup.count }} &mdash; {{ (backup.total_bytes / 1000000) | round(1) }} MB</dd>
+      <dd>{{ backup.count }} &mdash; {{ fmt_mb(backup.total_bytes) }}</dd>
 
       <dt>{{ t('set.backup_folder') }}</dt>
       <dd><code class="path">{{ backup.folder }}</code></dd>
@@ -300,6 +300,32 @@
     {# Said plainly, because it is the part people get wrong: a copy on the
        same disk dies with the disk. #}
     <p class="hint warn">{{ t('set.backup_offsite') }}</p>
+  </div>
+</section>
+
+{# Records. Sits beside backups because it answers the same worry. #}
+<section class="panel">
+  <h2>{{ t('set.protect') }}</h2>
+  <div class="panel-body">
+    <form method="post" action="/settings/protect-records" class="inline-form">
+      <div class="check">
+        <input type="checkbox" id="f_protect" name="protect_records" value="1"
+               {% if settings['protect_records'] %}checked{% endif %}>
+        <label for="f_protect">{{ t('set.protect') }}</label>
+      </div>
+      <button class="btn" type="submit">{{ t('action.save') }}</button>
+    </form>
+    <p class="hint">{{ t('set.protect_hint') }}</p>
+  </div>
+</section>
+
+{# Last on the page on purpose. Nobody needs this until something feels
+   slow, and putting it higher would suggest it is part of the daily job. #}
+<section class="panel">
+  <h2>{{ t('perf.title') }}</h2>
+  <div class="panel-body">
+    <p class="hint">{{ t('perf.lede') }}</p>
+    <p><a class="btn" href="/settings/performance">{{ t('perf.title') }}</a></p>
   </div>
 </section>
 {% endblock %}

@@ -318,3 +318,32 @@ def trend(
     )
     parts.append("</svg>")
     return "".join(parts)
+
+
+def sparkline(points: list[tuple[float, float]], *, label: str = "") -> str:
+    """A small shape for a series of readings over time.
+
+    Deliberately not a real chart: no axes, no gridlines, no numbers along
+    the bottom. The only question it answers is "what shape is this" -- flat,
+    climbing, or sawtoothing -- and the figures either side of it in the page
+    give the actual values. Anything more would be furniture.
+
+    Scaled from zero rather than from the lowest reading. Scaled from the
+    low, a wobble of two megabytes over a day looks like a cliff, which is
+    how a chart tells a lie without a single wrong number in it.
+    """
+    values = [value for _, value in points]
+    if not values:
+        return ""
+
+    top = max(values) or 1.0
+    bars = []
+    for value in values:
+        height = max(2.0, 100.0 * value / top)
+        bars.append(f'<span class="spark-bar" style="--h: {height:.1f}%"></span>')
+
+    return (
+        f'<div class="spark" role="img" aria-label="{escape(label)}">'
+        + "".join(bars)
+        + "</div>"
+    )

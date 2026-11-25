@@ -44,3 +44,19 @@
   <button type="submit" class="btn danger small">{{ label }}</button>
 </form>
 {%- endmacro %}
+
+{#
+  The same button when records are protected: it marks the record inactive
+  rather than removing it, so it says so and is not painted as a danger.
+  A button labelled "Delete" that does not delete is worse than either.
+#}
+{% macro retire_form(action) %}
+{% if settings and settings['protect_records'] %}
+<form method="post" action="{{ action }}"
+      onsubmit="return confirm('{{ t('action.confirm_retire') }}')">
+  <button type="submit" class="btn small">{{ t('act.retire') }}</button>
+</form>
+{% else %}
+{{ delete_form(action, t('action.delete'), t('action.confirm_delete')) }}
+{% endif %}
+{%- endmacro %}

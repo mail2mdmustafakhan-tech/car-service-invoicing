@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pill, delete_form with context %}
+{% from "_macros.html" import pill, delete_form, retire_form with context %}
 {% block title %}{{ vehicle['plate_no'] }}{% endblock %}
 
 {% block content %}
@@ -37,7 +37,7 @@
       {% if vehicle['notes'] %}<dt>{{ t('veh.notes') }}</dt><dd>{{ vehicle['notes'] }}</dd>{% endif %}
     </dl>
     <div class="formactions">
-      {{ delete_form('/vehicles/' ~ vehicle['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+      {{ retire_form('/vehicles/' ~ vehicle['id'] ~ '/delete') }}
     </div>
   </div>
 </section>

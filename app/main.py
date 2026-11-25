@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
@@ -33,8 +34,19 @@ from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 
-from . import backups, charts, exporting, forms, importing, messaging, register_import
+from . import (
+    backups,
+    charts,
+    exporting,
+    forms,
+    importing,
+    item_import,
+    messaging,
+    register_import,
+    telemetry,
+)
 from . import repository as repo
 from .db import backup_archive, connect, db_path, migrate, session
 from .forms import FormError
@@ -88,6 +100,43 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 
+def _megabytes(byte_count: float) -> str:
+    """A size, kept together as one left-to-right run.
+
+    "0.6 MB" is a number and a unit that belong to each other, but in an
+    Arabic page the bidirectional algorithm resolves them as separate runs
+    and lays them out right-to-left: the reader sees "MB 0.6". Isolating
+    the pair fixes the order without affecting the English page at all.
+
+    `isolate` rather than `plaintext`, and an explicit `dir` rather than a
+    <bdi>, because WeasyPrint supports the first of each pair and not the
+    second -- and these sizes appear on screens that get printed.
+    """
+    return Markup(
+        '<span dir="ltr" style="unicode-bidi: isolate">{} MB</span>'
+    ).format(f"{byte_count / 1_000_000:.1f}")
+
+
+def _uptime_words(seconds: float, lang: str = "en") -> str:
+    """"3 days, 4 hours" -- how long this has been counting.
+
+    Said in words because the number is only ever read as context for the
+    figures beside it: an average over four minutes and an average over
+    four days mean different things, and "345,600s" makes somebody do
+    arithmetic to find that out.
+    """
+    minutes = int(seconds // 60)
+    if minutes < 1:
+        return t("perf.up_new", lang)
+    if minutes < 60:
+        return t("perf.up_min", lang).format(n=minutes)
+    hours, minutes = divmod(minutes, 60)
+    if hours < 24:
+        return t("perf.up_hour", lang).format(h=hours, m=minutes)
+    days, hours = divmod(hours, 24)
+    return t("perf.up_day", lang).format(d=days, h=hours)
+
+
 def static_url(path: str) -> str:
     """A stylesheet or script URL that changes whenever the file does.
 
@@ -118,6 +167,9 @@ templates.env.globals.update(
     meter_list=charts.meter_list,
     donut=charts.donut,
     trend_chart=charts.trend,
+    memory_chart=charts.sparkline,
+    fmt_mb=_megabytes,
+    fmt_uptime=_uptime_words,
     LANGUAGES=LANGUAGES,
     PDF_AVAILABLE=PDF_AVAILABLE,
     fmt_qty=format_qty,
@@ -157,10 +209,75 @@ def page_url(request: Request, number: int) -> str:
 # Per-request plumbing
 # --------------------------------------------------------------------------
 
-def get_conn() -> Iterator[Connection]:
-    """Open a database connection for the duration of one request."""
+def get_conn(request: Request) -> Iterator[Connection]:
+    """Open a database connection for the duration of one request.
+
+    It also counts the queries that go through it, onto the request, so the
+    performance page can say how many a screen costs. SQLite's own trace
+    hook does the counting -- a wrapper class around the connection would
+    have to re-implement every method it forwards, and would be one more
+    thing to keep in step with sqlite3.
+    """
     with session() as conn:
-        yield conn
+        counter = _QueryCount()
+        conn.set_trace_callback(counter)
+        request.state.queries = counter
+        try:
+            yield conn
+        finally:
+            conn.set_trace_callback(None)
+
+
+class _QueryCount:
+    """Counts statements, and is cheap enough to leave switched on."""
+
+    __slots__ = ("n",)
+
+    def __init__(self) -> None:
+        self.n = 0
+
+    def __call__(self, _statement: str) -> None:
+        self.n += 1
+
+
+@app.middleware("http")
+async def measure(request: Request, call_next: Any) -> Any:
+    """Time every request, and remember it by route rather than by URL.
+
+    By route -- "/invoices/{invoice_id}" rather than "/invoices/4471" --
+    because otherwise five thousand invoices make five thousand entries and
+    the page that is meant to show which screen is slow shows nothing at
+    all.
+
+    Static files are skipped: they are served straight from disk, they are
+    the overwhelming majority of requests, and timing them would bury the
+    pages that matter under a hundred stylesheet fetches.
+    """
+    if request.url.path.startswith("/static"):
+        return await call_next(request)
+
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        counter = getattr(request.state, "queries", None)
+        route = request.scope.get("route")
+        # Group by the matched route, so one invoice screen is one row and
+        # not five thousand. Requests that matched nothing are all filed
+        # under one name rather than under whatever was typed: otherwise a
+        # typo spray or a bot probing for /wp-login.php would add a row per
+        # address and grow this dictionary without limit -- a memory leak on
+        # the page whose job is to show memory leaks.
+        telemetry.stats.record(
+            getattr(route, "path", None) or telemetry.UNMATCHED,
+            (time.perf_counter() - started) * 1000,
+            status=status,
+            queries=counter.n if counter else 0,
+            path=request.url.path,
+        )
 
 
 def current_lang(request: Request, settings: Any) -> str:
@@ -1070,6 +1187,13 @@ def customer_update(
 
 @app.post("/customers/{customer_id}/delete")
 def customer_delete(customer_id: int, conn: Connection = Depends(get_conn)):
+    # With records protected, this button means "retire", and the template
+    # labels it so. The route still honours it if the label is stale --
+    # somebody who left the page open before the switch was flipped should
+    # get the safe behaviour, not the behaviour their page was drawn with.
+    if repo.records_protected(conn):
+        repo.retire_customer(conn, customer_id)
+        return go(f"/customers/{customer_id}", msg="msg.retired")
     try:
         repo.delete_customer(conn, customer_id)
     except repo.InUse as exc:
@@ -1255,6 +1379,9 @@ def vehicle_update(
 @app.post("/vehicles/{vehicle_id}/delete")
 def vehicle_delete(vehicle_id: int, conn: Connection = Depends(get_conn)):
     vehicle = repo.get_vehicle(conn, vehicle_id)
+    if repo.records_protected(conn):
+        repo.retire_vehicle(conn, vehicle_id)
+        return go(f"/vehicles/{vehicle_id}", msg="msg.retired")
     try:
         repo.delete_vehicle(conn, vehicle_id)
     except repo.InUse as exc:
@@ -1265,6 +1392,97 @@ def vehicle_delete(vehicle_id: int, conn: Connection = Depends(get_conn)):
 # --------------------------------------------------------------------------
 # Service and parts catalogue
 # --------------------------------------------------------------------------
+
+# Importing a price list. Static paths are declared before the
+# {item_id: int} routes further down, or /catalog/import is read as an
+# item whose id is "import" -- bug 7 in the architecture notes, twice.
+
+@app.get("/catalog/import", response_class=HTMLResponse)
+def item_import_start(
+    request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    return render(request, conn, "item_import.html", batch=None, rows=[],
+                  summary=None, error="")
+
+
+@app.get("/catalog/import/template")
+def item_import_template() -> Response:
+    """A workbook with the expected headings and two example rows."""
+    return Response(
+        content=item_import.template_xlsx(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition":
+                'attachment; filename="item-import-template.xlsx"'
+        },
+    )
+
+
+@app.post("/catalog/import")
+async def item_import_upload(
+    request: Request,
+    spreadsheet: UploadFile = File(...),
+    conn: Connection = Depends(get_conn),
+):
+    """Parse an upload into a batch and show what it would do.
+
+    Nothing reaches the catalogue here. The batch is a staging area so
+    the preview can be read first -- a price list is not something
+    anybody wants to unpick by hand afterwards.
+    """
+    data = await spreadsheet.read()
+    try:
+        rows = item_import.read_table(data, spreadsheet.filename or "")
+        codes, names = repo.existing_catalog_keys(conn)
+        prepared, summary = item_import.prepare(
+            rows, existing_codes=codes, existing_names=names
+        )
+    except item_import.ImportError_ as exc:
+        return render(request, conn, "item_import.html", batch=None, rows=[],
+                      summary=None, error=str(exc))
+
+    batch_id = repo.create_import_batch(
+        conn, spreadsheet.filename or "upload", prepared
+    )
+    return go(f"/catalog/import/{batch_id}")
+
+
+@app.get("/catalog/import/{batch_id}", response_class=HTMLResponse)
+def item_import_preview(
+    batch_id: int, request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    batch, rows = repo.get_import_batch(conn, batch_id)
+    ready = sum(1 for r in rows if not r.get("skip"))
+    summary = {
+        "total": len(rows),
+        "ready": ready,
+        "skipped": len(rows) - ready,
+        "unmapped": [],
+        "fields": [],
+        "priced": sum(1 for r in rows
+                      if not r.get("skip") and r.get("unit_price_minor")),
+    }
+    return render(request, conn, "item_import.html", batch=batch, rows=rows,
+                  summary=summary, error="")
+
+
+@app.post("/catalog/import/{batch_id}/confirm")
+def item_import_confirm(batch_id: int, conn: Connection = Depends(get_conn)):
+    try:
+        result = repo.commit_item_batch(conn, batch_id)
+    except repo.InUse as exc:
+        return go("/catalog", err=str(exc))
+    return go("/catalog",
+              msg="msg.imported" if result["imported"] else "msg.nothing_imported")
+
+
+@app.post("/catalog/import/{batch_id}/cancel")
+def item_import_cancel(batch_id: int, conn: Connection = Depends(get_conn)):
+    repo.cancel_import_batch(conn, batch_id)
+    return go("/catalog")
+
 
 @app.get("/catalog", response_class=HTMLResponse)
 def catalog_list(
@@ -1460,17 +1678,7 @@ def _invoice_form_context(
         "catalog": catalog,
         # Plain dictionaries, embedded in the page as JSON so picking a
         # catalogue item on a line fills it in with no network round-trip.
-        "catalog_json": [
-            {
-                "id": i["id"],
-                "name_en": i["name_en"],
-                "name_ar": i["name_ar"],
-                "kind": i["kind"],
-                "unit": i["unit"],
-                "price": str(from_minor(i["unit_price_minor"])),
-            }
-            for i in catalog
-        ],
+        "catalog_json": _catalog_json(catalog),
         "default_vat_bp": settings["vat_rate_bp"],
         "default_include_vat": settings["prices_include_vat"],
         "error": error,
@@ -1897,6 +2105,12 @@ def invoice_status(
 
 @app.post("/invoices/{invoice_id}/delete")
 def invoice_delete(invoice_id: int, conn: Connection = Depends(get_conn)):
+    # An issued invoice is already un-deletable -- it is voided instead, so
+    # the number stays accounted for. With records protected a draft is
+    # treated the same way, which is the only gap there was.
+    if repo.records_protected(conn):
+        repo.set_invoice_status(conn, invoice_id, "void")
+        return go(f"/invoices/{invoice_id}", msg="msg.voided")
     try:
         repo.delete_invoice(conn, invoice_id)
     except repo.InUse as exc:
@@ -2055,17 +2269,7 @@ def _estimate_form_context(
         "customers": repo.list_customers(conn),
         "vehicles": repo.list_vehicles(conn),
         "catalog": catalog,
-        "catalog_json": [
-            {
-                "id": i["id"],
-                "name_en": i["name_en"],
-                "name_ar": i["name_ar"],
-                "kind": i["kind"],
-                "unit": i["unit"],
-                "price": str(from_minor(i["unit_price_minor"])),
-            }
-            for i in catalog
-        ],
+        "catalog_json": _catalog_json(catalog),
         "default_vat_bp": settings["vat_rate_bp"],
         "default_include_vat": settings["prices_include_vat"],
         "validity_days": settings["estimate_validity_days"],
@@ -2532,17 +2736,7 @@ def _contract_form_context(
         "vehicles": repo.list_vehicles(conn),
         "catalog": catalog,
         "services": [c for c in catalog if c["kind"] == "service"],
-        "catalog_json": [
-            {
-                "id": i["id"],
-                "name_en": i["name_en"],
-                "name_ar": i["name_ar"],
-                "kind": i["kind"],
-                "unit": i["unit"],
-                "price": str(from_minor(i["unit_price_minor"])),
-            }
-            for i in catalog
-        ],
+        "catalog_json": _catalog_json(catalog),
         "parts_markup_bp": settings["parts_markup_bp"],
         "error": error,
     }
@@ -3400,6 +3594,105 @@ def _cleanup(tmp: TemporaryDirectory):
 # Small JSON endpoints used by the invoice form
 # --------------------------------------------------------------------------
 
+@app.post("/settings/protect-records")
+def settings_protect_records(
+    protect_records: str = Form(""),
+    conn: Connection = Depends(get_conn),
+):
+    """Turn deletion off, or back on.
+
+    Its own small form rather than a field on the big Settings form: this
+    is the one setting whose effect somebody will want to switch and then
+    immediately go and try, and making them scroll to the bottom of a long
+    form and press Save would hide that.
+    """
+    repo.update_settings(conn, {"protect_records": 1 if protect_records else 0})
+    return go("/settings", msg="msg.saved")
+
+
+@app.get("/settings/performance")
+def performance_page(
+    request: Request, conn: Connection = Depends(get_conn)
+) -> HTMLResponse:
+    """How the application is behaving, so a slowdown can be answered.
+
+    Under Settings rather than on the dashboard: the dashboard is about the
+    business, and nobody at the counter needs to know what the median
+    response time of the invoice list is. This is for the day something
+    feels wrong.
+    """
+    data = telemetry.stats.snapshot()
+    return render(
+        request, conn, "performance.html",
+        perf=data,
+        db_bytes=db_path().stat().st_size if db_path().exists() else 0,
+        attachment_bytes=_folder_size(db_path().parent / "attachments"),
+        backup=backups.status(),
+        table_rows=repo.table_sizes(conn),
+    )
+
+
+@app.post("/settings/performance/reset")
+def performance_reset():
+    """Start the counting again, to see whether a change helped."""
+    telemetry.stats.reset()
+    return go("/settings/performance", msg="perf.reset_done")
+
+
+def _folder_size(folder: Path) -> int:
+    try:
+        return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+    except OSError:
+        return 0
+
+
+@app.get("/manifest.webmanifest")
+def manifest(request: Request, conn: Connection = Depends(get_conn)) -> JSONResponse:
+    """What a tablet needs to add this to its home screen.
+
+    Served rather than shipped as a file because two of its fields come from
+    the database: the workshop's name, and its logo. A manifest with a
+    stranger's name on it is worse than none.
+
+    `display: standalone` is what makes it open as its own window instead of
+    a browser tab, which is the whole point -- a tool somebody reaches for
+    rather than a page they have to go and find.
+    """
+    settings = repo.get_settings(conn)
+    lang = current_lang(request, settings)
+    name = localised(settings, "business_name_en", lang) or t("app.name", lang)
+    logo = repo.logo_state(conn)
+
+    icons = []
+    if logo["logo_mime"]:
+        # One entry, "any size": the file is whatever was uploaded, and
+        # claiming a size here that the image does not have is how an icon
+        # ends up stretched on somebody's home screen.
+        icons.append({
+            "src": f"/logo?v={logo['updated_at'].replace(' ', '')}",
+            "sizes": "any",
+            "type": logo["logo_mime"],
+        })
+
+    return JSONResponse(
+        {
+            "name": name,
+            "short_name": name.split(" (")[0][:14],
+            "description": t("app.name", lang),
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "any",
+            "background_color": "#f7f8fa",
+            "theme_color": "#24306b",
+            "lang": lang,
+            "dir": "rtl" if lang == "ar" else "ltr",
+            "icons": icons,
+        },
+        media_type="application/manifest+json",
+    )
+
+
 @app.get("/api/customers")
 def api_customers(
     request: Request,
@@ -3467,21 +3760,7 @@ def api_customer_vehicles(
 @app.get("/api/catalog")
 def api_catalog(conn: Connection = Depends(get_conn)) -> JSONResponse:
     """The catalogue, for the item picker on each invoice line."""
-    items = repo.list_catalog(conn)
-    return JSONResponse(
-        [
-            {
-                "id": i["id"],
-                "code": i["code"],
-                "name_en": i["name_en"],
-                "name_ar": i["name_ar"],
-                "kind": i["kind"],
-                "unit": i["unit"],
-                "price": str(from_minor(i["unit_price_minor"])),
-            }
-            for i in items
-        ]
-    )
+    return JSONResponse(_catalog_json(repo.list_catalog(conn)))
 
 
 @app.get("/api/preview-totals")
@@ -3543,6 +3822,7 @@ def _catalog_json(catalog: Any) -> list[dict[str, Any]]:
     return [
         {
             "id": i["id"],
+            "code": i["code"],
             "name_en": i["name_en"],
             "name_ar": i["name_ar"],
             "kind": i["kind"],

@@ -431,3 +431,80 @@ def test_a_missing_static_file_does_not_crash_the_page(client):
     from app.main import static_url
 
     assert static_url("css/not-there.css") == "/static/css/not-there.css"
+
+
+# ---------------------------------------------------------------------------
+# On a tablet
+# ---------------------------------------------------------------------------
+
+def test_the_tablet_can_add_it_to_its_home_screen(shop):
+    """So it opens as its own window with the workshop's logo on it, rather
+    than as a tab among twenty others."""
+    response = shop.get("/manifest.webmanifest")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/manifest+json")
+
+    manifest = response.json()
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"] == "/"
+
+
+def test_the_manifest_carries_the_workshops_own_name(shop, web_db):
+    """A manifest with a stranger's name on it is worse than none."""
+    from app import db
+    from app import repository as repo
+
+    with db.session(web_db) as conn:
+        repo.update_settings(conn, {"business_name_en": "Advance Repair Center (ARC)"})
+        conn.commit()
+
+    manifest = shop.get("/manifest.webmanifest").json()
+    assert manifest["name"] == "Advance Repair Center (ARC)"
+    # Home-screen labels are clipped at about a dozen characters.
+    assert len(manifest["short_name"]) <= 14
+
+
+def test_the_manifest_claims_no_icon_size_it_cannot_honour(shop, web_db):
+    """Claiming a size the uploaded file does not have is how an icon ends up
+    stretched on somebody's home screen."""
+    from pathlib import Path
+
+    from app import db
+    from app import repository as repo
+
+    with db.session(web_db) as conn:
+        repo.set_logo(conn, Path("branding/arc-logo-512.png").read_bytes(),
+                      filename="arc-logo-512.png")
+        conn.commit()
+
+    icons = shop.get("/manifest.webmanifest").json()["icons"]
+    assert icons and icons[0]["sizes"] == "any"
+
+
+def test_the_page_points_at_the_manifest(shop):
+    page = shop.get("/").text
+    assert 'rel="manifest"' in page
+    assert 'name="viewport"' in page
+
+
+def test_controls_are_sized_for_a_finger_on_a_touch_screen():
+    """Keyed on the pointer, not on the width.
+
+    An iPad in landscape is 1180px wide -- wider than the laptop this was
+    built on -- and is still operated with a thumb, so a width query would
+    leave exactly the device that needs this looking like a desktop.
+    """
+    from pathlib import Path
+
+    css = Path("app/static/css/app.css").read_text()
+    assert "@media (pointer: coarse)" in css
+
+    block = css[css.index("@media (pointer: coarse)"):]
+    block = block[:block.index("\n}\n", block.index("min-height: 44px"))]
+    assert "min-height: 44px" in block
+    # The checkbox was 13px across and carries some of the most
+    # consequential answers in the application.
+    assert 'input[type="checkbox"]' in block
+    # 16px or Safari zooms the page in on focus and leaves it zoomed.
+    assert "max(1rem, 16px)" in block

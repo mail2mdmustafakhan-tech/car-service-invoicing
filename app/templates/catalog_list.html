@@ -11,7 +11,10 @@
     <h1>{{ t('cat.title') }}</h1>
     {{ countline(counts_for('catalog'), 'count.catalog') }}
   </div>
-  <div class="actions"><a class="btn accent" href="/catalog/new">{{ t('cat.new') }}</a></div>
+  <div class="actions">
+    <a class="btn" href="/catalog/import">{{ t('iimp.title') }}</a>
+    <a class="btn accent" href="/catalog/new">{{ t('cat.new') }}</a>
+  </div>
 </div>
 
 <p class="hint" style="margin-block:0 var(--space-4);color:var(--ink-faint)">{{ t('cat.hint') }}</p>

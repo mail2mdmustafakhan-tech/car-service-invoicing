@@ -148,6 +148,19 @@ table.items .desc-alt {
     text-align: start;
 }
 
+/* The item code above its description. Monospaced and small: the
+   customer quotes it back over the phone, so the digits have to be
+   unambiguous and a leading zero has to look deliberate. Isolated so a
+   code of digits keeps its order inside an Arabic line. */
+table.items .line-code {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    font-size: 8.5pt;
+    color: var(--doc-soft);
+    unicode-bidi: isolate;
+    direction: ltr;
+    text-align: start;
+}
+
 /* Keep a line's two scripts together, and never split the table head. */
 table.items tr { page-break-inside: avoid; }
 table.items thead { display: table-header-group; }

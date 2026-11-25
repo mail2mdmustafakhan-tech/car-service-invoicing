@@ -18,6 +18,22 @@
    ========================================================================== */
 
 :root {
+    /* Which way round the browser should draw the things it draws itself:
+       the arrow on a dropdown, the calendar on a date field, scrollbars,
+       and the list a dropdown opens.
+
+       Without this the browser assumes a light page whatever our colours
+       say, so in the dark theme it drew a dark arrow on a dark box. Chrome
+       happens to tint the arrow with the text colour and got away with it;
+       Safari does not, which is why this was reported from a phone and not
+       from the office PC. Reported, reproduced on the cause rather than on
+       the symptom, and fixed here.
+
+       One line per theme, and it governs every native control at once --
+       the alternative is drawing our own arrow on every dropdown and
+       chasing the date picker separately. */
+    color-scheme: light;
+
     /* Ink and paper: cool slate rather than warm black, so the amber accent
        below reads as a deliberate signal and not as decoration. */
     --ink:          #16202b;
@@ -139,6 +155,8 @@
    something cannot change meaning with the lights.
    ========================================================================== */
 [data-theme="dark"] {
+    color-scheme: dark;
+
     --ink:          #e8edf2;
     --ink-soft:     #a8b5c2;
     /* 4.55:1 before: it cleared AA by a hair and stopped clearing it
@@ -688,6 +706,9 @@ textarea { min-height: 72px; resize: vertical; }
 .facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--space-2) var(--space-4); }
 .facts dt { font-size: 0.82rem; color: var(--ink-faint); white-space: nowrap; }
 .facts dd { margin: 0; }
+/* A subheading straight after a facts list needs air above it, or it reads
+   as another row of the list rather than the start of the next thing. */
+.facts + .subhead { margin-block-start: var(--space-5); }
 
 /* --------------------------------------------------------------------------
    Invoice editor line table
@@ -892,6 +913,174 @@ textarea { min-height: 72px; resize: vertical; }
 .checkline { color: var(--ink-soft); font-style: italic; }
 tr.muted td { opacity: 0.55; }
 
+
+/* --- Finger-sized controls ------------------------------------------------
+   For the tablet at the ramp.
+
+   Keyed on `pointer: coarse`, not on width. An iPad in landscape is 1180px
+   wide -- wider than the laptop this was built on -- and is still operated
+   with a thumb, so a width query would leave exactly the device that needs
+   this looking like a desktop. What matters is the pointer, and the browser
+   will say which it is.
+
+   The floor is 44px, which is what Apple asks for and close to Google's
+   48px. Measured before writing a line of this: on an iPad the checkboxes
+   were 13px, the buttons 30px, and the inspection sheet -- 37 text boxes and
+   39 dropdowns, the one screen somebody would actually hold while walking
+   round a car -- was the worst of the lot.
+
+   Only sizes change here. No layout is rearranged and nothing is hidden:
+   a tablet should be the same application, reachable by finger. */
+@media (pointer: coarse) {
+    input, select, textarea, .btn, button {
+        min-height: 44px;
+    }
+
+    /* Inside a line-item row, where several sit side by side. */
+    .line-desc, .line-qty, .line-price, .line-unit, .cond, .num {
+        min-height: 44px;
+    }
+
+    /* The inspection sheet's condition box squeezed to 56px on a portrait
+       tablet, which clips "Attention" to "Att". The sheet already scrolls
+       sideways in portrait -- it is 103px wider than the screen -- so the
+       choice is between a little more scrolling and a dropdown whose
+       options cannot be read. Readable wins; and in landscape, which is how
+       this screen is actually held at the ramp, the whole sheet fits with
+       nothing off-screen at all. */
+    select.cond { min-width: 92px; }
+
+    /* 16px or larger, or Safari zooms the whole page in when the field is
+       focused and leaves it zoomed. The usual fix is to forbid zooming,
+       which takes it away from people who need it; sizing the text properly
+       does not. */
+    input, select, textarea {
+        font-size: max(1rem, 16px);
+    }
+
+    /* A tick-box was 13px across. Nothing else here is as hard to hit, and
+       they carry some of the most consequential answers in the application
+       -- whether VAT is charged, whether a line is quoted. */
+    input[type="checkbox"], input[type="radio"] {
+        width: 24px;
+        height: 24px;
+        min-height: 24px;
+    }
+    /* The label comes with it, so the whole row is the target rather than
+       the box alone. */
+    .check {
+        min-height: 44px;
+        gap: var(--space-3);
+    }
+    .check label {
+        padding-block: var(--space-2);
+        cursor: pointer;
+    }
+
+    /* Links inside tables are text, and text is 19px tall. Padding the row
+       rather than the link keeps the table's shape. */
+    td a, th a, .sort-link {
+        display: inline-block;
+        padding-block: var(--space-2);
+    }
+
+    /* The rest of the links that are not buttons: the navigation tabs, the
+       language switch, the breadcrumb back up a level, and the small ones
+       under a field ("New customer"). Found by measuring rather than by
+       listing what seemed likely -- the breadcrumb was 16px and the one
+       under the customer picker 15px. */
+    .topnav a, .langswitch a, .breadcrumb a, .hint a {
+        display: inline-block;
+        padding-block: var(--space-2);
+        min-height: 44px;
+        line-height: 1.9;
+    }
+
+    /* Two taps' worth of separation between anything destructive and
+       anything ordinary. A mis-tap on a tablet is far likelier than a
+       mis-click. */
+    .formactions, .rowactions, .toolbar, .filterbar {
+        gap: var(--space-4);
+    }
+}
+
+
+/* The item code, sitting above the description it refers to. Small and
+   recessive: it is a reference somebody quotes back, not something to
+   read down the page. Monospaced so a column of them lines up and a
+   leading zero is unmistakably part of the code. */
+.line-code {
+  font-family: var(--mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  font-size: 0.8em;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+/* --- The performance page -----------------------------------------------
+   Figures, a few bars, and nothing that moves. Colour is used only where it
+   changes what somebody would do: a page nobody would notice is not marked,
+   however the numbers read. */
+.num.warm { color: var(--amber); font-weight: 600; }
+.num.slow { color: var(--void-ink); font-weight: 600; }
+.kpi-bad .kpi-figure { color: var(--void-ink); }
+.tag-bad {
+  display: inline-block;
+  margin-inline-start: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius);
+  background: var(--void-soft);
+  color: var(--void-ink);
+  font-size: 0.75rem;
+}
+
+/* The share column is aligned to the start, because its bars grow from
+   there. Right-aligned, the longest bar begins furthest left and the eye
+   has to find each one's starting point before it can compare them. */
+th.share, td.share { text-align: start; }
+
+/* A facts list straight under a heading, with no line of explanation
+   between them, needs the gap the explanation would have given. */
+h2 + .facts { margin-block-start: var(--space-4); }
+
+/* Share of total time, as a bar in the cell rather than a number. Which
+   page to work on first is a comparison, and a row of percentages makes
+   the reader do that comparison themselves. */
+.meterbar {
+  /* Block, not inline-block: a block box takes the inline-start edge of
+     its cell by itself, which is the left in English and the right in
+     Arabic. Aligning an inline box with text-align did the right thing in
+     one direction and left the bars ragged in the other. */
+  display: block;
+  width: var(--w, 0%);
+  min-width: 2px;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--chart-bar);
+}
+
+/* The memory shape. No axes and no numbers: the figures either side of it
+   give the values, and this answers only "flat, climbing, or sawtoothing". */
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 56px;
+  margin: var(--space-3) 0;
+  padding: var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.spark-bar {
+  flex: 1 1 auto;
+  min-width: 2px;
+  height: var(--h, 2%);
+  border-radius: 1px 1px 0 0;
+  background: var(--chart-bar);
+}
+
+@media print { .spark, .meterbar { display: none; } }
+
 /* --- Pager ---------------------------------------------------------------
    Under every list. The count on the left is the part that matters: it is
    what tells somebody a fifty-row page is not a fifty-row list. */
@@ -1061,7 +1250,7 @@ code.path {
 .tag.ok        { background: var(--paid-soft); color: var(--paid-ink); }
 .tag.attention { background: var(--amber-soft); color: var(--amber); }
 .tag.urgent    { background: var(--void-soft); color: var(--void-ink); }
-.tag.na        { background: var(--surface-sunken); color: var(--ink-faint); }
+.tag.na        { background: var(--paper); color: var(--ink-faint); }
 
 /* --------------------------------------------------------------------------
    Printing an application page
@@ -1080,6 +1269,8 @@ code.path {
         --ink:          #16202b;
         --ink-soft:     #4a5a6a;
         --ink-faint:    #5b6977;
+        /* Paper is light, whatever the screen was set to. */
+        color-scheme: light;
         --paper:        #ffffff;
         --surface:      #ffffff;
         --rule:         #dce1e6;

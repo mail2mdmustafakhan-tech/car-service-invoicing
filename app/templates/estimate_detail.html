@@ -103,7 +103,10 @@
         {% for item in items %}
         <tr>
           <td class="secondary">{{ item['line_no'] }}</td>
-          <td>{{ loc(item, 'description') }}</td>
+          <td>
+            {% if item['code'] %}<div class="line-code">{{ item['code'] }}</div>{% endif %}
+            {{ loc(item, 'description') }}
+          </td>
           <td class="tight secondary">{{ t('cat.unit_' ~ item['unit']) }}</td>
           <td class="num">{{ fmt_qty(item['qty_milli']) }}</td>
           <td class="num">{{ m(item['unit_price_minor']) }}</td>

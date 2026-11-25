@@ -11,6 +11,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {#
+    For a tablet kept on the counter or carried to the ramp. Added to the
+    home screen, these make it open as its own window with the workshop's
+    logo on it, rather than as a tab among twenty others -- which is the
+    difference between a tool somebody reaches for and a page they have to
+    go and find.
+
+    `theme-color` paints the status bar to match the top bar, so the seam
+    between the operating system and the application does not show.
+  #}
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#24306b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  {# Home-screen labels are clipped at about a dozen characters, so this is
+     the short form rather than the full registered name. #}
+  <meta name="apple-mobile-web-app-title" content="{{ (loc(settings, 'business_name_en') or t('app.name')).split(' (')[0][:14] }}">
+  {% if has_logo %}<link rel="apple-touch-icon" href="{{ logo_url }}">{% endif %}
   <title>{% block title %}{{ t('app.name') }}{% endblock %} — {{ loc(settings, 'business_name_en') or t('app.name') }}</title>
   {#
     The theme is set before the stylesheet loads, not after the page does.

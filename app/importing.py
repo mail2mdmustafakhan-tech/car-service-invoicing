@@ -116,6 +116,73 @@ def _read_csv(data: bytes) -> list[list[Any]]:
     )]
 
 
+#: Elements that describe how a workbook looked or printed, never what it
+#: contains. Stripped only when a file has already failed to open.
+_PRESENTATION_ELEMENTS = (
+    "bookViews", "sheetViews", "pageSetup", "printOptions",
+    "pageMargins", "headerFooter", "legacyDrawing", "drawing",
+)
+
+
+def _without_presentation(data: bytes) -> bytes | None:
+    """Return the workbook with its layout elements removed, or None.
+
+    Some systems write a .xlsx whose attribute names do not match the
+    standard's spelling -- WindowWidth for windowWidth, firstPageNo for
+    firstPageNumber. Excel and LibreOffice open such a file without
+    complaint, so to whoever exported it the file looks perfectly good;
+    openpyxl's parser refuses it outright and the upload fails with
+    nothing the user can act on. The report Mohammed sent on 2026-11-25
+    was one of these, and it would have been refused by the customer and
+    vehicle importers just the same.
+
+    Every element removed here records where a window sat or how a page
+    printed. None of them holds a cell value, so dropping them to get at
+    the rows loses nothing that an import would ever have read. Patching
+    the attribute spellings one at a time was the alternative, and that
+    is a game with no end: this file alone had two, in two different
+    parts.
+
+    Attempted only after a straight read has already failed, so an
+    ordinary file never takes this path.
+    """
+    import re
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as source:
+            names = source.namelist()
+            if "xl/workbook.xml" not in names:
+                return None
+            contents = {name: source.read(name) for name in names}
+    except (zipfile.BadZipFile, KeyError, OSError):
+        return None
+
+    pattern = re.compile(
+        r"<(?:" + "|".join(_PRESENTATION_ELEMENTS) + r")\b[^>]*?/>"
+        r"|<(" + "|".join(_PRESENTATION_ELEMENTS) + r")\b.*?</\1>",
+        re.S,
+    )
+    changed = False
+    for name, payload in list(contents.items()):
+        if not (name == "xl/workbook.xml" or name.startswith("xl/worksheets/")):
+            continue
+        text = payload.decode("utf-8", "replace")
+        stripped = pattern.sub("", text)
+        if stripped != text:
+            contents[name] = stripped.encode("utf-8")
+            changed = True
+
+    if not changed:
+        return None  # something else was wrong; do not pretend otherwise
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target:
+        for name, payload in contents.items():
+            target.writestr(name, payload)
+    return buffer.getvalue()
+
+
 def _read_xlsx(data: bytes) -> list[list[Any]]:
     try:
         from openpyxl import load_workbook
@@ -125,12 +192,25 @@ def _read_xlsx(data: bytes) -> list[list[Any]]:
             "Alternatively, save the sheet as CSV and upload that."
         ) from exc
 
-    try:
+    def open_book(payload: bytes):
         # read_only keeps a large sheet from being loaded into memory whole;
         # data_only takes the value a formula produced rather than the formula.
-        book = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        return load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+
+    try:
+        book = open_book(data)
     except Exception as exc:
-        raise ImportError_("That file could not be opened as a spreadsheet.") from exc
+        repaired = _without_presentation(data)
+        if repaired is None:
+            raise ImportError_(
+                "That file could not be opened as a spreadsheet."
+            ) from exc
+        try:
+            book = open_book(repaired)
+        except Exception:
+            raise ImportError_(
+                "That file could not be opened as a spreadsheet."
+            ) from exc
 
     sheet = book.active
     rows = [

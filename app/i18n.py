@@ -251,6 +251,89 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
 
     # The pager under a list. "Showing 51-100 of 4,312" is the important one:
     # it is what distinguishes a page of fifty rows from a list of fifty rows.
+    # The performance page. Under Settings, for the day something feels
+    # wrong -- not on the dashboard, which is about the business.
+    "perf.title": ("Performance", "\u0627\u0644\u0623\u062f\u0627\u0621"),
+    "perf.lede": (
+        "How the application is behaving on this computer. Here so that "
+        "\u201cit has got slower\u201d can be answered rather than argued about.",
+        "\u0623\u062f\u0627\u0621 \u0627\u0644\u062a\u0637\u0628\u064a\u0642 \u0639\u0644\u0649 \u0647\u0630\u0627 \u0627\u0644\u062c\u0647\u0627\u0632\u060c \u0644\u0645\u0639\u0631\u0641\u0629 \u0633\u0628\u0628 \u0623\u064a \u0628\u0637\u0621 \u0628\u062f\u0644 \u0627\u0644\u062a\u062e\u0645\u064a\u0646.",
+    ),
+    # Uptime, said in words. Four separate strings because Arabic does not
+    # abbreviate these the way English does.
+    "perf.up_new": ("just started", "بدأ الآن"),
+    "perf.up_min": ("{n} min", "{n} دقيقة"),
+    "perf.up_hour": ("{h}h {m}m", "{h} ساعة {m} دقيقة"),
+    "perf.up_day": ("{d}d {h}h", "{d} يوم {h} ساعة"),
+    "perf.since": ("Counting since", "\u0627\u0644\u0642\u064a\u0627\u0633 \u0645\u0646\u0630"),
+    "perf.resets": (
+        "These figures are kept in memory and start again when the "
+        "application is restarted.",
+        "\u062a\u064f\u062d\u0641\u0638 \u0647\u0630\u0647 \u0627\u0644\u0623\u0631\u0642\u0627\u0645 \u0641\u064a \u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0648\u062a\u0628\u062f\u0623 \u0645\u0646 \u062c\u062f\u064a\u062f \u0639\u0646\u062f \u0625\u0639\u0627\u062f\u0629 \u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u062a\u0637\u0628\u064a\u0642.",
+    ),
+    "perf.requests": ("Pages served", "\u0627\u0644\u0635\u0641\u062d\u0627\u062a \u0627\u0644\u0645\u0642\u062f\u0645\u0629"),
+    "perf.errors": ("Failed", "\u0623\u062e\u0637\u0627\u0621"),
+    "perf.memory": ("Memory in use", "\u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u0629"),
+    "perf.database": ("Database", "\u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a"),
+    "perf.by_page": ("Each page", "\u0643\u0644 \u0635\u0641\u062d\u0629"),
+    "perf.by_page_hint": (
+        "Grouped by page rather than by address, so one invoice screen is "
+        "one row and not five thousand. Ordered by total time spent, which "
+        "is where tuning pays.",
+        "\u0645\u062c\u0645\u0639\u0629 \u062d\u0633\u0628 \u0627\u0644\u0635\u0641\u062d\u0629 \u0644\u0627 \u062d\u0633\u0628 \u0627\u0644\u0639\u0646\u0648\u0627\u0646\u060c \u0648\u0645\u0631\u062a\u0628\u0629 \u062d\u0633\u0628 \u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0648\u0642\u062a \u0627\u0644\u0645\u0633\u062a\u063a\u0631\u0642.",
+    ),
+    "perf.page": ("Page", "\u0627\u0644\u0635\u0641\u062d\u0629"),
+    "perf.hits": ("Opened", "\u0645\u0631\u0627\u062a \u0627\u0644\u0641\u062a\u062d"),
+    "perf.median": ("Typical", "\u0627\u0644\u0645\u0639\u062a\u0627\u062f"),
+    "perf.p95": ("Slow runs", "\u0627\u0644\u0628\u0637\u064a\u0621"),
+    "perf.worst": ("Worst", "\u0627\u0644\u0623\u0633\u0648\u0623"),
+    "perf.queries": ("Queries", "\u0627\u0644\u0627\u0633\u062a\u0639\u0644\u0627\u0645\u0627\u062a"),
+    "perf.share": ("Share of time", "\u062d\u0635\u0629 \u0627\u0644\u0648\u0642\u062a"),
+    "perf.failed": ("failed", "\u0641\u0634\u0644"),
+    "perf.ms_note": (
+        "Times in milliseconds. \u201cTypical\u201d is the middle of recent "
+        "visits; \u201cslow runs\u201d is the slowest one in twenty, which is "
+        "what people actually notice. Under 100 is instant; over 500 is felt.",
+        "\u0627\u0644\u0623\u0648\u0642\u0627\u062a \u0628\u0627\u0644\u0645\u0644\u064a \u062b\u0627\u0646\u064a\u0629. \u0623\u0642\u0644 \u0645\u0646 100 \u0641\u0648\u0631\u064a\u060c \u0648\u0623\u0643\u062b\u0631 \u0645\u0646 500 \u0645\u0644\u0645\u0648\u0633.",
+    ),
+    "perf.nothing_yet": ("Nothing measured yet.", "\u0644\u0627 \u064a\u0648\u062c\u062f \u0642\u064a\u0627\u0633 \u0628\u0639\u062f."),
+    "perf.slowest": ("The slowest visits", "\u0623\u0628\u0637\u0623 \u0627\u0644\u0632\u064a\u0627\u0631\u0627\u062a"),
+    "perf.slowest_hint": (
+        "Individual ones, with the exact address. An average says a page is "
+        "slow; one of these says which one, and what was on it.",
+        "\u0632\u064a\u0627\u0631\u0627\u062a \u0645\u0641\u0631\u062f\u0629 \u0645\u0639 \u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0628\u0627\u0644\u0636\u0628\u0637.",
+    ),
+    "perf.when": ("When", "\u0627\u0644\u0648\u0642\u062a"),
+    "perf.address": ("Address", "\u0627\u0644\u0639\u0646\u0648\u0627\u0646"),
+    "perf.took": ("Took", "\u0627\u0633\u062a\u063a\u0631\u0642"),
+    "perf.memory_over_time": ("Memory over time", "\u0627\u0644\u0630\u0627\u0643\u0631\u0629 \u0639\u0628\u0631 \u0627\u0644\u0648\u0642\u062a"),
+    "perf.memory_started": ("Started at", "\u0628\u062f\u0623\u062a \u0639\u0646\u062f"),
+    "perf.memory_now_is": ("now", "\u0648\u0627\u0644\u0622\u0646"),
+    "perf.memory_hint": (
+        "A reading every ten minutes. What matters is the shape, not the "
+        "number: a line that climbs all day and never comes back down is a "
+        "leak. Rising and falling is normal \u2014 building a report or an "
+        "export is supposed to cost memory and then give it back.",
+        "\u0642\u0631\u0627\u0621\u0629 \u0643\u0644 \u0639\u0634\u0631 \u062f\u0642\u0627\u0626\u0642. \u0627\u0644\u0645\u0647\u0645 \u0647\u0648 \u0627\u0644\u0634\u0643\u0644 \u0644\u0627 \u0627\u0644\u0631\u0642\u0645: "
+        "\u0627\u0644\u062e\u0637 \u0627\u0644\u0630\u064a \u064a\u0631\u062a\u0641\u0639 \u0637\u0648\u0627\u0644 \u0627\u0644\u064a\u0648\u0645 \u0648\u0644\u0627 \u064a\u0639\u0648\u062f \u064a\u0639\u0646\u064a \u062a\u0633\u0631\u064a\u0628\u0627\u064b.",
+    ),
+    "perf.memory_wait": (
+        "A reading is taken every ten minutes. Come back once the "
+        "application has been open for a while.",
+        "\u062a\u064f\u0624\u062e\u0630 \u0642\u0631\u0627\u0621\u0629 \u0643\u0644 \u0639\u0634\u0631 \u062f\u0642\u0627\u0626\u0642. \u0639\u062f \u0628\u0639\u062f \u0641\u062a\u0631\u0629 \u0645\u0646 \u0627\u0644\u062a\u0634\u063a\u064a\u0644.",
+    ),
+    "perf.storage": ("What is being stored", "\u0627\u0644\u0645\u0633\u0627\u062d\u0629 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645\u0629"),
+    "perf.attachments": ("Scans and photos", "\u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062a"),
+    "perf.rows": ("Records", "\u0627\u0644\u0633\u062c\u0644\u0627\u062a"),
+    "perf.table": ("Table", "\u0627\u0644\u062c\u062f\u0648\u0644"),
+    "perf.row_count": ("Rows", "\u0639\u062f\u062f \u0627\u0644\u0635\u0641\u0648\u0641"),
+    "perf.reset": ("Start counting again", "\u0627\u0628\u062f\u0623 \u0627\u0644\u0642\u064a\u0627\u0633 \u0645\u0646 \u062c\u062f\u064a\u062f"),
+    "perf.reset_hint": (
+        "Clears the figures above. Useful after a change, to see whether it "
+        "helped without the old numbers dragging the average.",
+        "\u064a\u0645\u0633\u062d \u0627\u0644\u0623\u0631\u0642\u0627\u0645 \u0623\u0639\u0644\u0627\u0647\u060c \u0644\u0645\u0639\u0631\u0641\u0629 \u0623\u062b\u0631 \u0623\u064a \u062a\u063a\u064a\u064a\u0631.",
+    ),
+    "perf.reset_done": ("Counting started again.", "\u0628\u062f\u0623 \u0627\u0644\u0642\u064a\u0627\u0633 \u0645\u0646 \u062c\u062f\u064a\u062f."),
     "pager.nav": ("Pages", "الصفحات"),
     "pager.showing": ("Showing", "المعروض"),
     "pager.of": ("of", "من"),
@@ -634,6 +717,41 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
         "لن يُحفظ شيء قبل أن ترى ما سيتم تنفيذه.",
     ),
     "imp.choose": ("Choose a file", "اختر ملفاً"),
+    # Importing a price list. Its own keys rather than sharing the
+    # customer import's, because every sentence differs: codes,
+    # duplicates and missing prices are the things that go wrong here.
+    "iimp.title": ("Import items", "\u0627\u0633\u062a\u064a\u0631\u0627\u062f \u0627\u0644\u0628\u0646\u0648\u062f"),
+    "iimp.hint": (
+        "Add services and parts from a spreadsheet. Nothing is saved "
+        "until you have seen what it would do.",
+        "\u0623\u0636\u0641 \u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0648\u0642\u0637\u0639 \u0627\u0644\u063a\u064a\u0627\u0631 \u0645\u0646 \u0645\u0644\u0641 \u062c\u062f\u0648\u0644. \u0644\u0646 \u064a\u064f\u062d\u0641\u0638 \u0634\u064a\u0621 "
+        "\u062d\u062a\u0649 \u062a\u0631\u0649 \u0645\u0627 \u0633\u064a\u062d\u062f\u062b.",
+    ),
+    "iimp.choose": ("Spreadsheet (.xlsx or .csv)", "\u0645\u0644\u0641 \u062c\u062f\u0648\u0644 (xlsx \u0623\u0648 csv)"),
+    "iimp.template_hint": (
+        "A file with the right headings and two example rows, if you "
+        "would rather start from one.",
+        "\u0645\u0644\u0641 \u0628\u0627\u0644\u0639\u0646\u0627\u0648\u064a\u0646 \u0627\u0644\u0635\u062d\u064a\u062d\u0629 \u0648\u0645\u062b\u0627\u0644\u064a\u0646\u060c \u0625\u0646 \u0623\u0631\u062f\u062a \u0627\u0644\u0628\u062f\u0621 \u0645\u0646\u0647.",
+    ),
+    "iimp.headings": (
+        "Recognised headings, in English or Arabic: code (or item no), "
+        "description, Arabic description, type, unit, price. Any other "
+        "column is ignored.",
+        "\u0627\u0644\u0639\u0646\u0627\u0648\u064a\u0646 \u0627\u0644\u0645\u0639\u0631\u0648\u0641\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0623\u0648 \u0627\u0644\u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629: \u0627\u0644\u0631\u0645\u0632 \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u0635\u0646\u0641\u060c "
+        "\u0627\u0644\u0648\u0635\u0641\u060c \u0627\u0644\u0648\u0635\u0641 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629\u060c \u0627\u0644\u0646\u0648\u0639\u060c \u0627\u0644\u0648\u062d\u062f\u0629\u060c \u0627\u0644\u0633\u0639\u0631. "
+        "\u0648\u0623\u064a \u0639\u0645\u0648\u062f \u0622\u062e\u0631 \u064a\u064f\u062a\u062c\u0627\u0647\u0644.",
+    ),
+    "iimp.codes_note": (
+        "Codes are kept exactly as written, so a code like 0123 keeps "
+        "its leading zero.",
+        "\u062a\u064f\u062d\u0641\u0638 \u0627\u0644\u0631\u0645\u0648\u0632 \u0643\u0645\u0627 \u0647\u064a\u060c \u0641\u0631\u0645\u0632 \u0645\u062b\u0644 0123 \u064a\u062d\u062a\u0641\u0638 \u0628\u0627\u0644\u0635\u0641\u0631 \u0627\u0644\u0630\u064a \u0623\u0645\u0627\u0645\u0647.",
+    ),
+    "iimp.no_prices": (
+        "None of these rows has a price. They will be added at zero, and "
+        "a price can be set on each one in the catalogue afterwards.",
+        "\u0644\u0627 \u064a\u0648\u062c\u062f \u0633\u0639\u0631 \u0641\u064a \u0623\u064a \u0645\u0646 \u0647\u0630\u0647 \u0627\u0644\u0635\u0641\u0648\u0641\u060c \u0648\u0633\u062a\u064f\u0636\u0627\u0641 \u0628\u0633\u0639\u0631 \u0635\u0641\u0631\u060c "
+        "\u0648\u064a\u0645\u0643\u0646 \u062a\u062d\u062f\u064a\u062f \u0627\u0644\u0633\u0639\u0631 \u0644\u0643\u0644 \u0628\u0646\u062f \u0644\u0627\u062d\u0642\u0627\u064b.",
+    ),
     "imp.upload": ("Upload and preview", "رفع ومعاينة"),
     "imp.template": ("Download the template", "تحميل النموذج"),
     "imp.template_hint": (
@@ -997,6 +1115,35 @@ TRANSLATIONS: dict[str, tuple[str, str]] = {
     # -- Messages ----------------------------------------------------------
     "msg.saved": ("Saved.", "تم الحفظ."),
     "msg.deleted": ("Deleted.", "تم الحذف."),
+    # What the delete button does once records are protected. Worded as
+    # the outcome rather than as a refusal: the user asked for the record
+    # to go away, and it has gone away from the lists.
+    "msg.retired": (
+        "Marked inactive. It is out of the lists, and its history is kept.",
+        "تم وضعه غير نشط. لم يعد يظهر في القوائم، وسجلّه محفوظ.",
+    ),
+    "msg.voided": (
+        "Voided. The invoice stays on record and is out of the totals.",
+        "تم الإلغاء. تبقى الفاتورة في السجل وخارج الإجماليات.",
+    ),
+    # The switch itself, in Settings.
+    "set.protect": ("Never delete records", "عدم حذف السجلات"),
+    "set.protect_hint": (
+        "With this on, the Delete buttons on customers, vehicles and "
+        "invoices mark the record inactive instead of removing it. Nothing "
+        "is lost, and inactive records stay out of the lists. Leave it off "
+        "while you are still importing and tidying up, so a mistyped row "
+        "can simply be removed.",
+        "عند تفعيل هذا الخيار، تقوم أزرار الحذف في العملاء والمركبات "
+        "والفواتير بوضع السجل غير نشط بدلاً من إزالته. لا يُفقد أي شيء، "
+        "ولا تظهر السجلات غير النشطة في القوائم. اتركه معطّلاً أثناء "
+        "الاستيراد والترتيب حتى يمكن حذف أي صف مكتوب بالخطأ.",
+    ),
+    "act.retire": ("Make inactive", "وضع غير نشط"),
+    "action.confirm_retire": (
+        "Mark this inactive? It will drop out of the lists; nothing is lost.",
+        "وضعه غير نشط؟ سيختفي من القوائم ولن يُفقد أي شيء.",
+    ),
     "msg.created": ("Created.", "تم الإنشاء."),
     "msg.not_found": ("Not found.", "غير موجود."),
     "msg.error": ("Something went wrong.", "حدث خطأ ما."),

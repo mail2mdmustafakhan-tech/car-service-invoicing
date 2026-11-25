@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pill, delete_form with context %}
+{% from "_macros.html" import pill, delete_form, retire_form with context %}
 {% block title %}{{ invoice['invoice_no'] }}{% endblock %}
 
 {% block content %}
@@ -95,6 +95,7 @@
         <tr>
           <td class="secondary">{{ item['line_no'] }}</td>
           <td>
+            {% if item['code'] %}<div class="line-code">{{ item['code'] }}</div>{% endif %}
             {{ loc(item, 'description') }}
             <div class="secondary">{{ t('cat.kind_service') if item['kind'] == 'service' else t('cat.kind_part') }}</div>
           </td>
@@ -229,7 +230,7 @@
         </form>
       {% endif %}
       {% if invoice['status'] == 'draft' %}
-        {{ delete_form('/invoices/' ~ invoice['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+        {{ retire_form('/invoices/' ~ invoice['id'] ~ '/delete') }}
       {% endif %}
     </div>
   </div>

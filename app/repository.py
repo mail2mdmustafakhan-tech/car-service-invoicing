@@ -84,7 +84,51 @@ SETTINGS_FIELDS = (
     # Added in migration 004, for estimates and messaging.
     "estimate_prefix", "next_estimate_seq", "estimate_validity_days",
     "default_country_code", "message_template_en", "message_template_ar",
+    # Added in migration 017.
+    "protect_records",
 )
+
+
+class Protected(Exception):
+    """Raised when records are protected and the caller asked to delete.
+
+    Separate from InUse, which means "this particular record cannot go
+    because something else points at it". This one means "nothing here is
+    ever deleted", which is a different sentence to put in front of
+    somebody and a different thing for a test to assert.
+    """
+
+
+def records_protected(conn: sqlite3.Connection) -> bool:
+    """Whether deletion has been switched off in Settings.
+
+    Read from the database on each call rather than cached at startup: the
+    switch is the kind of thing somebody turns on and then immediately
+    tests, and a value that only takes effect after a restart would look
+    broken.
+    """
+    row = _one(conn, "SELECT protect_records FROM settings WHERE id = 1")
+    return bool(row and row["protect_records"])
+
+
+def retire_customer(conn: sqlite3.Connection, customer_id: int) -> None:
+    """Mark a customer inactive: out of the lists, history intact."""
+    _require(_one(conn, "SELECT id FROM customers WHERE id = ?", (customer_id,)),
+             "Customer")
+    with transaction(conn):
+        conn.execute(
+            "UPDATE customers SET is_active = 0, updated_at = datetime('now') "
+            "WHERE id = ?", (customer_id,))
+
+
+def retire_vehicle(conn: sqlite3.Connection, vehicle_id: int) -> None:
+    """Mark a vehicle inactive. Its service history stays on the customer."""
+    _require(_one(conn, "SELECT id FROM vehicles WHERE id = ?", (vehicle_id,)),
+             "Vehicle")
+    with transaction(conn):
+        conn.execute(
+            "UPDATE vehicles SET is_active = 0, updated_at = datetime('now') "
+            "WHERE id = ?", (vehicle_id,))
 
 
 def get_settings(conn: sqlite3.Connection) -> Row:
@@ -718,6 +762,29 @@ def page_customers(
 PICKER_LIMIT = 50
 
 
+def table_sizes(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """How many rows are in each table that grows, largest first.
+
+    Only the tables that grow with use. Counting the handful that hold
+    settings and dropdown values would pad the list with rows that will
+    never change and bury the one that is about to.
+    """
+    tables = (
+        "customers", "vehicles", "invoices", "invoice_items", "payments",
+        "estimates", "estimate_items", "inspections", "inspection_items",
+        "repair_orders", "repair_order_items", "catalog_items",
+        "known_issues", "attachments",
+    )
+    counts = []
+    for table in tables:
+        try:
+            row = _one(conn, f"SELECT COUNT(*) AS n FROM {table}")  # noqa: S608
+        except sqlite3.Error:
+            continue        # a table this version does not have
+        counts.append({"table": table, "rows": int(row["n"])})      # type: ignore[index]
+    return sorted(counts, key=lambda c: c["rows"], reverse=True)
+
+
 def picker_customers(
     conn: sqlite3.Connection, chosen: int | None = None, limit: int = PICKER_LIMIT
 ) -> list[Row]:
@@ -1066,8 +1133,88 @@ INVOICE_HEADER_FIELDS = (
     "discount_minor", "discount_mode", "discount_rate_bp", "notes", "doc_type",
 )
 
+CODE_SEPARATOR = " \u2014 "  # "0123 \u2014 Oil Service With Filter"
+
+
+def resolve_item_codes(
+    conn: sqlite3.Connection, items: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """Work out each line's catalogue item and record its code.
+
+    A line can name its item four ways, and all four end in the same
+    place:
+
+      * the hidden catalogue id, which the form fills in when somebody
+        picks from the list;
+      * the code on its own -- "0123" -- typed straight into the box;
+      * the code and the name together, which is what the dropdown
+        offers: "0123 -- Oil Service With Filter";
+      * the name on its own, as before.
+
+    Doing this here rather than only in the browser is the point. The
+    JavaScript does the same work, so the price and the unit fill in
+    while somebody is still typing -- but a line can reach this function
+    without it ever having run: JavaScript switched off, a page restored
+    from history, a form posted from a phone that stalled. Then a typed
+    code would be stored as the literal description "0123" on the
+    customer's invoice. The browser makes it pleasant; this makes it
+    true.
+
+    A line that matches nothing is left exactly as typed, with no code. A
+    custom line is an ordinary thing to want and must not be bent into a
+    catalogue item that happens to look similar.
+    """
+    resolved: list[dict[str, Any]] = []
+    for raw in items:
+        line = dict(raw)
+        typed = str(line.get("description") or "").strip()
+        item = None
+        matched_on_code = False
+
+        chosen = line.get("catalog_item_id")
+        if chosen:
+            item = _one(conn, "SELECT * FROM catalog_items WHERE id = ?", (chosen,))
+
+        if item is None and typed:
+            head = typed.split(CODE_SEPARATOR, 1)[0].strip()
+            item = _one(
+                conn,
+                "SELECT * FROM catalog_items"
+                " WHERE code <> '' AND code = ? COLLATE NOCASE LIMIT 1",
+                (head,),
+            )
+            matched_on_code = item is not None
+
+        if item is None and typed:
+            item = _one(
+                conn,
+                "SELECT * FROM catalog_items"
+                " WHERE name_en = ? COLLATE NOCASE OR name_ar = ? COLLATE NOCASE"
+                " ORDER BY is_active DESC, id LIMIT 1",
+                (typed, typed),
+            )
+
+        if item is None:
+            line["code"] = ""
+            line["description"] = typed
+        else:
+            line["catalog_item_id"] = item["id"]
+            line["code"] = item["code"]
+            if matched_on_code:
+                # They gave a code, so the item's own wording goes on the
+                # document: "0123" is a reference, not a description.
+                line["description"] = item["name_en"] or item["name_ar"]
+                line["description_ar"] = item["name_ar"] or item["name_en"]
+            # A name typed by hand is left exactly as typed, even where it
+            # differs from the catalogue only in capitalisation. Linking
+            # the item records the code and fills the price; it is not a
+            # licence to rewrite what somebody chose to write.
+        resolved.append(line)
+    return resolved
+
+
 ITEM_FIELDS = (
-    "catalog_item_id", "description", "description_ar", "kind", "unit",
+    "catalog_item_id", "code", "description", "description_ar", "kind", "unit",
     "qty_milli", "unit_price_minor",
 )
 
@@ -1214,6 +1361,7 @@ def _write_items(
     code for no benefit: an invoice has a handful of lines and the whole thing
     is rewritten inside one transaction.
     """
+    items = resolve_item_codes(conn, items)
     conn.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (invoice_id,))
     for line_no, raw in enumerate(items, start=1):
         values = _pick(raw, ITEM_FIELDS)
@@ -1393,7 +1541,7 @@ ORDER_HEADER_FIELDS = (
 )
 
 ORDER_ITEM_FIELDS = (
-    "catalog_item_id", "description", "description_ar", "expense_minor",
+    "catalog_item_id", "code", "description", "description_ar", "expense_minor",
     "technician_remarks",
 )
 
@@ -1545,6 +1693,7 @@ def order_totals(conn: sqlite3.Connection, order_id: int) -> dict[str, int]:
 def _write_order_items(
     conn: sqlite3.Connection, order_id: int, items: Sequence[Mapping[str, Any]]
 ) -> None:
+    items = resolve_item_codes(conn, items)
     conn.execute(
         "DELETE FROM repair_order_items WHERE repair_order_id = ?", (order_id,)
     )
@@ -1759,7 +1908,7 @@ ESTIMATE_HEADER_FIELDS = (
 )
 
 ESTIMATE_ITEM_FIELDS = (
-    "catalog_item_id", "description", "description_ar", "kind", "unit",
+    "catalog_item_id", "code", "description", "description_ar", "kind", "unit",
     "qty_milli", "unit_price_minor",
 )
 
@@ -1878,6 +2027,7 @@ def get_estimate_items(conn: sqlite3.Connection, estimate_id: int) -> list[Row]:
 def _write_estimate_items(
     conn: sqlite3.Connection, estimate_id: int, items: Sequence[Mapping[str, Any]]
 ) -> None:
+    items = resolve_item_codes(conn, items)
     conn.execute("DELETE FROM estimate_items WHERE estimate_id = ?", (estimate_id,))
     for line_no, raw in enumerate(items, start=1):
         values = _pick(raw, ESTIMATE_ITEM_FIELDS)
@@ -2426,6 +2576,77 @@ def commit_import_batch(conn: sqlite3.Connection, batch_id: int) -> dict[str, in
                SET status = 'imported', imported = ?, skipped = ?
              WHERE id = ?
             """,
+            (imported, skipped, batch_id),
+        )
+    return {"imported": imported, "skipped": skipped}
+
+
+def existing_catalog_keys(conn: sqlite3.Connection) -> tuple[set[str], set[str]]:
+    """Codes and names already in the catalogue, for spotting duplicates.
+
+    Inactive items count. A code that was retired is still the code on
+    old paperwork, and the unique index covers inactive rows too, so an
+    import that ignored them would fail at the INSERT instead of saying
+    so in the preview.
+    """
+    codes, names = set(), set()
+    for row in conn.execute("SELECT code, name_en, name_ar FROM catalog_items"):
+        if row["code"]:
+            codes.add(row["code"])
+        for name in (row["name_en"], row["name_ar"]):
+            if name:
+                names.add(name.casefold())
+    return codes, names
+
+
+def commit_item_batch(conn: sqlite3.Connection, batch_id: int) -> dict[str, int]:
+    """Add the items in a batch to the catalogue, skipping flagged rows.
+
+    Duplicates are checked again here, not only in the preview. Between
+    uploading a file and pressing Confirm somebody can add an item by
+    hand, or press Confirm twice; the preview was a picture of how things
+    were, and this is the moment that counts.
+    """
+    batch, rows = get_import_batch(conn, batch_id)
+    if batch["status"] != "pending":
+        raise InUse("This import has already been dealt with.")
+
+    codes, names = existing_catalog_keys(conn)
+    imported = skipped = 0
+    with transaction(conn):
+        for row in rows:
+            code = str(row.get("code") or "").strip()
+            name_en = str(row.get("name_en") or "").strip()
+            name_ar = str(row.get("name_ar") or "").strip()
+            if row.get("skip") or not name_en:
+                skipped += 1
+                continue
+            if (code and code in codes) or (not code and name_en.casefold() in names):
+                skipped += 1
+                continue
+
+            price = row.get("unit_price_minor")
+            conn.execute(
+                """
+                INSERT INTO catalog_items
+                    (code, name_en, name_ar, kind, unit, unit_price_minor,
+                     is_active, created_at, updated_at, manufacturer)
+                VALUES (?, ?, ?, ?, ?, ?, 1,
+                        datetime('now'), datetime('now'), '')
+                """,
+                (code, name_en, name_ar,
+                 row.get("kind") or "service",
+                 row.get("unit") or "pcs",
+                 int(price) if price else 0),
+            )
+            if code:
+                codes.add(code)
+            names.add(name_en.casefold())
+            imported += 1
+
+        conn.execute(
+            "UPDATE import_batches SET status = 'imported', imported = ?, "
+            "skipped = ? WHERE id = ?",
             (imported, skipped, batch_id),
         )
     return {"imported": imported, "skipped": skipped}

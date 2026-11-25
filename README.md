@@ -123,21 +123,30 @@ The first run builds a small private Python environment and installs four
 packages; it takes a minute. Later runs start immediately. Open
 **http://localhost:8000**.
 
-### Letting other computers in the office use it
+### Letting other computers, tablets and phones use it
 
-By default the application answers only on the machine it runs on. To let the
-manager's PC open it too, serve on all addresses:
+By default the application answers only on the machine it runs on. To open it
+to the local network:
 
 ```bash
-# Docker: already does this — just use http://THAT-PCS-IP:8000
-# Without Docker:
+network.bat                             # Windows — prints the address to type
 CARSERVICE_HOST=0.0.0.0 ./run.sh        # macOS / Linux
-set CARSERVICE_HOST=0.0.0.0 && run.bat  # Windows
+# Docker already serves the network.
 ```
 
-Then from another computer, open `http://192.168.1.42:8000` (substituting the
-serving machine's address). Keep this on your own office network — there is no
-login, so anyone who can reach the address can edit invoices.
+`network.bat` prints the address other devices should use. Do not copy an
+address out of this file or any other: it is specific to the machine and the
+router, and typing somebody else's is the commonest reason this appears not
+to work. If a device cannot connect, run `check-network.bat`, which reports
+on the four things that actually go wrong and prints the right address.
+
+**There is no login.** Anyone who can reach the network can read every
+customer's details and edit any invoice. Keep it to a network only staff can
+join.
+
+**→ [Using it from a tablet, a phone, or another computer](docs/access-from-another-device.md)**
+covers the firewall, adding it to a tablet's home screen, and what to do when
+it will not connect.
 
 ---
 
@@ -208,22 +217,28 @@ for and the paper in the customer's hand always matches something in the system.
 **This matters more than anything else in this document.** Everything lives in
 one file. If that file is lost, the invoices are gone.
 
-- **Settings → Download backup** makes a safe copy, even while the system is in
-  use. Do this weekly and keep copies somewhere other than that computer — a
-  USB stick, a network drive, a cloud folder.
-- The download is a **zip**: `carservice.db` plus an `attachments` folder.
-  Attachments are stored beside the database rather than inside it, so a copy
-  of the database alone would silently leave out every scanned invoice.
-- To restore, stop the application, unzip it over the `data` folder so you
-  have `data/carservice.db` and `data/attachments/`, and start it again.
+**It backs itself up.** One copy when the application starts, if that day has
+none, and an hourly check while it is open. They land in `data/backups`, named
+by date. The last fortnight is kept, then one a month for a year.
+**Settings → Backup** shows when the last one was taken, and warns in amber if
+more than two days have passed.
+
+- Each backup is a **zip**: `carservice.db` plus an `attachments` folder.
+  Attachments live beside the database rather than inside it, so a copy of the
+  database alone would silently leave out every scanned invoice.
+- **Settings → Backup → Back up now** takes one on demand — worth pressing
+  before a large import or anything else that makes you nervous.
+- To restore, stop the application, unzip over the `data` folder so you have
+  `data/carservice.db` and `data/attachments/`, and start it again.
 - Copying `data/carservice.db` by hand while the application is running can
-  catch it mid-write. Use the backup button, or stop the application first.
+  catch it mid-write. Use a backup, or stop the application first.
 
-Scripted nightly backup, if you want one:
+**The one thing the software cannot do for you:** these sit on the same disk
+as the data, so a failed disk takes both. Copy the `backups` folder to a USB
+stick or a cloud drive from time to time.
 
-```bash
-python -c "from app.db import backup_to; backup_to('backups/carservice-$(date +%F).db')"
-```
+**→ [Backups](docs/backups.md)** covers stopping it, changing how many are
+kept, verifying a backup, and what to do when it stops working.
 
 ---
 

@@ -199,6 +199,7 @@
       <tr>
         <td class="line-no">{{ item['line_no'] }}</td>
         <td>
+          {% if item['code'] %}<div class="line-code">{{ item['code'] }}</div>{% endif %}
           <bdi>{{ item['description'] }}</bdi>
           {% if item['description_ar'] and item['description_ar'] != item['description'] %}
             <div class="desc-alt">{{ item['description_ar'] }}</div>

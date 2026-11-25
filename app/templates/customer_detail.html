@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_customer_alert.html" import customer_alert_panel with context %}
-{% from "_macros.html" import pill, delete_form, vehicle_label with context %}
+{% from "_macros.html" import pill, delete_form, vehicle_label, retire_form with context %}
 {% block title %}{{ loc(customer, 'name') }}{% endblock %}
 
 {% block content %}
@@ -37,7 +37,7 @@
         {% if customer['notes'] %}<dt>{{ t('cust.notes') }}</dt><dd>{{ customer['notes'] }}</dd>{% endif %}
       </dl>
       <div class="formactions">
-        {{ delete_form('/customers/' ~ customer['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
+        {{ retire_form('/customers/' ~ customer['id'] ~ '/delete') }}
       </div>
     </div>
   </section>

@@ -165,15 +165,31 @@ window.CSMoney = (function () {
        trailing space from a double-click should not turn a cataloged
        service into an unpriced custom one. Anything that does not match is
        a custom description, which is a normal thing to want, not an error. */
+    /* Four ways to name an item, all landing on the same entry: its code
+       ("0123"), the code and name together as the dropdown offers them
+       ("0123 \u2014 Oil Service With Filter"), the English name, or the
+       Arabic one.
+
+       Codes are indexed last and win, because a code is unique and a name
+       need not be: his list has two entries called "Car Wash" under
+       different codes, and the one somebody typed a code for is the one
+       they meant. */
     function readCatalogByName() {
         var node = document.getElementById("catalog-data");
         if (!node) { return {}; }
         var byName = {};
+        function put(key, item) {
+            if (key) { byName[String(key).trim().toLowerCase()] = item; }
+        }
         try {
             JSON.parse(node.textContent).forEach(function (item) {
-                [item.name_en, item.name_ar].forEach(function (name) {
-                    if (name) { byName[String(name).trim().toLowerCase()] = item; }
-                });
+                put(item.name_en, item);
+                put(item.name_ar, item);
+                if (item.code) {
+                    put(item.code + " \u2014 " + item.name_en, item);
+                    put(item.code + " \u2014 " + item.name_ar, item);
+                    put(item.code, item);
+                }
             });
         } catch (err) { /* a malformed block just means no suggestions */ }
         return byName;
@@ -195,6 +211,18 @@ window.CSMoney = (function () {
 
         if (fields.catalogId) { fields.catalogId.value = item.id; }
         if (fields.descriptionAr) { fields.descriptionAr.value = item.name_ar || ""; }
+        /* A code is a reference, not a description. If what is in the box
+           is a code, or the code-and-name the dropdown offers, put the
+           item's own wording there instead -- that is what prints on the
+           customer's invoice. A name typed by hand is left exactly as
+           typed, capitals and all: linking the item is not a licence to
+           rewrite what somebody chose to write. */
+        var rtl = document.documentElement.lang === "ar";
+        var name = rtl && item.name_ar ? item.name_ar : item.name_en;
+        if (name && typed !== String(item.name_en || "").trim().toLowerCase()
+                 && typed !== String(item.name_ar || "").trim().toLowerCase()) {
+            fields.description.value = name;
+        }
         if (fields.kind) { fields.kind.value = item.kind || "service"; }
 
         /* A price the user typed is theirs, and must survive. A price this

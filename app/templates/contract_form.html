@@ -266,7 +266,7 @@
 </datalist>
 
 <datalist id="catalog-names">
-  {% for ci in catalog %}<option value="{{ loc(ci, 'name_en') }}"></option>
+  {% for ci in catalog %}<option value="{{ (ci['code'] ~ ' \u2014 ' ~ loc(ci, 'name_en')) if ci['code'] else loc(ci, 'name_en') }}"></option>
   {% endfor %}
 </datalist>
 

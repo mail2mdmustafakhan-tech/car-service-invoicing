@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('perf.title') }}{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb"><a href="/settings">{{ t('nav.settings') }}</a></nav>
+<h1>{{ t('perf.title') }}</h1>
+<p class="hint">{{ t('perf.lede') }}</p>
+
+{#
+  Counting started when the application last started, and says so at the
+  top rather than in a footnote. Every number below is "since then", and a
+  page of averages over two minutes of use means something very different
+  from the same page after a fortnight.
+#}
+<p class="hint">
+  {{ t('perf.since') }} {{ perf['started'].strftime('%Y-%m-%d %H:%M') }}
+  &mdash; {{ fmt_uptime(perf['uptime_s'], lang) }}.
+  {{ t('perf.resets') }}
+</p>
+
+<div class="kpi-row">
+    <div class="kpi">
+      <span class="kpi-figure">{{ "{:,}".format(perf['requests']) }}</span>
+      <span class="kpi-label">{{ t('perf.requests') }}</span>
+    </div>
+    <div class="kpi{% if perf['errors'] %} kpi-bad{% endif %}">
+      <span class="kpi-figure">{{ perf['errors'] }}</span>
+      <span class="kpi-label">{{ t('perf.errors') }}</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-figure">
+        {%- if perf['memory_now'] %}{{ fmt_mb(perf['memory_now'] * 1000000) }}
+        {%- else %}&mdash;{% endif %}
+      </span>
+      <span class="kpi-label">{{ t('perf.memory') }}</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-figure">{{ fmt_mb(db_bytes) }}</span>
+      <span class="kpi-label">{{ t('perf.database') }}</span>
+    </div>
+</div>
+
+{# ---------------------------------------------------------------------- #}
+<section class="panel">
+  <h2>{{ t('perf.by_page') }}</h2>
+  <p class="hint">{{ t('perf.by_page_hint') }}</p>
+
+  {% if perf['routes'] %}
+  <div class="scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('perf.page') }}</th>
+          <th class="num">{{ t('perf.hits') }}</th>
+          <th class="num">{{ t('perf.median') }}</th>
+          <th class="num">{{ t('perf.p95') }}</th>
+          <th class="num">{{ t('perf.worst') }}</th>
+          <th class="num">{{ t('perf.queries') }}</th>
+          <th class="share">{{ t('perf.share') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set busiest_total = perf['routes'][0].total_ms if perf['routes'] else 1 %}
+        {% for r in perf['routes'] %}
+        <tr>
+          <td><code>{{ r.name }}</code>{% if r.errors %}
+            <span class="tag tag-bad">{{ r.errors }} {{ t('perf.failed') }}</span>{% endif %}</td>
+          <td class="num">{{ "{:,}".format(r.count) }}</td>
+          {# Colour only where it means something: a page nobody would
+             notice is not worth marking, however the numbers read. And
+             no colour at all on a figure we do not have yet. #}
+          {% set typical = r.median_ms %}
+          <td class="num{% if typical and typical > 500 %} slow
+              {%- elif typical and typical > 200 %} warm{% endif %}">
+            {% if typical is none %}&mdash;
+            {% else %}{{ typical | round(0) | int }}{% endif %}
+          </td>
+          <td class="num">
+            {% if r.p95_ms is none %}&mdash;
+            {% else %}{{ r.p95_ms | round(0) | int }}{% endif %}
+          </td>
+          <td class="num">{{ r.max_ms | round(0) | int }}</td>
+          <td class="num">{{ r.queries_each | round(1) }}</td>
+          <td class="share">
+            <span class="meterbar" style="--w: {{ (100 * r.total_ms / busiest_total) | round(0) | int }}%"></span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">{{ t('perf.ms_note') }}</p>
+  {% else %}
+  <p class="empty">{{ t('perf.nothing_yet') }}</p>
+  {% endif %}
+</section>
+
+{# ---------------------------------------------------------------------- #}
+{% if perf['slowest'] %}
+<section class="panel">
+  <h2>{{ t('perf.slowest') }}</h2>
+  <p class="hint">{{ t('perf.slowest_hint') }}</p>
+  <div class="scrollx">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>{{ t('perf.when') }}</th>
+          <th>{{ t('perf.address') }}</th>
+          <th class="num">{{ t('perf.took') }}</th>
+          <th class="num">{{ t('perf.queries') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in perf['slowest'] %}
+        <tr>
+          <td class="tight">{{ r['at'] }}</td>
+          <td><code>{{ r['path'] }}</code></td>
+          <td class="num{% if r['ms'] > 500 %} slow{% endif %}">{{ r['ms'] | round(0) | int }}</td>
+          <td class="num">{{ r['queries'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{# ---------------------------------------------------------------------- #}
+<section class="panel">
+  <h2>{{ t('perf.memory_over_time') }}</h2>
+  {% if perf['memory'] | length > 1 %}
+    {#
+      The question this answers is not "how much memory" but "is it still
+      climbing". A single figure cannot tell you: an application that has
+      just built a spreadsheet is supposed to be larger than one that has
+      not. A line that rises all day and never comes back down is a leak.
+    #}
+    {% set first = perf['memory_first'] %}
+    {% set now = perf['memory_now'] %}
+    {% set change = now - first %}
+    <p>
+      {{ t('perf.memory_started') }} <strong>{{ fmt_mb(first * 1000000) }}</strong>,
+      {{ t('perf.memory_now_is') }} <strong>{{ fmt_mb(now * 1000000) }}</strong>
+      {% if change > 0.5 %}
+        <span class="{% if change > first %}slow{% endif %}">(+{{ fmt_mb(change * 1000000) }})</span>
+      {% elif change < -0.5 %}
+        ({{ fmt_mb(change * 1000000) }})
+      {% endif %}
+    </p>
+    {{ memory_chart(perf['memory'], label=t('perf.memory_over_time')) | safe }}
+    <p class="hint">{{ t('perf.memory_hint') }}</p>
+  {% else %}
+    <p class="empty">{{ t('perf.memory_wait') }}</p>
+  {% endif %}
+</section>
+
+{# ---------------------------------------------------------------------- #}
+<section class="panel">
+  <h2>{{ t('perf.storage') }}</h2>
+  <dl class="facts">
+    <dt>{{ t('perf.database') }}</dt>
+    <dd>{{ fmt_mb(db_bytes) }}</dd>
+    <dt>{{ t('perf.attachments') }}</dt>
+    <dd>{{ fmt_mb(attachment_bytes) }}</dd>
+    <dt>{{ t('set.backup_kept') }}</dt>
+    <dd>{{ backup.count }} &mdash; {{ fmt_mb(backup.total_bytes) }}</dd>
+  </dl>
+
+  <h3 class="subhead">{{ t('perf.rows') }}</h3>
+  <div class="scrollx">
+    <table class="ledger">
+      <thead><tr><th>{{ t('perf.table') }}</th><th class="num">{{ t('perf.row_count') }}</th></tr></thead>
+      <tbody>
+        {% for t_ in table_rows %}
+        <tr><td><code>{{ t_['table'] }}</code></td>
+            <td class="num">{{ "{:,}".format(t_['rows']) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-body">
+    <p class="hint">{{ t('perf.reset_hint') }}</p>
+    <form method="post" action="/settings/performance/reset">
+      <button class="btn" type="submit">{{ t('perf.reset') }}</button>
+    </form>
+  </div>
+</section>
+{% endblock %}
