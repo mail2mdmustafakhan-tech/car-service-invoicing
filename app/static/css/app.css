@@ -932,6 +932,9 @@ tr.muted td { opacity: 0.55; }
    Only sizes change here. No layout is rearranged and nothing is hidden:
    a tablet should be the same application, reachable by finger. */
 @media (pointer: coarse) {
+  /* A row of tick boxes is a column of targets to hit in sequence. */
+  th.pick input, td.pick input { width: 24px; height: 24px; }
+
     input, select, textarea, .btn, button {
         min-height: 44px;
     }
@@ -1015,6 +1018,55 @@ tr.muted td { opacity: 0.55; }
   color: var(--ink-faint);
   letter-spacing: 0.02em;
 }
+
+/* --- A panel's own padding floor ---------------------------------------
+   `.panel` deliberately has no padding: it comes from `.panel-head` and
+   `.panel-body`, so a table can span the full width and its row rules
+   can reach both borders. The cost is that anything dropped straight
+   into a panel -- a heading, a paragraph, a nav -- sits flush against
+   the border with nothing between them.
+
+   This is the floor for that case. `:where` keeps the specificity at
+   zero, so any component with padding of its own still wins and nothing
+   here is double-padded. Elements that are meant to reach the edge are
+   named out. */
+.panel > :where(h1, h2, h3, h4, p, ul, ol, dl, nav, form, section) {
+  padding-inline: var(--space-4);
+}
+.panel > :where(h1, h2, h3, h4):first-child { padding-block-start: var(--space-4); }
+.panel > :where(p, ul, ol, dl):last-child { padding-block-end: var(--space-4); }
+
+/* --- Selecting rows in a list ------------------------------------------
+   The narrow first column of tick boxes, and the strip that appears above
+   the table once something is ticked. */
+th.pick, td.pick {
+  width: 1%;
+  padding-inline-end: 0;
+  white-space: nowrap;
+}
+th.pick input, td.pick input {
+  /* Bigger than the browser's default: this is the control somebody taps
+     forty times in a row while tidying a list, and on a phone the default
+     is a hard target to hit. The 44px row floor is set under
+     (pointer: coarse) further down. */
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.bulkbar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--rule);
+  background: var(--paper);
+}
+.bulkbar[hidden] { display: none; }
+
+@media print { th.pick, td.pick, .bulkbar { display: none; } }
 
 /* --- The performance page -----------------------------------------------
    Figures, a few bars, and nothing that moves. Colour is used only where it
@@ -1149,7 +1201,12 @@ code.path {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-top: var(--space-3);
+  /* Its own padding, because it is dropped straight into a panel and a
+     panel has none of its own -- so without this the count sits against
+     the left border and the last button against the right. The inline
+     value matches the body padding above it, so the count lines up with
+     the first column of the table rather than sitting proud of it. */
+  padding: var(--space-3) var(--space-4) var(--space-4);
 }
 .pager-count { margin: 0; color: var(--ink-soft); font-size: 0.88rem; }
 .pager-count strong { color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -1747,7 +1804,12 @@ main.container {
     min-width: 0;
 }
 .meter-name {
-    flex: 0 0 var(--meter-label, 150px);
+    /* Allowed to shrink (0 *1* basis, not 0 0). Held rigid, a long label
+       column pushes the figure at the end of the row out through the
+       panel's padding on a narrow screen -- which is what "Customers by
+       type" did at 390px. The name wraps rather than truncating, so
+       giving up width costs it nothing but a second line. */
+    flex: 0 1 var(--meter-label, 150px);
     min-width: 0;
     font-size: 0.86rem;
     color: var(--ink);

@@ -254,7 +254,7 @@
 {% if revenue | length > 1 %}
 <section class="panel">
   <div class="panel-head"><h2>{{ t('dash.revenue_by_month') }}</h2></div>
-  <div class="panel-body tight">
+  <div class="panel-body tight scrollx">
     <table class="ledger">
       <thead>
         <tr>
@@ -470,7 +470,7 @@
     {% if analytics['top_customers'] %}
     <section class="panel">
       <div class="panel-head"><h2>{{ t('dash.top_customers') }}</h2></div>
-      <div class="panel-body">
+      <div class="panel-body tight scrollx">
         <table class="ledger">
           <thead>
             <tr>

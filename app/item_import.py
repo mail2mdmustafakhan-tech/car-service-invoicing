@@ -200,16 +200,20 @@ def prepare(
             "skip": "",
         }
 
+        # A reason is a key and its argument, not a sentence. Built as a
+        # sentence here it reaches the page already in English, and the
+        # Arabic preview shows "Code 0123 is already in the catalogue"
+        # in the middle of an otherwise Arabic table.
         if not name_en:
-            row["skip"] = "No description"
+            row["skip"] = "iimp.skip_no_description"
         elif code and code in existing_codes:
-            row["skip"] = f"Code {code} is already in the catalogue"
+            row["skip"] = "iimp.skip_code_exists"
         elif code and code in seen_codes:
-            row["skip"] = f"Code {code} appears earlier in this file"
+            row["skip"] = "iimp.skip_code_repeated"
         elif not code and name_en.casefold() in existing_names:
-            row["skip"] = "Already in the catalogue"
+            row["skip"] = "iimp.skip_exists"
         elif not code and name_en.casefold() in seen_names:
-            row["skip"] = "Appears earlier in this file"
+            row["skip"] = "iimp.skip_repeated"
 
         if not row["skip"]:
             if code:

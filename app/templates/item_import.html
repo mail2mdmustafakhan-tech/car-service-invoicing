@@ -43,11 +43,11 @@
   <div class="figures">
     <div class="figure">
       <div class="value">{{ summary.ready }}</div>
-      <div class="label">{{ t('imp.will_import') }}</div>
+      <div class="label">{{ t('iimp.will_import') }}</div>
     </div>
     <div class="figure owed">
       <div class="value">{{ summary.skipped }}</div>
-      <div class="label">{{ t('imp.will_skip') }}</div>
+      <div class="label">{{ t('iimp.will_skip') }}</div>
     </div>
     <div class="figure">
       <div class="value">{{ summary.total }}</div>
@@ -64,7 +64,7 @@
   {% endif %}
 
   {% if batch['status'] != 'pending' %}
-    <div class="flash">{{ t('msg.imported') if batch['status'] == 'imported' else t('imp.cancel') }}</div>
+    <div class="flash">{{ t('iimp.imported') if batch['status'] == 'imported' else t('imp.cancel') }}</div>
   {% endif %}
 
   <section class="panel">
@@ -103,9 +103,9 @@
             </td>
             <td class="tight">
               {% if row.skip %}
-                <span class="pill void">{{ row.skip }}</span>
+                <span class="pill void">{{ t(row.skip).format(code=row.get('code', '')) }}</span>
               {% else %}
-                <span class="pill paid">{{ t('imp.will_import') }}</span>
+                <span class="pill paid">{{ t('iimp.will_import') }}</span>
               {% endif %}
             </td>
           </tr>
@@ -120,7 +120,7 @@
       <form method="post" action="/catalog/import/{{ batch['id'] }}/confirm">
         <div class="formactions">
           <button class="btn accent" type="submit">
-            {{ t('imp.confirm') }} ({{ summary.ready }})
+            {{ t('iimp.confirm') }} ({{ summary.ready }})
           </button>
         </div>
       </form>

@@ -142,7 +142,7 @@ def test_a_code_already_in_the_catalogue_is_flagged_not_imported():
         rows, existing_codes={"0123"}, existing_names=set())
 
     assert summary["ready"] == 0
-    assert "0123" in prepared[0]["skip"]
+    assert prepared[0]["skip"] == "iimp.skip_code_exists"
 
 
 def test_the_same_code_twice_in_one_file_is_imported_once():
@@ -330,3 +330,48 @@ def test_the_dropdown_offers_the_code_beside_the_name(shop):
 
 def test_the_catalogue_can_be_searched_by_code(shop):
     assert "Oil change" in shop.get("/catalog?search=OIL").text
+
+
+def test_the_item_import_never_talks_about_customers(shop):
+    """It shared the customer importer's strings and said so out loud.
+
+    The confirm button read "Import these customers" on a page full of
+    brake pads. Worth a test rather than a careful read: these pages are
+    built by copying the one next door, so the wording follows the
+    copy unless something checks.
+    """
+    page = _upload(shop, _book([["Item No", "Description"],
+                                ["0123", "Oil service"]]))
+    # The page's own content, not the navigation bar, which links to
+    # Customers from every page and rightly says so.
+    body = page.text.split('<main class="container">', 1)[1].split("</main>")[0]
+
+    for word in ("customer", "Customer", "\u0639\u0645\u064a\u0644", "\u0627\u0644\u0639\u0645\u0644\u0627\u0621"):
+        assert word not in body, f"the item import page says {word!r}"
+
+
+def test_the_message_after_importing_items_says_items(shop):
+    import re
+
+    page = _upload(shop, _book([["Item No", "Description"],
+                                ["0123", "Oil service"]]))
+    batch = re.search(r"/catalog/import/(\d+)/confirm", page.text).group(1)
+    done = shop.post(f"/catalog/import/{batch}/confirm", follow_redirects=True)
+
+    assert "Items imported" in done.text
+    assert "Customers imported" not in done.text
+
+
+def test_a_skip_reason_reads_in_the_language_of_the_page(shop):
+    """It was built as an English sentence in Python, so the Arabic
+    preview showed "Code 0123 is already in the catalogue" in the
+    middle of an otherwise Arabic table."""
+    _upload(shop, _book([["Item No", "Description"], ["OIL", "Oil change"]]))
+    english = shop.get("/catalog/import/1").text
+    assert "already in the catalogue" in english
+
+    shop.get("/lang/ar")
+    arabic = shop.get("/catalog/import/1").text
+    assert "already in the catalogue" not in arabic
+    assert "\u0645\u0648\u062c\u0648\u062f \u0645\u0633\u0628\u0642\u0627\u064b" in arabic
+    assert "OIL" in arabic  # the code itself still shows

@@ -1112,6 +1112,53 @@ def update_catalog_item(
         _update(conn, "catalog_items", item_id, _pick(data, CATALOG_FIELDS))
 
 
+def delete_catalog_items(
+    conn: sqlite3.Connection, item_ids: Sequence[int]
+) -> int:
+    """Remove several catalogue entries at once. Returns how many went.
+
+    One transaction, so a bulk delete either happens or does not. Half a
+    deletion is the worst outcome available here: the user sees a list
+    that is partly what they asked for and has no way to tell which half
+    failed.
+
+    Historic lines are unharmed, as with a single delete -- they keep
+    their own description, price and code, and only lose the link back.
+    """
+    ids = [int(i) for i in item_ids]
+    if not ids:
+        return 0
+    marks = ",".join("?" * len(ids))
+    with transaction(conn):
+        cursor = conn.execute(
+            f"DELETE FROM catalog_items WHERE id IN ({marks})", ids
+        )
+    return cursor.rowcount
+
+
+def retire_catalog_items(
+    conn: sqlite3.Connection, item_ids: Sequence[int]
+) -> int:
+    """Mark several catalogue entries inactive. Returns how many changed.
+
+    What the bulk button does when records are protected. Counts only
+    rows that were actually active, so the message afterwards says what
+    happened rather than how many boxes were ticked.
+    """
+    ids = [int(i) for i in item_ids]
+    if not ids:
+        return 0
+    marks = ",".join("?" * len(ids))
+    with transaction(conn):
+        cursor = conn.execute(
+            f"UPDATE catalog_items SET is_active = 0, "
+            f"updated_at = datetime('now') "
+            f"WHERE id IN ({marks}) AND is_active = 1",
+            ids,
+        )
+    return cursor.rowcount
+
+
 def delete_catalog_item(conn: sqlite3.Connection, item_id: int) -> None:
     """Delete a catalogue entry.
 

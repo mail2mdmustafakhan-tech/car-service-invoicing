@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% from "_sortable.html" import sort_th with context %}
 {% from "_counts.html" import countline with context %}
-{% from "_macros.html" import delete_form with context %}
 {% from "_pager.html" import pager with context %}
 {% block title %}{{ t('cat.title') }}{% endblock %}
 
@@ -35,12 +34,33 @@
   {% if q or kind or inactive %}<a class="btn link" href="/catalog">{{ t('action.clear') }}</a>{% endif %}
 </form>
 
+{# The whole table is one form. Ticking rows and pressing the single
+   button at the top acts on all of them at once -- which beats a Delete
+   button on every row when the job in hand is tidying up an imported
+   list of seventy. #}
+<form method="post" action="/catalog/bulk-delete" data-bulk
+      data-confirm="{{ t('cat.confirm_retire_n') if settings['protect_records'] else t('cat.confirm_delete_n') }}">
 <div class="panel">
   {% if items %}
+  {# Shown only once something is ticked: a disabled button sitting over
+     every list, all day, teaches people not to look at the row it is in.
+     Without JavaScript it is simply always there, which still works. #}
+  <div class="bulkbar" data-bulk-bar hidden>
+    <span data-bulk-count class="secondary"
+          data-template="{{ t('cat.selected_n') }}"></span>
+    <button class="btn {{ '' if settings['protect_records'] else 'danger' }} small" type="submit">
+      {{ t('act.retire') if settings['protect_records'] else t('action.delete') }}
+    </button>
+  </div>
   <div class="panel-body tight scrollx">
     <table class="ledger">
       <thead>
         <tr>
+          <th class="pick">
+            <input type="checkbox" data-bulk-all
+                   aria-label="{{ t('cat.select_all') }}"
+                   title="{{ t('cat.select_all') }}">
+          </th>
           {% set keep = {'q': q, 'kind': kind, 'inactive': inactive} %}
           {{ sort_th('name', t('cat.name_en'), extra=keep) }}
           {{ sort_th('kind', t('cat.kind'), extra=keep) }}
@@ -53,6 +73,10 @@
       <tbody>
         {% for i in items %}
         <tr>
+          <td class="pick">
+            <input type="checkbox" name="ids" value="{{ i['id'] }}"
+                   aria-label="{{ t('cat.select_row') }}">
+          </td>
           <td>
             {{ i['name_en'] }}
             {% if not i['is_active'] %}<span class="pill draft">{{ t('cust.inactive') }}</span>{% endif %}
@@ -65,7 +89,6 @@
           <td>
             <div class="row-actions">
               <a class="btn small" href="/catalog/{{ i['id'] }}/edit">{{ t('action.edit') }}</a>
-              {{ delete_form('/catalog/' ~ i['id'] ~ '/delete', t('action.delete'), t('action.confirm_delete')) }}
             </div>
           </td>
         </tr>
@@ -81,4 +104,9 @@
   </div>
   {% endif %}
 </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/bulk-select.js') }}"></script>
 {% endblock %}

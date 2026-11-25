@@ -1397,6 +1397,30 @@ def vehicle_delete(vehicle_id: int, conn: Connection = Depends(get_conn)):
 # {item_id: int} routes further down, or /catalog/import is read as an
 # item whose id is "import" -- bug 7 in the architecture notes, twice.
 
+@app.post("/catalog/bulk-delete")
+def catalog_bulk_delete(
+    ids: list[int] = Form(default=[]),
+    conn: Connection = Depends(get_conn),
+):
+    """Remove, or retire, every ticked item in one go.
+
+    Which of the two it does follows the same Settings switch as every
+    other delete in the application. The button on the page is labelled
+    to match, but the decision is made here: somebody whose page was
+    drawn before the switch was flipped gets the safe behaviour rather
+    than the one their button promised.
+    """
+    if not ids:
+        return go("/catalog", msg="cat.none_selected")
+
+    if repo.records_protected(conn):
+        changed = repo.retire_catalog_items(conn, ids)
+        return go("/catalog", msg="msg.retired" if changed else "msg.no_change")
+
+    removed = repo.delete_catalog_items(conn, ids)
+    return go("/catalog", msg="msg.deleted" if removed else "msg.no_change")
+
+
 @app.get("/catalog/import", response_class=HTMLResponse)
 def item_import_start(
     request: Request, conn: Connection = Depends(get_conn)
@@ -1475,7 +1499,7 @@ def item_import_confirm(batch_id: int, conn: Connection = Depends(get_conn)):
     except repo.InUse as exc:
         return go("/catalog", err=str(exc))
     return go("/catalog",
-              msg="msg.imported" if result["imported"] else "msg.nothing_imported")
+              msg="iimp.imported" if result["imported"] else "msg.nothing_imported")
 
 
 @app.post("/catalog/import/{batch_id}/cancel")
